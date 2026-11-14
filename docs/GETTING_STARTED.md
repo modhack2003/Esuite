@@ -1,6 +1,6 @@
 # Use ESuite on Android 9–17
 
-The app is configured for an unrooted Android 9–17 phone. Runtime needs no computer. Production distribution is a privately signed, optimized APK in GitHub Releases, with SHA256SUMS and build-info.json. Signing is configured; first publication awaits full CI and exact signed-APK smoke checks; see [Release delivery](RELEASING.md). CI debug/validation artifacts are for verification and must not be presented as production downloads.
+Download the [production-signed ESuite 1.0.0 APK](https://github.com/modhack2003/Esuite/releases/download/v1.0.0/ESuite-1.0.0.apk) from [GitHub Releases](https://github.com/modhack2003/Esuite/releases/tag/v1.0.0), open it on your Android phone, and follow Android's installation prompt. Runtime needs no root or computer. The release includes SHA256SUMS and build-info.json; [verification evidence](VERIFICATION.md) records Android 9–17 results and capability skips. Internal CI fixtures are not production downloads.
 
 ## Start an assessment
 

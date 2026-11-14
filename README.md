@@ -1,13 +1,15 @@
 <p align="center"><img src="docs/assets/esuite-mark.svg" width="76" alt="ESuite monogram"></p>
 
 <h1 align="center">ESuite</h1>
-<p align="center"><strong>Inspect. Intercept. Investigate.</strong><br>A security workbench being built for the Android device already in your pocket.</p>
+<p align="center"><strong>Inspect. Replay. Investigate.</strong><br>A security workbench being built for the Android device already in your pocket.</p>
 
 <p align="center"><a href="#try-esuite">Get started</a> · <a href="docs/UI_SPEC.md">UI & design</a> · <a href="docs/ROADMAP.md">Roadmap</a> · <a href="docs/PRODUCT_PLAN.md">Full specification</a> · <a href="CONTRIBUTING.md">Contribute</a></p>
 
 <p align="center"><a href="https://github.com/modhack2003/Esuite/actions/workflows/ci.yml"><img src="https://github.com/modhack2003/Esuite/actions/workflows/ci.yml/badge.svg" alt="Build and verify workflow status"></a></p>
 
 ![ESuite — Your pocket. Full visibility. Android security workbench. UI foundation; capture engines planned.](docs/assets/esuite-banner.svg)
+
+<p align="center"><strong><a href="https://github.com/modhack2003/Esuite/releases/download/v1.0.0/ESuite-1.0.0.apk">Download ESuite 1.0.0 APK</a></strong> · Android 9–17 · Signed and optimized</p>
 
 <p align="center"><strong>Native Android</strong> &nbsp; / &nbsp; <strong>No root required</strong> &nbsp; / &nbsp; <strong>No computer during use</strong> &nbsp; / &nbsp; <strong>Local processing</strong></p>
 
@@ -100,7 +102,7 @@ Workspace protections include Keystore-backed authenticated encryption, bounded 
 
 ### Android builds and production delivery
 
-Requested compatibility: **Android 9–17 (API 28–37)**. The build targets API 37 with the 37.0 platform, AGP 9.2.1, Gradle 9.4.1 and JDK 17. All ten Android 9–17 emulator jobs passed (24 native passes; six unsupported-WebView capability skips). Full workflow/release verification is completing after pinning its browser-check host to Ubuntu 24.04. See [release delivery](docs/RELEASING.md) for signing and verification gates.
+Requested compatibility: **Android 9–17 (API 28–37)**. The build targets API 37 with the 37.0 platform, AGP 9.2.1, Gradle 9.4.1 and JDK 17. All ten Android 9–17 emulator jobs passed (24 native passes; six unsupported-WebView capability skips). Full CI and exact production-signed APK smoke checks passed on pinned Ubuntu 24.04 runners. See [release delivery](docs/RELEASING.md) for signing and verification gates.
 
 ```bash
 git clone https://github.com/modhack2003/Esuite.git
@@ -110,7 +112,16 @@ cd Esuite
 
 Open the project in Android Studio, or use the command line with an installed SDK. On Windows use `gradlew.bat`. The debug APK is generated at `app/build/outputs/apk/debug/app-debug.apk`. The [build workflow](.github/workflows/ci.yml) uploads internal fixture artifacts and an unsigned optimized APK for verification. Installable production downloads are published only by the signed release workflow. Full interception and physical-device validation are still pending.
 
-The [production release workflow](.github/workflows/release.yml) builds an optimized, privately signed APK after successful exact-commit CI and publishes it to [GitHub Releases](https://github.com/modhack2003/Esuite/releases) only after signer/metadata/integrity checks and signed-APK device smoke tests. **Production signing is configured. First publication awaits the full CI and exact signed-APK smoke gates; no stable APK is available yet.** Never distribute the internal test bundle or disposable CI-signed APK as production. Read the [usage guide](docs/GETTING_STARTED.md) for the browser → API → evidence workflow.
+The [production release workflow](.github/workflows/release.yml) builds an optimized, privately signed APK after successful exact-commit CI and publishes it to [GitHub Releases](https://github.com/modhack2003/Esuite/releases) only after signer/metadata/integrity checks and signed-APK device smoke tests. **[Download ESuite 1.0.0 APK](https://github.com/modhack2003/Esuite/releases/download/v1.0.0/ESuite-1.0.0.apk)** · [Release notes and checksums](https://github.com/modhack2003/Esuite/releases/tag/v1.0.0). The optimized APK is privately signed, non-debuggable, 2,457,153 bytes, and configured for Android 9–17. Never distribute the internal test bundle or disposable CI-signed APK as production. Read the [usage guide](docs/GETTING_STARTED.md) for the browser → API → evidence workflow.
+
+### Native application evidence
+
+<p align="center">
+  <img src="docs/assets/native-home-api35.png" width="260" alt="Production-signed ESuite 1.0.0 home screen running on an Android 15 emulator" />
+  <img src="docs/assets/native-findings-api35.png" width="260" alt="Optimized ESuite APK showing a synthetic observation retained after a process restart" />
+</p>
+
+The home image is from the production-signed APK. The observation image uses synthetic evidence from the independent optimized-APK UI test. Both are actual Android 15 emulator screenshots. [Verified source, per-version results and release integrity](docs/VERIFICATION.md).
 
 ### Offline UI concept
 

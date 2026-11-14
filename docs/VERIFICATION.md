@@ -1,10 +1,23 @@
 # ESuite implementation verification
 
-Latest completed native checkpoint: `db5e102b129410c1d9b5385c678a52c0fb02bc32`.
+Released version: **1.0.0**, version code **3**, source `98425c9e4bcc7ace1a56604b0d466859db3a8e5b`.
 
-Run: https://github.com/modhack2003/Esuite/actions/runs/43615910937
+- [Full CI passed](https://github.com/modhack2003/Esuite/actions/runs/43623409210): build/lint, 23 JVM passes, six publication-guard scenarios and browser-concept checks.
+- Android matrix: **30 native cases: 24 passes, six capability skips, zero failures/errors**. Every API 28–37.0 job passed.
+- [Production release workflow passed](https://github.com/modhack2003/Esuite/actions/runs/43623797877): durable-key signing, certificate/package/version/SDK/signature/ZIP/ELF verification, then installation/relaunch of the exact signed APK on Android 9, 15 and 17.
+- [Published stable release](https://github.com/modhack2003/Esuite/releases/tag/v1.0.0). Independently downloaded the public assets and verified checksums, certificate and exact source metadata. No private signing files are release assets.
 
-Downloaded report XML confirms **23 JVM passes** and **30 native cases: 24 passes, six capability skips, zero failures/errors**. All Android jobs passed. The overall run failed only the design-host setup: ubuntu-latest moved to Ubuntu 26.04, which pinned Playwright 1.51 does not support. The current increment pins Ubuntu 24.04 and awaits a fresh full CI pass. Production signing is configured; publication still requires successful CI and signed-APK smoke gates.
+| Release property | Verified value |
+| --- | --- |
+| APK | ESuite-1.0.0.apk |
+| Size | 2,457,153 bytes |
+| Package | dev.esuite.app |
+| SDK | minimum 28; target 37; no maximum |
+| Debuggable | false |
+| SHA-256 | `020ff3d307ded1484393075fd1688cd9b9099726c4928fff34695e43c486952e` |
+| Certificate SHA-256 | `55800cce75d814b64a1f9663463da2f0521cd0da55541ff56449f5a94fb88e12` |
+
+Later documentation/image-only commits do not change this tested/released application source. Emulator verification does not certify every physical device, OEM, accessibility mode or planned feature.
 
 | Android | API | Native passes | Skips | Observation |
 | --- | --- | --- | --- | --- |
@@ -21,7 +34,7 @@ Downloaded report XML confirms **23 JVM passes** and **30 native cases: 24 passe
 
 Every OS passed actual Android Keystore/AtomicFile round-trip, backup recovery and tamper rejection, plus independent UI automation against the optimized APK: scoped project → observation → encrypted save confirmation → process force-stop/relaunch → retained evidence. Browser profile/cookie/inspector checks ran only when MULTI_PROFILE was advertised. A skipped capability is not a browser pass.
 
-The release publication guard integration passed six scenarios. The production release will separately verify its durable certificate and run installation/relaunch checks on the exact production-signed APK. No physical-device/OEM certification is implied by emulator results.
+The release publication guard integration passed six scenarios. The production release separately verified its durable certificate and passed installation/relaunch checks on the exact production-signed APK. No physical-device/OEM certification is implied by emulator results.
 
 ## Verified boundaries
 
@@ -31,7 +44,7 @@ The Android emulator tests exercise the actual Android Keystore and AtomicFile w
 
 The web-concept checks exercise navigation, cookie fixtures, traffic filters/empty states, request transfer, identity fixtures, comparison, Unicode Base64/error handling, memory-only notes/reset, dialog focus/Escape, mobile horizontal overflow and absence of HTTP requests from the self-contained concept.
 
-Artifacts in the linked run include the debug APK, JVM/lint reports, native Android reports and concept screenshots. Artifact retention is seven days; the committed source, tests and evidence links remain reproducible through CI.
+CI artifacts include internal fixtures, JVM/lint/native reports and screenshots with finite retention. The production APK, checksums, release notes and build-info metadata are durable GitHub Release assets. Native screenshot files committed under docs/assets are emulator evidence; the separate React images remain synthetic.
 
 ## Important limits
 

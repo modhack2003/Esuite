@@ -69,7 +69,8 @@ Detailed capabilities and acceptance criteria: [Product plan](PRODUCT_PLAN.md).
 - [x] Add optimized non-debuggable release variant and independent CI UI harness against the optimized APK.
 - [x] Add native project/observation/process-restart test and API 28–37.0 emulator matrix.
 - [x] Implement signed GitHub Actions release workflow with certificate pin, integrity metadata and exact signed-APK smoke tests.
-- [ ] Pass migrated build/lint/JVM/native compatibility gates; record per-version results.
+- [x] Pass build/lint/JVM/native Android 9–17 gates; per-version outcomes and capability skips recorded in VERIFICATION.md.
 - [x] Configure durable private signer, verified local recovery copy and pinned public certificate; owner retains offline recovery responsibility.
-- [ ] Publish verified APK/checksums/metadata as stable GitHub release and test update continuity.
+- [x] Publish verified APK/checksums/metadata as stable GitHub release v1.0.0; exact signed APK installation/relaunch checks passed.
+- [ ] Test the first cross-version production upgrade when the next release exists.
 - [ ] Complete physical/OEM/accessibility and remaining production-readiness checks above.

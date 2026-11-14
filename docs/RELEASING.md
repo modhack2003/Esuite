@@ -1,6 +1,6 @@
 # Production APK delivery
 
-The requested distribution is an installable, optimized, privately signed APK in GitHub Releases. An unsigned APK or CI validation signer is never a production release. Version intent is recorded in `release/version.properties`; 1.0.0 has not been published until the release workflow completes.
+The requested distribution is an installable, optimized, privately signed APK in GitHub Releases. An unsigned APK or CI validation signer is never a production release. Version intent is recorded in `release/version.properties`. [ESuite 1.0.0 is published](https://github.com/modhack2003/Esuite/releases/tag/v1.0.0) from source `98425c9e4bcc7ace1a56604b0d466859db3a8e5b`; [release workflow](https://github.com/modhack2003/Esuite/actions/runs/43623797877) and [full CI](https://github.com/modhack2003/Esuite/actions/runs/43623409210) passed. Reuse the configured signer for subsequent versions.
 
 ## Build contract
 
