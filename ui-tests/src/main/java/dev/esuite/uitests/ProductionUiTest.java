@@ -87,6 +87,8 @@ public class ProductionUiTest {
                 device.wait(Until.hasObject(By.res("browser_unsupported")), 2000));
         tag("browser_go").click(); output("Page loaded");
         evaluate("document.title", "Example Domain");
+        evaluate("location.hash='inspector'; 'Anchor ready'", "Anchor ready");
+        evaluate("document.title", "Example Domain");
         // Real HTTPS loaded above. Only synthetic DOM/storage/cookies are added below.
         evaluate("document.body.innerHTML='<button id=fixture style=\"position:absolute;top:8px;left:8px\">Inspect me</button>'; localStorage.setItem('esuite-ui','local-value'); sessionStorage.setItem('session-ui','session-value'); 'Fixture ready'", "Fixture ready");
         top(); tag("browser_tab_elements").click(); tag("browser_select").click();
@@ -115,7 +117,23 @@ public class ProductionUiTest {
         top(); tag("identity_A").click(); readCookies("esuite_ui=[HIDDEN]");
         top(); tag("browser_go").click(); output("Page loaded");
         evaluate("const f=document.createElement('form'); f.method='POST'; f.action='https://outside.invalid/blocked'; document.body.appendChild(f); f.submit(); 'Submitting fixture'", "Blocked navigation outside project scope");
-        top(); tag("browser_url").setText("https://outside.invalid/"); tag("browser_go").click(); output("outside project scope");
+        top(); tag("browser_url").setText("https://outside.invalid/"); tag("browser_go").click(); output("outside the selected project origin");
+    }
+
+    @Test public void apiSendCompareCollectionAndFailureReplacePreviousResult() throws Exception {
+        launch(); tag("project_name").setText("API UI fixture");
+        tag("project_origin").setText("https://example.com"); tag("create_project").click();
+        tag("nav_api").click(); tag("api_send").click(); top();
+        assertTrue("HTTPS API request did not complete", device.wait(Until.hasObject(By.res("workspace_status").textContains("HTTP 200")), 45000));
+        tag("api_compare").click(); top();
+        assertTrue("A/B comparison did not finish", device.wait(Until.hasObject(By.res("workspace_status").textContains("Separate session jars used")), 90000));
+        tag("api_saved_name").setText("Synthetic GET"); tag("api_save_draft").click();
+        assertNotNull(find(By.text("Load: Synthetic GET")));
+        tag("api_url").setText("https://outside.invalid/"); tag("api_send").click();
+        assertNotNull(find(By.textMatches("Error · .*")));
+        // The failed send must replace the old 200 result, with no request to outside.invalid.
+        top(); assertTrue(device.wait(Until.hasObject(By.res("workspace_status").textContains("outside the selected project origin")), 15000));
+        tag("nav_traffic").click(); assertNotNull(find(By.textContains("Identity comparison · identity B · 200")));
     }
 
 }

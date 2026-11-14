@@ -77,7 +77,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
             if (project != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("A", "B").forEach { identity -> FilterChip(modifier = Modifier.testTag("identity_$identity"), selected = state.identity == identity, onClick = { model.identity(identity) }, label = { Text("Identity $identity") }) }
             }
-            Text(state.message, style = MaterialTheme.typography.bodySmall, color = Muted)
+            Text(state.message, Modifier.testTag("workspace_status"), style = MaterialTheme.typography.bodySmall, color = Muted)
             when (screen) {
                 Screen.Home -> HomeScreen(state, model) { selectedName = it.name }
                 Screen.Browser -> if (project != null) BrowserScreen(project, state.identity, model) else Text("Create a project first.")
@@ -136,21 +136,23 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
 
 @Composable private fun ApiScreen(state: AppState, model: AppViewModel) {
     val draft = state.draft
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     var headers by remember(draft.headers) { mutableStateOf(draft.headers.joinToString("\n") { "${it.name}: ${it.value}" }) }
     var raw by remember { mutableStateOf("") }
     var savedName by remember { mutableStateOf("") }
     var identityHeaders by remember(state.projectId, state.identity, state.workspace.identityConfigs) { mutableStateOf(state.workspace.identityConfigs.firstOrNull { it.projectId == state.projectId && it.identity == state.identity }?.headers.orEmpty().joinToString("\n") { "${it.name}: ${it.value}" }) }
-    fun prepare(action: () -> Unit) { runCatching { DraftParser.headers(headers) }.onSuccess { model.draft(draft.copy(headers = it)); action() }.onFailure { model.message(it.message ?: "Invalid headers") } }
+    fun prepare(action: () -> Unit) { focus.clearFocus(); keyboard?.hide(); runCatching { DraftParser.headers(headers) }.onSuccess { model.draft(draft.copy(headers = it)); action() }.onFailure { model.message(it.message ?: "Invalid headers") } }
     Text("Request lab.", style = MaterialTheme.typography.headlineLarge)
-    OutlinedTextField(draft.method, { model.draft(draft.copy(method = it.uppercase())) }, label = { Text("HTTP method") }, modifier = Modifier.fillMaxWidth())
-    OutlinedTextField(draft.url, { model.draft(draft.copy(url = it)) }, label = { Text("URL (must match project origin)") }, modifier = Modifier.fillMaxWidth())
-    OutlinedTextField(headers, { headers = it }, label = { Text("Headers — Name: value") }, minLines = 3, modifier = Modifier.fillMaxWidth())
-    OutlinedTextField(draft.body, { model.draft(draft.copy(body = it)) }, label = { Text("Request body") }, minLines = 3, modifier = Modifier.fillMaxWidth())
+    OutlinedTextField(draft.method, { model.draft(draft.copy(method = it.uppercase())) }, label = { Text("HTTP method") }, modifier = Modifier.fillMaxWidth().testTag("api_method"))
+    OutlinedTextField(draft.url, { model.draft(draft.copy(url = it)) }, label = { Text("URL (must match project origin)") }, modifier = Modifier.fillMaxWidth().testTag("api_url"))
+    OutlinedTextField(headers, { headers = it }, label = { Text("Headers — Name: value") }, minLines = 3, modifier = Modifier.fillMaxWidth().testTag("api_headers"))
+    OutlinedTextField(draft.body, { model.draft(draft.copy(body = it)) }, label = { Text("Request body") }, minLines = 3, modifier = Modifier.fillMaxWidth().testTag("api_body"))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(onClick = { prepare { model.send() } }, enabled = !state.busy && state.projectId != null) { Text("Send") }
+        Button(modifier = Modifier.testTag("api_send"), onClick = { prepare { model.send() } }, enabled = !state.busy && state.projectId != null) { Text("Send") }
         OutlinedButton(onClick = { model.cancelRequest() }, enabled = state.busy) { Text("Cancel") }
     }
-    OutlinedButton(onClick = { prepare { model.send(compare = true) } }, enabled = !state.busy && state.projectId != null) { Text("Send as A then B (two requests)") }
+    OutlinedButton(modifier = Modifier.testTag("api_compare"), onClick = { prepare { model.send(compare = true) } }, enabled = !state.busy && state.projectId != null) { Text("Send as A then B (two requests)") }
     Text("Redirects/retries are disabled. Comparison strips known auth headers and uses each identity's configuration/jar. Body credentials remain unchanged; review them before comparing.", style = MaterialTheme.typography.bodySmall)
     if (state.comparison.isNotBlank()) Panel("Comparison", state.comparison)
     state.selected?.let { e -> Panel("${e.status ?: "Error"} · ${e.durationMs} ms · ${e.response.encoding}${if (e.response.truncated) " · TRUNCATED" else ""}", e.error ?: e.responseHeaders.joinToString("\n") { "${it.name}: ${it.value}" } + "\n\n" + e.response.value) }
@@ -158,10 +160,10 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     OutlinedButton(onClick = { model.currentProject()?.let { p -> runCatching { DraftParser.raw(raw, p.origin) }.onSuccess(model::draft).onFailure { model.message(it.message ?: "Invalid request") } } }) { Text("Import into editor") }
     OutlinedButton(modifier = Modifier.testTag("api_session_metadata"), onClick = { model.message(model.currentProject()?.let { model.engine.sessions.jar(it.id, state.identity).describe() }.orEmpty().ifBlank { "No session cookies for this identity" }) }) { Text("Show API session metadata") }
     OutlinedButton(onClick = { model.clearSessions() }) { Text("Clear API sessions") }
-    OutlinedTextField(identityHeaders, { identityHeaders = it }, label = { Text("Identity ${state.identity} headers (encrypted)") }, minLines = 2, modifier = Modifier.fillMaxWidth())
-    OutlinedButton(onClick = { model.configureIdentity(identityHeaders) }) { Text("Save this identity's auth headers") }
-    OutlinedTextField(savedName, { savedName = it }, label = { Text("Saved request name") }, modifier = Modifier.fillMaxWidth())
-    OutlinedButton(onClick = { prepare { model.saveDraft(savedName) } }) { Text("Save request to collection") }
+    OutlinedTextField(identityHeaders, { identityHeaders = it }, label = { Text("Identity ${state.identity} headers (encrypted)") }, minLines = 2, modifier = Modifier.fillMaxWidth().testTag("api_identity_headers"))
+    OutlinedButton(modifier = Modifier.testTag("api_save_identity"), onClick = { focus.clearFocus(); keyboard?.hide(); model.configureIdentity(identityHeaders) }) { Text("Save this identity's auth headers") }
+    OutlinedTextField(savedName, { savedName = it }, label = { Text("Saved request name") }, modifier = Modifier.fillMaxWidth().testTag("api_saved_name"))
+    OutlinedButton(modifier = Modifier.testTag("api_save_draft"), onClick = { prepare { model.saveDraft(savedName) } }) { Text("Save request to collection") }
     state.workspace.savedRequests.filter { it.projectId == state.projectId }.forEach { saved ->
         OutlinedButton(onClick = { model.draft(saved.draft) }, modifier = Modifier.fillMaxWidth()) { Text("Load: ${saved.name}") }
         TextButton(onClick = { model.deleteSavedRequest(saved.id) }) { Text("Remove saved request") }

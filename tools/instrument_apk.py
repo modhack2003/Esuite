@@ -95,7 +95,7 @@ try:
     command('adb', 'uninstall', 'dev.esuite.app')
     command('adb', 'install', unique('**/app/build/outputs/apk/ci/app-release-ci.apk'))
     command('adb', 'install', '-r', '-t', unique('**/ui-tests/build/outputs/apk/debug/ui-tests-debug.apk'))
-    suite('dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner', 'OptimizedUi', 2, 'dev.esuite.uitests.ProductionUiTest')
+    suite('dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner', 'OptimizedUi', 3, 'dev.esuite.uitests.ProductionUiTest')
 except Exception as error:
     case = ET.SubElement(root, 'testcase', classname='Instrumentation', name='setupAndExecution')
     ET.SubElement(case, 'failure', message=str(error)).text = repr(error)

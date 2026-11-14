@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""Disposable-emulator UI and same-certificate upgrade checks for exact release bytes."""
+import hashlib
+import os
+from pathlib import Path
+import subprocess
+import urllib.request
+
+
+def run(*args, timeout=600):
+    result = subprocess.run(args, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout)
+    print(result.stdout)
+    if result.returncode:
+        raise RuntimeError('Command failed: ' + args[0])
+    return result.stdout
+
+
+def instrument(method, expected):
+    output = run('adb', 'shell', 'am', 'instrument', '-w', '-r', '-e', 'class',
+                 method, 'dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner')
+    Path('signed-ui-results').mkdir(exist_ok=True)
+    Path('signed-ui-results', method.split('.')[-1].replace('#', '-') + '.txt').write_text(output)
+    # Android's am can exit 0 even when JUnit fails. Require its completed summary.
+    if f'OK ({expected} test' not in output or 'FAILURES!!!' in output or 'INSTRUMENTATION_CODE: -1' not in output:
+        raise RuntimeError('Signed APK UI suite failed or incomplete: ' + method)
+
+
+if os.environ.get('GITHUB_ACTIONS') != 'true' or run('adb', 'shell', 'getprop', 'ro.kernel.qemu').strip() != '1':
+    raise SystemExit('Refusing destructive fixture setup outside a disposable Actions emulator')
+apks = list(Path('release-assets').glob('ESuite-*.apk'))
+harnesses = list(Path('signed-ui-harness').glob('*.apk'))
+assert len(apks) == len(harnesses) == 1
+run('adb', 'install', '-r', '-t', str(harnesses[0]))
+base = Path('previous-production.apk')
+# Immutable published baseline; verify bytes before installing. Android enforces signer continuity on -r.
+url = 'https://github.com/modhack2003/Esuite/releases/download/v1.0.0/ESuite-1.0.0.apk'
+with urllib.request.urlopen(url, timeout=60) as response:
+    data = response.read(10 * 1024 * 1024)
+assert hashlib.sha256(data).hexdigest() == '020ff3d307ded1484393075fd1688cd9b9099726c4928fff34695e43c486952e'
+base.write_bytes(data)
+run('adb', 'uninstall', 'dev.esuite.app') if 'dev.esuite.app' in run('adb', 'shell', 'pm', 'list', 'packages', 'dev.esuite.app') else None
+run('adb', 'install', str(base))
+instrument('dev.esuite.uitests.UpgradeUiTest#seedPreviousRelease', 1)
+# No uninstall or pm clear is allowed between seeding and verification.
+run('adb', 'install', '-r', str(apks[0]))
+instrument('dev.esuite.uitests.UpgradeUiTest#verifyUpgradeRetainsEncryptedWorkspace', 1)
+instrument('dev.esuite.uitests.ProductionUiTest', 3)
+print('PASS: exact production-signed APK UI and v1.0.0 same-signer encrypted-data upgrade')

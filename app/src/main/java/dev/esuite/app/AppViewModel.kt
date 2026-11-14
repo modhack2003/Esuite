@@ -108,21 +108,28 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (snapshot.busy) return
         requestJob = viewModelScope.launch {
             mutable.update { it.copy(busy = true, comparison = "", message = "Sending to ${project.origin}…") }
+            var attemptedIdentity = snapshot.identity
+            var attemptedDraft = snapshot.draft
             try {
                 if (compare) {
                     val draft = CredentialPolicy.strip(snapshot.draft, snapshot.workspace.identityConfigs.filter { it.projectId == project.id })
-                    val a = engine.execute(project, "A", withIdentity(draft, project.id, "A"), "Identity comparison"); record(a)
-                    val b = engine.execute(project, "B", withIdentity(draft, project.id, "B"), "Identity comparison"); record(b)
+                    attemptedIdentity = "A"; attemptedDraft = withIdentity(draft, project.id, "A")
+                    val a = engine.execute(project, "A", attemptedDraft, "Identity comparison"); record(a)
+                    attemptedIdentity = "B"; attemptedDraft = withIdentity(draft, project.id, "B")
+                    val b = engine.execute(project, "B", attemptedDraft, "Identity comparison"); record(b)
                     mutable.update { it.copy(selected = b, comparison = ResponseComparer.compare(a, b), message = "Separate session jars used; explicit Cookie/Authorization headers omitted.") }
                 } else {
-                    val response = engine.execute(project, snapshot.identity, withIdentity(snapshot.draft, project.id, snapshot.identity)); record(response)
+                    attemptedDraft = withIdentity(snapshot.draft, project.id, snapshot.identity)
+                    val response = engine.execute(project, snapshot.identity, attemptedDraft); record(response)
                     mutable.update { it.copy(selected = response, message = "HTTP ${response.status} · ${response.durationMs} ms${if (response.response.truncated) " · body truncated" else ""}") }
                 }
             } catch (e: CancellationException) { message("Request cancelled"); throw e }
             catch (e: Exception) {
                 val detail = e.message ?: e.javaClass.simpleName
-                record(Exchange(projectId = project.id, identity = snapshot.identity, request = snapshot.draft, error = detail))
-                message(detail)
+                val failed = Exchange(projectId = project.id, identity = attemptedIdentity, request = attemptedDraft,
+                    source = if (compare) "Identity comparison" else "API Lab", error = detail)
+                record(failed)
+                mutable.update { it.copy(selected = failed, comparison = "", message = detail) }
             } finally { mutable.update { it.copy(busy = false) } }
         }
     }

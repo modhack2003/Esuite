@@ -108,6 +108,14 @@ jobs:
           ESUITE_KEY_ALIAS: ${{ secrets.ESUITE_KEY_ALIAS }}
           ESUITE_KEY_PASSWORD: ${{ secrets.ESUITE_KEY_PASSWORD }}
         run: ./gradlew :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease --no-daemon
+      - name: Build independent UI harness without production signing inputs
+        run: ./gradlew :ui-tests:assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: esuite-signed-ui-harness
+          path: ui-tests/build/outputs/apk/debug/ui-tests-debug.apk
+          if-no-files-found: error
+          retention-days: 7
       - name: Verify signer, SDK range, package, version and alignment
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
@@ -153,6 +161,10 @@ jobs:
         with:
           name: esuite-signed-release
           path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: esuite-signed-ui-harness
+          path: signed-ui-harness
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -176,7 +188,9 @@ jobs:
           ram-size: 4096M
           disable-animations: true
           emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu ${{ matrix.gpu }}
-          script: bash tools/smoke_release.sh
+          script: |
+            bash tools/smoke_release.sh
+            python3 tools/verify_signed_ui.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -185,6 +199,7 @@ jobs:
             release-ui.xml
             release-crash.txt
             release-home.png
+            signed-ui-results/
           retention-days: 30
   publish:
     needs: [prepare, sign, smoke]
