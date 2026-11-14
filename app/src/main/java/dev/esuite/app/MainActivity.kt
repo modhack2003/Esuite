@@ -13,6 +13,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.esuite.app.browser.BrowserScreen
@@ -32,6 +37,7 @@ enum class Screen(val label: String, val symbol: String) {
     Home("Home", "E"), Browser("Browser", "◎"), Traffic("Traffic", "⇄"), Api("API Lab", "{}"), Findings("Findings", "⚑"), Tools("Tools", "⌘")
 }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun ESuiteApp(model: AppViewModel = viewModel()) {
     val state by model.state.collectAsState()
@@ -49,10 +55,10 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
         }
         return
     }
-    Scaffold(containerColor = Midnight, bottomBar = {
+    Scaffold(modifier = Modifier.semantics { testTagsAsResourceId = true }, containerColor = Midnight, bottomBar = {
         NavigationBar(containerColor = Midnight) {
             Screen.entries.filter { it != Screen.Tools }.forEach { target ->
-                NavigationBarItem(selected = screen == target, onClick = { selectedName = target.name }, icon = { Text(target.symbol) }, label = { Text(target.label) })
+                NavigationBarItem(modifier = Modifier.testTag("nav_${target.name.lowercase()}"), selected = screen == target, onClick = { selectedName = target.name }, icon = { Text(target.symbol) }, label = { Text(target.label) })
             }
         }
     }) { inset ->
@@ -90,12 +96,14 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
 }
 
 @Composable private fun HomeScreen(state: AppState, model: AppViewModel, navigate: (Screen) -> Unit) {
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     var name by remember { mutableStateOf("") }; var origin by remember { mutableStateOf("") }
     Text("Your workspace.", style = MaterialTheme.typography.headlineLarge)
     state.workspace.projects.forEach { p -> OutlinedButton(onClick = { model.selectProject(p.id) }, modifier = Modifier.fillMaxWidth()) { Text("${if (state.projectId == p.id) "✓ " else ""}${p.name} · ${p.origin}") } }
-    OutlinedTextField(name, { name = it }, label = { Text("Project name") }, modifier = Modifier.fillMaxWidth())
-    OutlinedTextField(origin, { origin = it }, label = { Text("Exact origin, e.g. https://api.example.test") }, modifier = Modifier.fillMaxWidth())
-    Button(onClick = { model.createProject(name, origin) }, enabled = !state.busy) { Text("Create scoped project") }
+    OutlinedTextField(name, { name = it }, label = { Text("Project name") }, modifier = Modifier.fillMaxWidth().testTag("project_name"))
+    OutlinedTextField(origin, { origin = it }, label = { Text("Exact origin, e.g. https://api.example.test") }, modifier = Modifier.fillMaxWidth().testTag("project_origin"))
+    Button(modifier = Modifier.testTag("create_project"), onClick = { val count = model.state.value.workspace.projects.size; model.createProject(name, origin); if (model.state.value.workspace.projects.size > count) { focus.clearFocus(); keyboard?.hide() } }, enabled = !state.busy) { Text("Create scoped project") }
     Text("HTTPS-only runtime with system trust validation. No requests run on startup.", style = MaterialTheme.typography.bodySmall)
     Text("${state.workspace.exchanges.count { it.projectId == state.projectId }} history entries · ${state.workspace.findings.count { it.projectId == state.projectId }} observations")
     listOf(Screen.Browser, Screen.Traffic, Screen.Api, Screen.Tools, Screen.Findings).forEach { target ->
@@ -156,6 +164,8 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
 }
 
 @Composable private fun FindingsScreen(state: AppState, model: AppViewModel) {
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     var title by remember { mutableStateOf("") }; var detail by remember { mutableStateOf("") }
     Text("Evidence before conclusions.", style = MaterialTheme.typography.headlineSmall)
     state.selected?.let { exchange ->
@@ -164,9 +174,9 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
             OutlinedButton(onClick = { model.addFinding(observation.title, observation.evidence, exchange) }) { Text("Save as observation") }
         }
     }
-    OutlinedTextField(title, { title = it }, label = { Text("Observation title") }, modifier = Modifier.fillMaxWidth())
-    OutlinedTextField(detail, { detail = it }, label = { Text("Evidence / reproduction / next test") }, minLines = 3, modifier = Modifier.fillMaxWidth())
-    Button(onClick = { if (model.addFinding(title, detail)) { title = ""; detail = "" } }, enabled = state.projectId != null) { Text("Save observation") }
+    OutlinedTextField(title, { title = it }, label = { Text("Observation title") }, modifier = Modifier.fillMaxWidth().testTag("finding_title"))
+    OutlinedTextField(detail, { detail = it }, label = { Text("Evidence / reproduction / next test") }, minLines = 3, modifier = Modifier.fillMaxWidth().testTag("finding_detail"))
+    Button(modifier = Modifier.testTag("save_finding"), onClick = { if (model.addFinding(title, detail)) { title = ""; detail = ""; focus.clearFocus(); keyboard?.hide(); model.saveNow() } }, enabled = state.projectId != null) { Text("Save observation") }
     state.workspace.findings.filter { it.projectId == state.projectId }.forEach { finding ->
         Panel("${finding.state}: ${finding.title}", finding.detail + "\nEvidence: " + finding.evidenceIds.joinToString())
         TextButton(onClick = { model.deleteFinding(finding.id) }) { Text("Remove observation") }

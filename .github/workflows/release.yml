@@ -101,7 +101,7 @@ jobs:
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
       - uses: gradle/actions/setup-gradle@v4
       - name: Build optimized production APK and repeat release lint
-        run: ./gradlew testReleaseUnitTest lintRelease assembleRelease --no-daemon
+        run: ./gradlew :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease --no-daemon
       - name: Verify signer, SDK range, package, version and alignment
         env:
           VERSION: ${{ needs.prepare.outputs.version }}

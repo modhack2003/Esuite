@@ -5,3 +5,5 @@ dependencyResolutionManagement {
 }
 rootProject.name = "ESuite"
 include(":app")
+
+include(":ui-tests")

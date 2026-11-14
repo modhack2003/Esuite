@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 import re
 import secrets
+import json
+import shutil
 import subprocess
 import tempfile
 
@@ -42,6 +44,10 @@ with tempfile.TemporaryDirectory(prefix='esuite-signature-test-') as directory:
     pin = re.search(r'certificate SHA-256 digest: ([a-fA-F0-9]+)', signature)[1]
     metadata = guard.inspect(signed, sdk, pin, version, code)
     assert metadata['debuggable'] is False
+    ci = Path('app/build/outputs/apk/ci'); ci.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(signed, ci / 'app-release-ci.apk')
+    metadata.update(ciOnly=True, description='Disposable fixture signer; never distribute as production')
+    (ci / 'build-info-ci.json').write_text(json.dumps(metadata, indent=2) + '\n')
     print('Accepted correctly signed, pinned, optimized APK')
     rejected(lambda: guard.inspect(signed, sdk, '0' * 64, version, code), 'wrong certificate pin')
     rejected(lambda: guard.inspect(signed, sdk, pin, '99.99.99', code), 'wrong package version')

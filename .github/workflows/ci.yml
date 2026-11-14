@@ -20,22 +20,24 @@ jobs:
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
       - uses: gradle/actions/setup-gradle@v4
       - name: Unit tests, lint and debug APK
-        run: ./gradlew testDebugUnitTest lintDebug lintRelease assembleDebug assembleRelease assembleValidation assembleValidationAndroidTest --no-daemon
+        run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease :ui-tests:assembleDebug --no-daemon
       - name: Verify production publication guards with disposable fixture signer
         run: python3 tools/test_release_guards.py
       - uses: actions/upload-artifact@v4
         with:
-          name: esuite-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: esuite-device-test-bundle
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/androidTest/debug/*.apk
+            app/build/outputs/apk/ci/*
+            ui-tests/build/outputs/apk/debug/*.apk
           retention-days: 7
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: esuite-unsigned-release-validation
+          name: esuite-unsigned-release
           path: |
             app/build/outputs/apk/release/*.apk
-            app/build/outputs/apk/validation/*.apk
-            app/build/outputs/apk/androidTest/validation/*.apk
             app/build/outputs/mapping/release/mapping.txt
           retention-days: 7
       - uses: actions/upload-artifact@v4
@@ -110,7 +112,7 @@ jobs:
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
       - uses: actions/download-artifact@v4
         with:
-          name: esuite-unsigned-release-validation
+          name: esuite-device-test-bundle
           path: ci-apks
       - name: Give ephemeral runner access to KVM
         run: |
@@ -128,7 +130,7 @@ jobs:
           emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu swiftshader_indirect
           script: |
             python3 tools/instrument_apk.py
-            adb shell am start -W -n dev.esuite.app.validation/dev.esuite.app.MainActivity
+            adb shell am start -W -n dev.esuite.app/.MainActivity
             adb exec-out screencap -p > optimized-native-home.png
       - uses: actions/upload-artifact@v4
         if: always()

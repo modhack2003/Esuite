@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:label="ESuite CI UI tests" android:allowBackup="false" android:testOnly="true" />
+    <instrumentation android:name="androidx.test.runner.AndroidJUnitRunner" android:targetPackage="dev.esuite.uitests" android:functionalTest="true" />
+    <queries><package android:name="dev.esuite.app" /></queries>
+</manifest>
