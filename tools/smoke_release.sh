@@ -20,5 +20,6 @@ adb shell am start -W -n dev.esuite.app/.MainActivity
 adb shell uiautomator dump /sdcard/esuite-ui.xml >/dev/null
 adb pull /sdcard/esuite-ui.xml release-ui.xml >/dev/null
 python3 -c 'import xml.etree.ElementTree as E; r=E.parse("release-ui.xml"); assert any(n.get("text")=="Your workspace." for n in r.iter("node"))'
+adb exec-out screencap -p > release-home.png
 adb logcat -d -b crash > release-crash.txt
 if grep -q 'Process: dev.esuite.app' release-crash.txt; then cat release-crash.txt; exit 1; fi

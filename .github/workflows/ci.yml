@@ -20,6 +20,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Unit tests, lint and debug APK
         run: ./gradlew testDebugUnitTest lintDebug lintRelease assembleDebug assembleRelease assembleValidation assembleValidationAndroidTest --no-daemon
+      - name: Verify production publication guards with disposable fixture signer
+        run: python3 tools/test_release_guards.py
       - uses: actions/upload-artifact@v4
         with:
           name: esuite-debug
@@ -117,7 +119,10 @@ jobs:
           disable-animations: true
           ram-size: 4096M
           emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu swiftshader_indirect
-          script: ./gradlew connectedValidationAndroidTest --no-daemon
+          script: |
+            ./gradlew connectedValidationAndroidTest --no-daemon
+            adb shell am start -W -n dev.esuite.app.validation/dev.esuite.app.MainActivity
+            adb exec-out screencap -p > optimized-native-home.png
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -125,4 +130,5 @@ jobs:
           path: |
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
+            optimized-native-home.png
           retention-days: 7
