@@ -130,7 +130,7 @@ public class ProductionUiTest {
         tag("api_saved_name").setText("Synthetic GET"); tag("api_save_draft").click();
         assertNotNull(find(By.text("Load: Synthetic GET")));
         tag("api_url").setText("https://outside.invalid/"); tag("api_send").click();
-        assertNotNull(find(By.textMatches("Error · .*")));
+        assertNotNull(find(By.text(java.util.regex.Pattern.compile("Error · .*"))));
         // The failed send must replace the old 200 result, with no request to outside.invalid.
         top(); assertTrue(device.wait(Until.hasObject(By.res("workspace_status").textContains("outside the selected project origin")), 15000));
         tag("nav_traffic").click(); assertNotNull(find(By.textContains("Identity comparison · identity B · 200")));

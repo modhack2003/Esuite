@@ -33,6 +33,7 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel) {
     val policy = remember(project.id) { ScopePolicy(project.origin) }
     var address by remember(project.id, identity) { mutableStateOf(project.origin + "/") }
     var webView by remember(project.id, identity) { mutableStateOf<WebView?>(null) }
+    var rendererFailed by remember(project.id, identity) { mutableStateOf(false) }
     var panel by remember(project.id, identity) { mutableStateOf("Elements") }
     var output by remember(project.id, identity) { mutableStateOf("Press Go to load the selected target. Inspection is local to this WebView.") }
     var console by remember(project.id, identity) { mutableStateOf(emptyList<String>()) }
@@ -73,7 +74,8 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel) {
             OutlinedButton(onClick = { webView?.stopLoading() }) { Text("Stop") }
             OutlinedButton(onClick = { if (webView?.canGoBack() == true) webView?.goBack() }) { Text("Back") }
         }
-        key(project.id, identity) {
+        if (rendererFailed) OutlinedButton(onClick = { rendererFailed = false; output = "Press Go to reload the target" }) { Text("Restart browser renderer") }
+        else key(project.id, identity) {
             AndroidView(modifier = Modifier.fillMaxWidth().height(340.dp), factory = { context ->
                 WebView(context).apply {
                     if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) WebViewCompat.setProfile(this, "esuite_${project.id}_$identity")
@@ -105,8 +107,9 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel) {
                         }
                         override fun onPageFinished(view: WebView, url: String) { if (policy.allows(url.substringBefore('#'))) { address = url; if (output == "Loading…") output = "Page loaded" } }
                         override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
-                            view.destroy(); webView = null
-                            output = "WebView renderer stopped. Reopen Browser to create a new renderer; profile data is retained."
+                            (view.parent as? android.view.ViewGroup)?.removeView(view)
+                            view.destroy(); webView = null; rendererFailed = true
+                            output = "WebView renderer stopped. Use Restart browser renderer, then Go. Profile data is retained."
                             return true
                         }
                         override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) { handler.cancel(); output = "TLS validation failed. Connection cancelled." }
