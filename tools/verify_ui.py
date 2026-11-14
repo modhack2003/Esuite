@@ -1,6 +1,6 @@
 """Exercise the actual bundled concept without a server or target requests.
 
-Install: python -m pip install playwright==1.51.1
+Install: python -m pip install playwright==1.51.0
 Then: python -m playwright install chromium
 Run: python tools/verify_ui.py [--screenshots]
 Optional: ESUITE_CHROMIUM_PATH=/path/to/chromium for a local browser.
