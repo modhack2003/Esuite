@@ -35,6 +35,6 @@ Workspace evidence, saved requests and configured identity headers are encrypted
 
 ## Part 4 task behavior
 
-The first Part 4 CI run caught a Kotlin lambda-variable shadowing error in paired substitution. It has been corrected; use the latest run rather than the failed intermediate commit as the validation gate.
+Part 4 CI caught a lambda-variable shadowing error and an input-error exception-type mismatch. Both are corrected. A native Android 35 emulator job now verifies Keystore round-trip/tamper handling and compatible WebView profile-cookie isolation/inspection. Use the latest run rather than intermediate failed commits as the validation gate.
 
 The parameter runner exposes two payload lists in UI, four supported substitution modes, a 50-request engine cap, sequential execution and at least one second between requests. Stop cancels the underlying call; HTTP 429/503 stops the run with no retry. Saved-request sequences have at most 10 steps, fail on non-2xx responses, and can extract one token from the first response using a JSON Pointer. cURL is parsed as data, not executed. OpenAPI 3 JSON and textual HAR imports become reviewed collection drafts, never automatic requests. AWS JSON review is offline structural analysis, not an authenticated cloud audit or effective-permissions verdict.

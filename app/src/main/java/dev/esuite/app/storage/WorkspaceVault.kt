@@ -17,9 +17,10 @@ class WorkspaceVault(context: Context) {
     private val file = AtomicFile(File(context.noBackupFilesDir, "workspace.esv"))
     private val alias = "esuite_workspace_aes_v1"
     private val json = Json { encodeDefaults = true }
-    private fun key(): SecretKey {
+    private fun key(create: Boolean = true): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (store.getKey(alias, null) as? SecretKey)?.let { return it }
+        check(create) { "Workspace encryption key is missing or invalidated; no replacement key was generated" }
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply {
             init(KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
@@ -29,7 +30,7 @@ class WorkspaceVault(context: Context) {
     @Synchronized fun load(): Workspace {
         if (!file.baseFile.exists()) return Workspace()
         require(file.baseFile.length() <= Limits.VAULT_BYTES + 32) { "Workspace file exceeds limit" }
-        val decoded = VaultCipher.open(file.openRead().use { it.readBytes() }, key())
+        val decoded = VaultCipher.open(file.openRead().use { it.readBytes() }, key(create = false))
         return json.decodeFromString<Workspace>(decoded.toString(Charsets.UTF_8)).also {
             require(it.version == 1) { "Unsupported workspace version" }
             require(it.projects.size <= 20 && it.savedRequests.size <= 100 && it.findings.size <= Limits.FINDINGS && it.exchanges.size <= Limits.HISTORY) { "Workspace record limits exceeded" }

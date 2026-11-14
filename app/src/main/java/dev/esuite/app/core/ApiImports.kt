@@ -14,7 +14,7 @@ object ApiImports {
                 quote != null -> if (c == quote) quote = null else token.append(c)
                 c == '\'' || c == '"' -> { quote = c; started = true }
                 c.isWhitespace() -> if (started) { out += token.toString(); token.clear(); started = false }
-                c in "|;&<>`" -> error("Shell operators are not supported; no command is executed")
+                c in "|;&<>`" -> throw IllegalArgumentException("Shell operators are not supported; no command is executed")
                 else -> { token.append(c); started = true }
             }
         }
