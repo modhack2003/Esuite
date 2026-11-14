@@ -7,10 +7,42 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import struct
+from zipfile import ZipFile
 
 
 def output(*args):
     return subprocess.check_output(args, text=True, stderr=subprocess.STDOUT)
+
+
+
+def verify_native_alignment(apk):
+    checked = []
+    with ZipFile(apk) as archive:
+        for name in archive.namelist():
+            if not name.startswith("lib/") or not name.endswith(".so"):
+                continue
+            data = archive.read(name)
+            if data[:4] != b"\x7fELF":
+                raise ValueError(f"Invalid native library: {name}")
+            if data[4] != 2:  # 32-bit ABIs retain the Android 9 baseline.
+                continue
+            endian = "<" if data[5] == 1 else ">"
+            offset = struct.unpack_from(endian + "Q", data, 32)[0]
+            size, count = struct.unpack_from(endian + "HH", data, 54)
+            loads = 0
+            for index in range(count):
+                entry = offset + index * size
+                if struct.unpack_from(endian + "I", data, entry)[0] != 1:
+                    continue
+                _, _, file_offset, address, _, _, _, alignment = struct.unpack_from(endian + "IIQQQQQQ", data, entry)
+                if alignment < 16384 or file_offset % 16384 != address % 16384:
+                    raise ValueError(f"Native library is not compatible with 16 KiB pages: {name}")
+                loads += 1
+            if not loads:
+                raise ValueError(f"No native load segments: {name}")
+            checked.append(name)
+    return checked
 
 
 def inspect(apk, sdk, fingerprint, version, code):
@@ -23,8 +55,9 @@ def inspect(apk, sdk, fingerprint, version, code):
     certificates = re.findall(r"Signer #\d+ certificate SHA-256 digest: ([a-fA-F0-9]+)", signatures)
     if len(certificates) != 1 or certificates[0].lower() != fingerprint.lower():
         raise ValueError("APK signer does not match the pinned production certificate")
-    if "Verified using v2 scheme (APK Signature Scheme v2): true" not in signatures:
-        raise ValueError("APK v2 signature is required for the Android 9 baseline")
+    modern_signature = any(f"Verified using v{scheme} scheme (APK Signature Scheme v{scheme}): true" in signatures for scheme in (2, 3))
+    if not modern_signature:
+        raise ValueError("A verified APK v2 or v3 signature is required")
     badging = output(str(tools / "aapt2"), "dump", "badging", str(apk))
     expected = ("name='dev.esuite.app'", f"versionCode='{code}'", f"versionName='{version}'", "sdkVersion:'28'", "targetSdkVersion:'37'")
     if not all(item in badging for item in expected) or "application-debuggable" in badging:
@@ -32,7 +65,8 @@ def inspect(apk, sdk, fingerprint, version, code):
     if "maxSdkVersion" in badging or ".validation" in badging:
         raise ValueError("A maximum SDK or validation package must not be distributed")
     output(str(tools / "zipalign"), "-c", "-P", "16", "4", str(apk))
-    return {"file": apk.name, "sha256": hashlib.sha256(apk.read_bytes()).hexdigest(),
+    native_libraries = verify_native_alignment(apk)
+    return {"nativeLibraries16KiB": native_libraries, "file": apk.name, "sha256": hashlib.sha256(apk.read_bytes()).hexdigest(),
             "certificateSha256": certificates[0].lower(), "versionName": version,
             "versionCode": int(code), "minSdk": 28, "targetSdk": 37, "debuggable": False}
 

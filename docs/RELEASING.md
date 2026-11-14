@@ -33,7 +33,7 @@ Configure repository **Actions variable** `ESUITE_CERT_SHA256` with the signing 
 
 1. A push to main runs Build and verify: JVM tests, release/debug lint, optimized assembly, design checks, and native instrumentation on API 28, 29, 30, 31, 32, 33, 34, 35, 36 and 37.0. Newer System WebView capabilities are reported separately from operating-system compatibility; unsupported profile tests may skip, which must be disclosed.
 2. Signed production release is triggered only after successful main-branch push CI. Manual Run workflow also requires successful CI for that exact commit. Pull-request runs cannot access signing material through this workflow.
-3. The signing job restores the durable key to a restricted temporary file, builds the production APK, verifies its certificate pin, v2 signature, package/version/SDK metadata, non-debuggable flag and zip alignment, then removes the temporary key even on failure.
+3. The signing job restores the durable key to a restricted temporary file, builds the production APK, verifies its certificate pin, v2/v3 signature, package/version/SDK metadata, non-debuggable flag, zip alignment and 64-bit native ELF segment compatibility with 16 KiB pages, then removes the temporary key even on failure.
 4. Separate jobs install and launch the exact signed APK on API 28, 35 and 37.0, verify the native home screen, stop/relaunch it and check for crashes. They never receive signing credentials.
 5. The publication job receives only verified assets, checks SHA-256, creates a draft, uploads APK/metadata/checksums/notes, then publishes a normal stable release. Existing published versions are never replaced. A failed upload/test cannot publish the draft.
 
