@@ -22,9 +22,11 @@ import java.util.UUID
     val timestamp: Long = System.currentTimeMillis(),
 )
 @Serializable data class SavedRequest(val id: String = UUID.randomUUID().toString(), val projectId: String, val name: String, val draft: RequestDraft)
+@Serializable data class IdentityConfig(val projectId: String, val identity: String, val headers: List<Header> = emptyList())
 @Serializable data class Workspace(
     val version: Int = 1, val projects: List<Project> = emptyList(), val exchanges: List<Exchange> = emptyList(),
     val findings: List<Finding> = emptyList(), val savedRequests: List<SavedRequest> = emptyList(),
+    val identityConfigs: List<IdentityConfig> = emptyList(),
 )
 
 /** Runtime limits apply at the engine boundary as well as the UI. */

@@ -43,13 +43,14 @@ Explore the [self-contained UI concept](docs/ui/index.html), [editable Canva con
 | Native utilities | UTF-8 Base64 encode/decode, form URL encode/decode and SHA-256 hashing |
 | Native request editor | Real scoped HTTP, cancellation, response limits, raw HTTP import and account A/B comparison |
 | Browser | Compatible per-project/identity WebView profiles, element selection, HTML/CSS edits, native cookies, console, storage and request metadata |
+| Local evidence | AES-GCM project persistence, request collections, observations, sanitized report preview/export and project deletion |
 | Passive observations | Inspect selected API responses for cookie/header hardening observations; no extra scan requests |
 | Web concept | Six views, searchable fixtures, request-detail transfer, simulated account comparison and in-memory notes |
 | Web decoder | Real Unicode-aware Base64 transformations, executed locally |
 | Design system | Original E monogram, vector banner, palette, navigation, flows and UI state specification |
 | Engineering foundation | Gradle wrapper with pinned distribution checksum, unit tests, CI build definition and contribution guidance |
 
-The native app now has INTERNET permission for explicit target operations. Runtime targets require HTTPS and system trust validation. HTTP is used only by local JVM integration fixtures. API redirects/retries are disabled. Evidence is currently held in memory; encrypted persistence is the next increment. No VPN or full interception service is registered.
+The native app now has INTERNET permission for explicit target operations. Runtime targets require HTTPS and system trust validation. HTTP is used only by local JVM integration fixtures. API redirects/retries are disabled. Project evidence, saved requests and identity headers are now encrypted locally with an Android Keystore key. API session cookie jars remain memory-only; WebView profiles use their separate platform store. No VPN or full interception service is registered.
 
 ## The toolkit we are building
 
@@ -91,7 +92,7 @@ These are engineering requirements and known constraints, not currently implemen
 
 The intended product has no mandatory account, analytics backend, hosted AI, automatic capture upload or remote worker. Target requests still travel to the target: local processing does not mean internet targets can be tested offline.
 
-Planned storage protections include Keystore-protected keys, encrypted sensitive records, protected interception CA keys, retention limits, backup exclusions and explicit redacted exports. The current native workflow uses user-selected targets. Encrypted persistence is the next increment; do not treat the current memory-only state as a durable evidence vault.
+Planned storage protections include Keystore-protected keys, encrypted sensitive records, protected interception CA keys, retention limits, backup exclusions and explicit redacted exports. The native workflow uses user-selected targets. Encrypted workspace storage is implemented; Android Keystore and vendor backup behavior still require physical-device verification. WebView profile storage remains a separate platform-managed store.
 
 ## Try the foundation
 

@@ -36,6 +36,17 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     var selectedName by rememberSaveable { mutableStateOf(Screen.Home.name) }
     val screen = Screen.valueOf(selectedName)
     val project = state.workspace.projects.firstOrNull { it.id == state.projectId }
+    if (!state.ready) {
+        var erase by remember { mutableStateOf(false) }
+        Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text("ESuite · encrypted workspace", style = MaterialTheme.typography.titleLarge)
+            Text(state.message)
+            OutlinedButton(onClick = model::loadWorkspace) { Text("Retry open") }
+            TextButton(onClick = { erase = true }) { Text("Erase unreadable vault") }
+            if (erase) EraseVaultDialog({ erase = false }, model)
+        }
+        return
+    }
     Scaffold(containerColor = Midnight, bottomBar = {
         NavigationBar(containerColor = Midnight) {
             Screen.entries.filter { it != Screen.Tools }.forEach { target ->
@@ -89,6 +100,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
         OutlinedButton(onClick = { navigate(target) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(target.label, Modifier.weight(1f)); Text("↗") }
     }
     Panel("Capture status", "Browser request metadata and API responses are available. Full browser interception and device-wide VPN forwarding are not implemented yet.")
+    WorkspaceControls(state, model)
 }
 
 @Composable private fun TrafficScreen(state: AppState, model: AppViewModel, openApi: () -> Unit) {
@@ -111,6 +123,8 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     val draft = state.draft
     var headers by remember(draft.headers) { mutableStateOf(draft.headers.joinToString("\n") { "${it.name}: ${it.value}" }) }
     var raw by remember { mutableStateOf("") }
+    var savedName by remember { mutableStateOf("") }
+    var identityHeaders by remember(state.projectId, state.identity, state.workspace.identityConfigs) { mutableStateOf(state.workspace.identityConfigs.firstOrNull { it.projectId == state.projectId && it.identity == state.identity }?.headers.orEmpty().joinToString("\n") { "${it.name}: ${it.value}" }) }
     fun prepare(action: () -> Unit) { runCatching { DraftParser.headers(headers) }.onSuccess { model.draft(draft.copy(headers = it)); action() }.onFailure { model.message(it.message ?: "Invalid headers") } }
     Text("Request lab.", style = MaterialTheme.typography.headlineLarge)
     OutlinedTextField(draft.method, { model.draft(draft.copy(method = it.uppercase())) }, label = { Text("HTTP method") }, modifier = Modifier.fillMaxWidth())
@@ -129,6 +143,11 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     OutlinedButton(onClick = { model.currentProject()?.let { p -> runCatching { DraftParser.raw(raw, p.origin) }.onSuccess(model::draft).onFailure { model.message(it.message ?: "Invalid request") } } }) { Text("Import into editor") }
     OutlinedButton(onClick = { model.message(model.currentProject()?.let { model.engine.sessions.jar(it.id, state.identity).describe() }.orEmpty().ifBlank { "No session cookies for this identity" }) }) { Text("Show API session metadata") }
     OutlinedButton(onClick = { model.clearSessions() }) { Text("Clear API sessions") }
+    OutlinedTextField(identityHeaders, { identityHeaders = it }, label = { Text("Identity ${state.identity} headers (encrypted)") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+    OutlinedButton(onClick = { model.configureIdentity(identityHeaders) }) { Text("Save this identity's auth headers") }
+    OutlinedTextField(savedName, { savedName = it }, label = { Text("Saved request name") }, modifier = Modifier.fillMaxWidth())
+    OutlinedButton(onClick = { prepare { model.saveDraft(savedName) } }) { Text("Save request to collection") }
+    state.workspace.savedRequests.filter { it.projectId == state.projectId }.forEach { saved -> OutlinedButton(onClick = { model.draft(saved.draft) }, modifier = Modifier.fillMaxWidth()) { Text("Load: ${saved.name}") } }
 }
 
 @Composable private fun FindingsScreen(state: AppState, model: AppViewModel) {

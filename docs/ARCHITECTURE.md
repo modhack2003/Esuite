@@ -15,7 +15,7 @@
 | proxy | HTTP interception and scoped modification | Planned |
 | capture | VpnService, selected apps, userspace forwarding | Planned |
 | analysis | Passive observations and structured body comparison | Implemented; task scheduling planned |
-| storage | Local encryption, retention, redaction and export | Planned |
+| storage | Keystore AES-GCM vault, bounded history, sanitized local export | Implemented; device checks pending |
 | cloud | Direct account audits and imported configurations | Planned |
 
 Start modular boundaries inside the app; split Gradle modules as implementations justify them. Do not create empty modules pretending to be engines.
@@ -34,4 +34,4 @@ Prove browser proxy routing, cookie metadata support, separate profiles, rootles
 
 Shipping design: no backend, telemetry or remote AI; local project storage with Keystore-protected keys; per-project retention; local CA private key protection; explicit redacted exports; backup exclusions; loopback-bound control surfaces. These storage and capture mechanisms are roadmap requirements, not current working security claims.
 
-Present native app: explicit INTERNET permission and exact-origin HTTP execution. Project/evidence state currently remains in memory. WebView manages its own app-private profile cookie/cache data, separate from the planned encrypted project vault. Backups are excluded; platform behavior still needs device verification.
+Present native app: explicit INTERNET permission and exact-origin HTTP execution. Projects, evidence, saved requests and configured identity headers persist in the Keystore-encrypted workspace. API cookie jars remain in memory. WebView manages its own app-private profile cookie/cache data, separate from the planned encrypted project vault. Backups are excluded; platform behavior still needs device verification.

@@ -2,7 +2,7 @@
 
 All unchecked items are planned. A native build or a UI preview does not establish capture functionality.
 
-Current implementation and next-agent entry point: [Agent handoff](AGENT_HANDOFF.md). Part 1 API engine tests passed CI. Part 2 adds live browser and native API wiring; CI/device verification is tracked in the handoff. Do not infer native networking capability from the still-synthetic React concept.
+Current implementation and next-agent entry point: [Agent handoff](AGENT_HANDOFF.md). Part 1 API engine tests passed CI. Part 2 browser/API UI passed CI. Part 3 adds encrypted workspace, collections and exports; device verification remains tracked in the handoff. Do not infer native networking capability from the still-synthetic React concept.
 
 ## Foundation delivered
 
@@ -27,11 +27,12 @@ Current implementation and next-agent entry point: [Agent handoff](AGENT_HANDOFF
 
 ## M1 — manual testing workbench
 
-- [ ] Live browser DOM/CSS inspector, console and storage views.
+- [x] Live browser DOM/CSS inspector, console and storage views (built and page-side scripts tested; device tests pending).
 - [ ] Scoped Proxy intercept/edit/forward/drop and history.
 - [x] Real API execution / Repeater and per-identity cookie jars (JVM integration tests passed).
 - [ ] Original/modified message provenance, Decoder and Comparer.
-- [ ] Site map, local findings, redaction and encrypted persistence.
+- [x] Local observations, sanitized export and encrypted workspace implementation (Part 3; CI/device gates tracked).
+- [ ] Expand observed history into a dedicated site map and rich evidence report formats.
 
 ## M2 — version 1 completion
 
