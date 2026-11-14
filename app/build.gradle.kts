@@ -1,19 +1,28 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
+
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+val releaseVersion = Properties().apply { rootProject.file("release/version.properties").inputStream().use(::load) }
+val signingNames = listOf("ESUITE_KEYSTORE_PATH", "ESUITE_STORE_PASSWORD", "ESUITE_KEY_ALIAS", "ESUITE_KEY_PASSWORD")
+val signingValues = signingNames.associateWith { providers.environmentVariable(it).orNull }
+require(signingValues.values.all { it.isNullOrBlank() } || signingValues.values.all { !it.isNullOrBlank() }) {
+    "Release signing requires all four ESUITE signing environment variables. No debug-key fallback is permitted."
+}
+
 android {
     namespace = "dev.esuite.app"
-    compileSdk = 35
+    compileSdk { version = release(37) { minorApiLevel = 0 } }
     defaultConfig {
         applicationId = "dev.esuite.app"
         minSdk = 28
-        targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0-dev"
+        targetSdk = 37
+        versionCode = releaseVersion.getProperty("versionCode").toInt()
+        versionName = releaseVersion.getProperty("versionName")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }
@@ -21,7 +30,36 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
+    signingConfigs {
+        if (signingValues.values.all { !it.isNullOrBlank() }) create("production") {
+            storeFile = file(signingValues.getValue("ESUITE_KEYSTORE_PATH")!!)
+            storePassword = signingValues.getValue("ESUITE_STORE_PASSWORD")
+            keyAlias = signingValues.getValue("ESUITE_KEY_ALIAS")
+            keyPassword = signingValues.getValue("ESUITE_KEY_PASSWORD")
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            isDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.findByName("production")
+        }
+        // Same optimization settings; CI-only signer. This variant is never a release asset.
+        create("validation") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".validation"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+        }
+    }
+    testBuildType = "validation"
+    lint { abortOnError = true; checkReleaseBuilds = true }
+}
+
+kotlin {
+    compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
 
 dependencies {
@@ -37,6 +75,8 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2025.04.01"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
 }

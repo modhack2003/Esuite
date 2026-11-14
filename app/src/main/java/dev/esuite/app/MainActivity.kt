@@ -3,6 +3,7 @@ package dev.esuite.app
 import android.os.Bundle
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -21,6 +22,7 @@ import dev.esuite.app.ui.*
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         WebView.setWebContentsDebuggingEnabled(false)
         setContent { ESuiteTheme { ESuiteApp() } }
     }
@@ -38,7 +40,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     val project = state.workspace.projects.firstOrNull { it.id == state.projectId }
     if (!state.ready) {
         var erase by remember { mutableStateOf(false) }
-        Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("ESuite · encrypted workspace", style = MaterialTheme.typography.titleLarge)
             Text(state.message)
             OutlinedButton(onClick = model::loadWorkspace) { Text("Retry open") }
@@ -58,7 +60,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("E  ESuite", style = MaterialTheme.typography.titleLarge, color = Signal)
-                Text("DEVELOPMENT", color = Muted, style = MaterialTheme.typography.labelSmall)
+                Text("ON DEVICE", color = Muted, style = MaterialTheme.typography.labelSmall)
             }
             Text(project?.let { "${it.name} · ${it.origin} · identity ${state.identity}" } ?: "No active project", color = Signal, style = MaterialTheme.typography.bodySmall)
             if (project != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

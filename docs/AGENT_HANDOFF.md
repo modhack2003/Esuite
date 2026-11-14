@@ -23,6 +23,15 @@ Latest tested application source: `6fc8be239dd7f1a7d5fc0ac665e22e3e6ca6a1bf`. Fi
 | Native boundary tests | Android 15 emulator: actual Keystore round-trip and tamper rejection; separate WebView cookies including HttpOnly/native visibility; page inspector execution. Two tests passed, none skipped | https://github.com/modhack2003/Esuite/actions/runs/43583424635 |
 | Storage hardening | AtomicFile backup recovery, missing-key failure without replacement, durable-data admission budgets and collection/observation removal | Passed including native backup recovery: https://github.com/modhack2003/Esuite/actions/runs/43584287247 |
 
+## Release engineering increment (verification pending)
+
+User now requests Android 9–17 and a signed production APK through GitHub Actions / Releases.
+- Migrated to AGP 9.2.1 / Gradle 9.4.1 / built-in Kotlin 2.2.10; compile SDK 37.0, target 37, minimum 28, no maxSdk.
+- Release uses R8/resource shrinking and no debug signing fallback. Optimized `.validation` variant is CI-only, never distributable as production.
+- Added native project → observation → activity recreation UI test; expanded emulator matrix API 28–37.0 including Android 12L and 16 KiB API 36/37 images. Results still pending; old 23+2 count is historical.
+- GitHub connector can write code but cannot administer Actions secrets. Local gh has no login and browser is signed out. A durable production signer remains a concrete publication blocker. Do not generate a new signing identity each CI run or publish its private material.
+- Next: run/fix migrated CI, add secure signed-release workflow, configure signing secrets with account owner access, verify certificate and release assets. Preserve all unchecked product tasks below.
+
 ## Next tasks in dependency order
 
 | ID | Priority | Task | Acceptance gate |
