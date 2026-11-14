@@ -19,6 +19,7 @@ def instrument(method, expected):
     output = run('adb', 'shell', 'am', 'instrument', '-w', '-r', '-e', 'class',
                  method, 'dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner')
     Path('signed-ui-results').mkdir(exist_ok=True)
+    subprocess.run(['adb', 'pull', '/sdcard/Android/data/dev.esuite.uitests/files', 'signed-ui-results/ui-evidence'], check=False, timeout=30)
     Path('signed-ui-results', method.split('.')[-1].replace('#', '-') + '.txt').write_text(output)
     # Android's am can exit 0 even when JUnit fails. Require its completed summary.
     if f'OK ({expected} test' not in output or 'FAILURES!!!' in output or 'INSTRUMENTATION_CODE: -1' not in output:

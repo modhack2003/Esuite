@@ -18,6 +18,19 @@ import static org.junit.Assert.*;
 public class ProductionUiTest {
     private final UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
 
+    @org.junit.Rule public org.junit.rules.TestWatcher evidence = new org.junit.rules.TestWatcher() {
+        @Override protected void failed(Throwable error, org.junit.runner.Description description) {
+            try {
+                java.io.File dir = InstrumentationRegistry.getInstrumentation().getContext().getExternalFilesDir(null);
+                if(dir != null) {
+                    device.takeScreenshot(new java.io.File(dir, description.getMethodName()+".png"));
+                    java.io.File tree = new java.io.File(dir, description.getMethodName()+".xml");
+                    device.dumpWindowHierarchy(tree);
+                    System.out.println("Failure UI hierarchy: " + new String(java.nio.file.Files.readAllBytes(tree.toPath()), java.nio.charset.StandardCharsets.UTF_8));
+                }
+            } catch(Exception diagnostic) { System.out.println("Failure evidence unavailable: "+diagnostic); }
+        }
+    };
     @Before public void resetDisposableFixture() throws Exception {
         assertEquals("UI fixture runner supports disposable emulators only", "1", device.executeShellCommand("getprop ro.kernel.qemu").trim());
         assertTrue(device.executeShellCommand("pm clear dev.esuite.app").contains("Success"));
