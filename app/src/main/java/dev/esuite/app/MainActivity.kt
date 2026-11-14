@@ -1,6 +1,7 @@
 package dev.esuite.app
 
 import android.os.Bundle
+import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -11,151 +12,147 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import dev.esuite.app.core.Codec
-import dev.esuite.app.data.demoTraffic
+import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.esuite.app.browser.BrowserScreen
+import dev.esuite.app.core.*
 import dev.esuite.app.ui.*
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WebView.setWebContentsDebuggingEnabled(false)
         setContent { ESuiteTheme { ESuiteApp() } }
     }
 }
 
-private enum class Screen(val label: String, val symbol: String) {
-    Home("Home", "E"), Browser("Browser", "◎"), Traffic("Traffic", "⇄"), Api("API Lab", "{}"), Tools("Tools", "⌘")
+enum class Screen(val label: String, val symbol: String) {
+    Home("Home", "E"), Browser("Browser", "◎"), Traffic("Traffic", "⇄"), Api("API Lab", "{}"), Findings("Findings", "⚑"), Tools("Tools", "⌘")
 }
 
 @Composable
-fun ESuiteApp() {
+fun ESuiteApp(model: AppViewModel = viewModel()) {
+    val state by model.state.collectAsState()
     var selectedName by rememberSaveable { mutableStateOf(Screen.Home.name) }
     val screen = Screen.valueOf(selectedName)
-    Scaffold(
-        containerColor = Midnight,
-        bottomBar = {
-            NavigationBar(containerColor = Midnight) {
-                Screen.entries.forEach { target ->
-                    NavigationBarItem(selected = screen == target, onClick = { selectedName = target.name },
-                        icon = { Text(target.symbol) }, label = { Text(target.label) })
-                }
+    val project = state.workspace.projects.firstOrNull { it.id == state.projectId }
+    Scaffold(containerColor = Midnight, bottomBar = {
+        NavigationBar(containerColor = Midnight) {
+            Screen.entries.filter { it != Screen.Tools }.forEach { target ->
+                NavigationBarItem(selected = screen == target, onClick = { selectedName = target.name }, icon = { Text(target.symbol) }, label = { Text(target.label) })
             }
-        },
-    ) { inset ->
-        Column(Modifier.fillMaxSize().padding(inset).imePadding().padding(horizontal = 20.dp)
-            .verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        }
+    }) { inset ->
+        Column(Modifier.fillMaxSize().padding(inset).imePadding().padding(horizontal = 18.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("E  ESuite", style = MaterialTheme.typography.titleLarge, color = Signal)
-                Text("ALPHA UI", color = Muted, style = MaterialTheme.typography.labelSmall)
+                Text("DEVELOPMENT", color = Muted, style = MaterialTheme.typography.labelSmall)
             }
-            Text("SYNTHETIC DEMO · NO LIVE CAPTURE", color = Signal, style = MaterialTheme.typography.labelSmall)
+            Text(project?.let { "${it.name} · ${it.origin} · identity ${state.identity}" } ?: "No active project", color = Signal, style = MaterialTheme.typography.bodySmall)
+            if (project != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("A", "B").forEach { identity -> FilterChip(selected = state.identity == identity, onClick = { model.identity(identity) }, label = { Text("Identity $identity") }) }
+            }
+            Text(state.message, style = MaterialTheme.typography.bodySmall, color = Muted)
             when (screen) {
-                Screen.Home -> HomeScreen { selectedName = it.name }
-                Screen.Browser -> BrowserConcept()
-                Screen.Traffic -> TrafficScreen { selectedName = Screen.Api.name }
-                Screen.Api -> ApiConcept()
+                Screen.Home -> HomeScreen(state, model) { selectedName = it.name }
+                Screen.Browser -> if (project != null) BrowserScreen(project, state.identity, model) else Text("Create a project first.")
+                Screen.Traffic -> TrafficScreen(state, model) { selectedName = Screen.Api.name }
+                Screen.Api -> ApiScreen(state, model)
+                Screen.Findings -> FindingsScreen(state, model)
                 Screen.Tools -> ToolsScreen()
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(20.dp))
         }
     }
 }
 
-@Composable
-private fun Panel(title: String, body: String) {
+@Composable fun Panel(title: String, body: String) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Raised)) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, color = Ink, style = MaterialTheme.typography.titleMedium)
-            Text(body, color = Muted, style = MaterialTheme.typography.bodyMedium)
+            SelectionContainer { Text(body, color = Muted, style = MaterialTheme.typography.bodySmall) }
         }
     }
 }
 
-@Composable
-private fun HomeScreen(navigate: (Screen) -> Unit) {
+@Composable private fun HomeScreen(state: AppState, model: AppViewModel, navigate: (Screen) -> Unit) {
+    var name by remember { mutableStateOf("") }; var origin by remember { mutableStateOf("") }
     Text("Your workspace.", style = MaterialTheme.typography.headlineLarge)
-    Panel("Sandbox API", "api.esuite.test\n\nA bundled demo project. No traffic is captured or transmitted.")
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text("05 fixture requests", color = Signal)
-        Text("02 demo identities", color = Amber)
+    state.workspace.projects.forEach { p -> OutlinedButton(onClick = { model.selectProject(p.id) }, modifier = Modifier.fillMaxWidth()) { Text("${if (state.projectId == p.id) "✓ " else ""}${p.name} · ${p.origin}") } }
+    OutlinedTextField(name, { name = it }, label = { Text("Project name") }, modifier = Modifier.fillMaxWidth())
+    OutlinedTextField(origin, { origin = it }, label = { Text("Exact origin, e.g. https://api.example.test") }, modifier = Modifier.fillMaxWidth())
+    Button(onClick = { model.createProject(name, origin) }, enabled = !state.busy) { Text("Create scoped project") }
+    Text("HTTPS-only runtime with system trust validation. No requests run on startup.", style = MaterialTheme.typography.bodySmall)
+    Text("${state.workspace.exchanges.count { it.projectId == state.projectId }} history entries · ${state.workspace.findings.count { it.projectId == state.projectId }} observations")
+    listOf(Screen.Browser, Screen.Traffic, Screen.Api, Screen.Tools, Screen.Findings).forEach { target ->
+        OutlinedButton(onClick = { navigate(target) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(target.label, Modifier.weight(1f)); Text("↗") }
     }
-    Text("Start investigating", style = MaterialTheme.typography.titleMedium)
-    listOf(Screen.Browser, Screen.Traffic, Screen.Api, Screen.Tools).forEach { target ->
-        OutlinedButton(onClick = { navigate(target) }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
-            Text(target.label, Modifier.weight(1f)); Text("↗")
+    Panel("Capture status", "Browser request metadata and API responses are available. Full browser interception and device-wide VPN forwarding are not implemented yet.")
+}
+
+@Composable private fun TrafficScreen(state: AppState, model: AppViewModel, openApi: () -> Unit) {
+    var filter by remember { mutableStateOf("") }
+    Text("Every observed exchange.", style = MaterialTheme.typography.headlineSmall)
+    OutlinedTextField(filter, { filter = it }, label = { Text("Filter method, URL or source") }, modifier = Modifier.fillMaxWidth())
+    val entries = state.workspace.exchanges.filter { it.projectId == state.projectId && (it.request.method + it.request.url + it.source).contains(filter, true) }
+    if (entries.isEmpty()) Text("No matching history. Browse an in-scope page or send an API request.")
+    entries.take(50).forEach { e ->
+        OutlinedButton(onClick = { model.select(e) }, modifier = Modifier.fillMaxWidth()) { Text("${e.request.method} ${e.request.url}\n${e.source} · identity ${e.identity} · ${e.status ?: if (e.error != null) "error" else "metadata only"}") }
+    }
+    state.selected?.takeIf { it.projectId == state.projectId }?.let { e ->
+        Panel("Exchange detail", "${e.completeness}\n${e.error.orEmpty()}\n\n" + e.request.headers.joinToString("\n") { "${it.name}: ${it.value}" } + "\n\n" + e.responseHeaders.joinToString("\n") { "${it.name}: ${it.value}" } + "\n\n${e.response.encoding}${if (e.response.truncated) " · TRUNCATED" else ""}\n${e.response.value}")
+        Button(onClick = { model.replay(e); openApi() }) { Text("To API Lab (review before sending)") }
+    }
+    OutlinedButton(onClick = { model.clearHistory() }) { Text("Clear this project's history") }
+}
+
+@Composable private fun ApiScreen(state: AppState, model: AppViewModel) {
+    val draft = state.draft
+    var headers by remember(draft.headers) { mutableStateOf(draft.headers.joinToString("\n") { "${it.name}: ${it.value}" }) }
+    var raw by remember { mutableStateOf("") }
+    fun prepare(action: () -> Unit) { runCatching { DraftParser.headers(headers) }.onSuccess { model.draft(draft.copy(headers = it)); action() }.onFailure { model.message(it.message ?: "Invalid headers") } }
+    Text("Request lab.", style = MaterialTheme.typography.headlineLarge)
+    OutlinedTextField(draft.method, { model.draft(draft.copy(method = it.uppercase())) }, label = { Text("HTTP method") }, modifier = Modifier.fillMaxWidth())
+    OutlinedTextField(draft.url, { model.draft(draft.copy(url = it)) }, label = { Text("URL (must match project origin)") }, modifier = Modifier.fillMaxWidth())
+    OutlinedTextField(headers, { headers = it }, label = { Text("Headers — Name: value") }, minLines = 3, modifier = Modifier.fillMaxWidth())
+    OutlinedTextField(draft.body, { model.draft(draft.copy(body = it)) }, label = { Text("Request body") }, minLines = 3, modifier = Modifier.fillMaxWidth())
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(onClick = { prepare { model.send() } }, enabled = !state.busy && state.projectId != null) { Text("Send") }
+        OutlinedButton(onClick = { model.cancelRequest() }, enabled = state.busy) { Text("Cancel") }
+    }
+    OutlinedButton(onClick = { prepare { model.send(compare = true) } }, enabled = !state.busy && state.projectId != null) { Text("Send as A then B (two requests)") }
+    Text("Redirects and automatic retries are disabled. Comparison omits explicit Cookie/Authorization headers and uses each identity's own jar.", style = MaterialTheme.typography.bodySmall)
+    if (state.comparison.isNotBlank()) Panel("Comparison", state.comparison)
+    state.selected?.let { e -> Panel("${e.status ?: "Error"} · ${e.durationMs} ms · ${e.response.encoding}${if (e.response.truncated) " · TRUNCATED" else ""}", e.error ?: e.responseHeaders.joinToString("\n") { "${it.name}: ${it.value}" } + "\n\n" + e.response.value) }
+    OutlinedTextField(raw, { raw = it }, label = { Text("Import raw HTTP/1.x message") }, minLines = 3, modifier = Modifier.fillMaxWidth())
+    OutlinedButton(onClick = { model.currentProject()?.let { p -> runCatching { DraftParser.raw(raw, p.origin) }.onSuccess(model::draft).onFailure { model.message(it.message ?: "Invalid request") } } }) { Text("Import into editor") }
+    OutlinedButton(onClick = { model.message(model.currentProject()?.let { model.engine.sessions.jar(it.id, state.identity).describe() }.orEmpty().ifBlank { "No session cookies for this identity" }) }) { Text("Show API session metadata") }
+    OutlinedButton(onClick = { model.clearSessions() }) { Text("Clear API sessions") }
+}
+
+@Composable private fun FindingsScreen(state: AppState, model: AppViewModel) {
+    var title by remember { mutableStateOf("") }; var detail by remember { mutableStateOf("") }
+    Text("Evidence before conclusions.", style = MaterialTheme.typography.headlineSmall)
+    state.selected?.let { exchange ->
+        PassiveAnalyzer.inspect(exchange).forEach { observation ->
+            Panel(observation.title, observation.evidence)
+            OutlinedButton(onClick = { model.addFinding(observation.title, observation.evidence, exchange) }) { Text("Save as observation") }
         }
     }
-    Panel("Your work stays with you.", "This starter uses in-memory fixtures and local utilities. Browser inspection, VPN capture and encrypted project storage are planned.")
+    OutlinedTextField(title, { title = it }, label = { Text("Observation title") }, modifier = Modifier.fillMaxWidth())
+    OutlinedTextField(detail, { detail = it }, label = { Text("Evidence / reproduction / next test") }, minLines = 3, modifier = Modifier.fillMaxWidth())
+    Button(onClick = { model.addFinding(title, detail); title = ""; detail = "" }, enabled = state.projectId != null) { Text("Save observation") }
+    state.workspace.findings.filter { it.projectId == state.projectId }.forEach { Panel("${it.state}: ${it.title}", it.detail + "\nEvidence: " + it.evidenceIds.joinToString()) }
 }
 
-@Composable
-private fun BrowserConcept() {
-    var tab by rememberSaveable { mutableStateOf("Elements") }
-    Text("Look closer.", style = MaterialTheme.typography.headlineLarge)
-    Panel("sandbox.esuite.test", "Browser inspector concept. This screen is not a live WebView.")
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf("Elements", "Cookies").forEach { name -> FilterChip(selected = tab == name, onClick = { tab = name }, label = { Text(name) }) }
-    }
-    SelectionContainer {
-        Text(if (tab == "Elements") "<button class=\"profile-action\">\n  View profile\n</button>"
-            else "session_demo = synthetic-session-value\nDomain: sandbox.esuite.test\nPath: /\nHttpOnly: true\nSecure: true\nSameSite: Lax",
-            color = Signal, fontFamily = FontFamily.Monospace)
-    }
-    Panel("Native inspection is next", "Cookie APIs and the capture engine must be validated before this becomes a live inspection screen.")
-}
-
-@Composable
-private fun TrafficScreen(openApi: () -> Unit) {
-    var query by rememberSaveable { mutableStateOf("") }
-    Text("Every request.", style = MaterialTheme.typography.headlineLarge)
-    Text("Bundled fixture history · no capture service running", color = Muted)
-    OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Filter path or method") }, modifier = Modifier.fillMaxWidth())
-    val filtered = demoTraffic.filter { (it.method + it.path).contains(query, ignoreCase = true) }
-    if (filtered.isEmpty()) Text("No fixture requests match.", color = Muted)
-    filtered.forEach { request ->
-        Panel("${request.method}  ${request.path}", "${request.status} · ${request.durationMs} ms · api.esuite.test\nSynthetic response record")
-    }
-    Button(onClick = openApi, modifier = Modifier.fillMaxWidth()) { Text("Open API Lab concept") }
-}
-
-@Composable
-private fun ApiConcept() {
-    var identity by rememberSaveable { mutableStateOf("Account A") }
-    var request by rememberSaveable { mutableStateOf("GET /api/profile HTTP/1.1\nHost: api.esuite.test\nAccept: application/json") }
-    var response by rememberSaveable { mutableStateOf("") }
-    Text("Request lab.", style = MaterialTheme.typography.headlineLarge)
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf("Account A", "Account B").forEach { account -> FilterChip(selected = identity == account, onClick = { identity = account; response = "" }, label = { Text(account) }) }
-    }
-    OutlinedTextField(value = request, onValueChange = { request = it; response = "" }, label = { Text("Editable request · no network") }, minLines = 5, modifier = Modifier.fillMaxWidth())
-    Button(onClick = { response = if (identity == "Account A") "{\"id\":\"user_a\",\"role\":\"member\"}" else "{\"id\":\"user_b\",\"role\":\"member\"}" }, modifier = Modifier.fillMaxWidth()) { Text("Load identity fixture") }
-    if (response.isNotEmpty()) SelectionContainer { Text(response, color = Signal, fontFamily = FontFamily.Monospace) }
-    Text("The edited request is not executed. Live HTTP replay and real session isolation are planned.", color = Muted)
-}
-
-@Composable
-private fun ToolsScreen() {
-    var input by rememberSaveable { mutableStateOf("ESuite: inspect anywhere.") }
-    var output by rememberSaveable { mutableStateOf("") }
-    var error by rememberSaveable { mutableStateOf(false) }
-    fun transform(action: (String) -> String) {
-        runCatching { action(input) }.onSuccess { output = it; error = false }
-            .onFailure { output = "Invalid input for this transformation."; error = true }
-    }
+@Composable private fun ToolsScreen() {
+    var input by remember { mutableStateOf("") }; var output by remember { mutableStateOf("") }
+    fun transform(action: (String) -> String) { output = runCatching { action(input) }.getOrElse { it.message ?: "Invalid input" } }
     Text("Local utilities.", style = MaterialTheme.typography.headlineLarge)
-    Text("Working locally · no network or persistence", color = Signal)
-    OutlinedTextField(value = input, onValueChange = { input = it }, label = { Text("Input") }, minLines = 4, modifier = Modifier.fillMaxWidth())
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(onClick = { transform(Codec::base64Encode) }) { Text("Base64 encode") }
-        OutlinedButton(onClick = { transform(Codec::base64Decode) }) { Text("Decode") }
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { transform(Codec::formEncode) }) { Text("Form URL encode") }
-        OutlinedButton(onClick = { transform(Codec::formDecode) }) { Text("Decode") }
-    }
-    OutlinedButton(onClick = { transform(Codec::sha256) }, modifier = Modifier.fillMaxWidth()) { Text("SHA-256 hash") }
-    OutlinedTextField(value = output, onValueChange = {}, readOnly = true, isError = error, label = { Text("Output") }, minLines = 4, modifier = Modifier.fillMaxWidth())
-    Text("Form URL encoding uses '+' for spaces. Hashing is one-way.", color = Muted)
+    OutlinedTextField(input, { input = it }, label = { Text("Input") }, minLines = 4, modifier = Modifier.fillMaxWidth())
+    listOf<Pair<String, (String) -> String>>("Base64 encode" to Codec::base64Encode, "Base64 decode" to Codec::base64Decode, "Form URL encode" to Codec::formEncode, "Form URL decode" to Codec::formDecode, "SHA-256" to Codec::sha256, "JWT claims (unverified)" to TokenTools::jwtClaims,
+        "Token sample statistics" to { TokenTools.sample(it.lines().filter(String::isNotBlank)) }).forEach { (name, action) -> OutlinedButton(onClick = { transform(action) }, modifier = Modifier.fillMaxWidth()) { Text(name) } }
+    OutlinedTextField(output, {}, readOnly = true, label = { Text("Output") }, minLines = 4, modifier = Modifier.fillMaxWidth())
+    Text("All transformations run locally. JWT decoding is not verification; sample statistics do not prove unpredictability.", style = MaterialTheme.typography.bodySmall)
 }

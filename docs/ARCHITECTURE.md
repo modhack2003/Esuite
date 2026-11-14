@@ -2,7 +2,7 @@
 
 ## Current boundary
 
-`app/` is a native Kotlin/Compose UI foundation with pure local codecs and synthetic fixtures. `design/prototype/` is the independent web interaction study. Neither includes a traffic interception engine. The web concept and native starter deliberately do not execute editable requests.
+`app/` now has a scoped OkHttp engine with isolated identity sessions and a live native WebView inspector. `design/prototype/` remains the synthetic web interaction study. Native browser callbacks record request metadata only; no proxy or VPN interception engine exists yet.
 
 ## Proposed module boundaries
 
@@ -10,11 +10,11 @@
 | --- | --- | --- |
 | app | Navigation, Compose screens, lifecycle | Starter implemented |
 | core | Byte transformations and shared data contracts | Codec implemented |
-| browser | WebView, native cookies, inspection and profiles | Planned |
-| transport | Scoped API requests, TLS validation, identity jars | Planned |
+| browser | WebView, native cookies, inspection and profiles | Implemented; device checks pending |
+| transport | Scoped API requests, TLS validation, identity jars | Implemented; JVM integration tests passed |
 | proxy | HTTP interception and scoped modification | Planned |
 | capture | VpnService, selected apps, userspace forwarding | Planned |
-| analysis | Passive checks, comparison, task scheduler | Planned |
+| analysis | Passive observations and structured body comparison | Implemented; task scheduling planned |
 | storage | Local encryption, retention, redaction and export | Planned |
 | cloud | Direct account audits and imported configurations | Planned |
 
@@ -34,4 +34,4 @@ Prove browser proxy routing, cookie metadata support, separate profiles, rootles
 
 Shipping design: no backend, telemetry or remote AI; local project storage with Keystore-protected keys; per-project retention; local CA private key protection; explicit redacted exports; backup exclusions; loopback-bound control surfaces. These storage and capture mechanisms are roadmap requirements, not current working security claims.
 
-Present starter: no INTERNET permission, no credentials, no database and no network execution. UI data remains in memory / Android saved UI state. Saved-state restoration is for demonstration values, not a future secret vault.
+Present native app: explicit INTERNET permission and exact-origin HTTP execution. Project/evidence state currently remains in memory. WebView manages its own app-private profile cookie/cache data, separate from the planned encrypted project vault. Backups are excluded; platform behavior still needs device verification.

@@ -11,7 +11,7 @@
 
 <p align="center"><strong>Native Android</strong> &nbsp; / &nbsp; <strong>No root required</strong> &nbsp; / &nbsp; <strong>No computer during use</strong> &nbsp; / &nbsp; <strong>Local processing</strong></p>
 
-> **Development stage: UI foundation.** The repository contains a native Compose starter, working local transformation utilities, an interactive web design concept, and an implementation plan. **It does not yet intercept traffic, inspect live cookies, execute API requests, or scan targets.** The no-computer promise concerns the intended runtime; development still needs an Android build environment.
+> **Development stage: native implementation.** API Lab now executes scoped HTTP requests with separate identity cookie jars; the native browser implements local page inspection, cookie tools, console and storage views on compatible WebViews. Browser history currently contains **request metadata only**, without response bodies. Full proxy interception, VPN capture, active scanning and cloud account connectors remain planned. The web concept below stays synthetic. See [the current agent handoff](docs/AGENT_HANDOFF.md).
 
 ## A connected workflow, built for a phone
 
@@ -39,19 +39,21 @@ Explore the [self-contained UI concept](docs/ui/index.html), [editable Canva con
 
 | Component | Current behavior |
 | --- | --- |
-| Android app | Compose navigation across Home, Browser concept, Traffic fixtures, API concept and Tools |
+| Android app | Native Home, live Browser, Traffic, API Lab, Findings and Tools |
 | Native utilities | UTF-8 Base64 encode/decode, form URL encode/decode and SHA-256 hashing |
-| Native request editor | Editable text and identity-specific fixture responses; no request execution |
+| Native request editor | Real scoped HTTP, cancellation, response limits, raw HTTP import and account A/B comparison |
+| Browser | Compatible per-project/identity WebView profiles, element selection, HTML/CSS edits, native cookies, console, storage and request metadata |
+| Passive observations | Inspect selected API responses for cookie/header hardening observations; no extra scan requests |
 | Web concept | Six views, searchable fixtures, request-detail transfer, simulated account comparison and in-memory notes |
 | Web decoder | Real Unicode-aware Base64 transformations, executed locally |
 | Design system | Original E monogram, vector banner, palette, navigation, flows and UI state specification |
 | Engineering foundation | Gradle wrapper with pinned distribution checksum, unit tests, CI build definition and contribution guidance |
 
-The current native manifest deliberately has **no INTERNET permission**. No VPN or capture service is registered. There is no credential vault or encrypted project database yet. Demo notes and state are not a durable evidence store.
+The native app now has INTERNET permission for explicit target operations. Runtime targets require HTTPS and system trust validation. HTTP is used only by local JVM integration fixtures. API redirects/retries are disabled. Evidence is currently held in memory; encrypted persistence is the next increment. No VPN or full interception service is registered.
 
 ## The toolkit we are building
 
-These are planned capabilities. A feature's appearance in the concept is not evidence that its engine exists.
+This table describes the full target scope; some manual capabilities are now implemented as listed above. The concept remains a visual reference, not a capability test.
 
 | Workspace | Planned capabilities |
 | --- | --- |
@@ -89,7 +91,7 @@ These are engineering requirements and known constraints, not currently implemen
 
 The intended product has no mandatory account, analytics backend, hosted AI, automatic capture upload or remote worker. Target requests still travel to the target: local processing does not mean internet targets can be tested offline.
 
-Planned storage protections include Keystore-protected keys, encrypted sensitive records, protected interception CA keys, retention limits, backup exclusions and explicit redacted exports. The current starter uses demonstration data and does not claim these future storage mechanisms are implemented.
+Planned storage protections include Keystore-protected keys, encrypted sensitive records, protected interception CA keys, retention limits, backup exclusions and explicit redacted exports. The current native workflow uses user-selected targets. Encrypted persistence is the next increment; do not treat the current memory-only state as a durable evidence vault.
 
 ## Try the foundation
 
@@ -103,7 +105,7 @@ cd Esuite
 ./gradlew testDebugUnitTest lintDebug assembleDebug
 ```
 
-Open the project in Android Studio, or use the command line with an installed SDK. On Windows use `gradlew.bat`. The debug APK is generated at `app/build/outputs/apk/debug/app-debug.apk`. The [build workflow](.github/workflows/ci.yml) uploads a debug APK when its Android job succeeds; this is a UI starter, not a pentesting release.
+Open the project in Android Studio, or use the command line with an installed SDK. On Windows use `gradlew.bat`. The debug APK is generated at `app/build/outputs/apk/debug/app-debug.apk`. The [build workflow](.github/workflows/ci.yml) uploads a debug APK when its Android job succeeds; this is a development build; full interception and physical-device validation are still pending.
 
 ### Offline UI concept
 
