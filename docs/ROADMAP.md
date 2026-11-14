@@ -2,6 +2,8 @@
 
 All unchecked items are planned. A native build or a UI preview does not establish capture functionality.
 
+Current implementation and next-agent entry point: [Agent handoff](AGENT_HANDOFF.md). Part 1 adds a real HTTP engine and pure analysis utilities; native UI wiring and CI verification are in progress. Do not infer native networking capability from the still-synthetic React concept.
+
 ## Foundation delivered
 
 - [x] ESuite name, original vector identity and repository banner.
