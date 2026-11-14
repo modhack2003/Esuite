@@ -30,7 +30,9 @@ User now requests Android 9–17 and a signed production APK through GitHub Acti
 - Release uses R8/resource shrinking and no debug signing fallback. Optimized `.validation` variant is CI-only, never distributable as production.
 - Added native project → observation → activity recreation UI test; expanded emulator matrix API 28–37.0 including Android 12L and 16 KiB API 36/37 images. Results still pending; old 23+2 count is historical.
 - GitHub connector can write code but cannot administer Actions secrets. Local gh has no login and browser is signed out. A durable production signer remains a concrete publication blocker. Do not generate a new signing identity each CI run or publish its private material.
-- Next: run/fix migrated CI, add secure signed-release workflow, configure signing secrets with account owner access, verify certificate and release assets. Preserve all unchecked product tasks below.
+- Added `.github/workflows/release.yml`: exact successful main-push CI gate → private durable signer → certificate/metadata/alignment verification → exact signed APK smoke tests → immutable stable GitHub release. Missing secrets fail closed; no APK has been published yet.
+- First migrated CI run https://github.com/modhack2003/Esuite/actions/runs/43586091774 failed before assembly because AGP 9 only creates JVM tasks for the tested build type by default. Explicitly enabled JVM tasks for all build types; rerun pending. Do not treat this run as compatibility evidence.
+- `docs/RELEASING.md` has exact signing secret/variable names, owner setup and publication steps. Next: run/fix migrated CI, configure signing secrets with account owner access, verify certificate/release download/upgrade. Preserve all unchecked product tasks below.
 
 ## Next tasks in dependency order
 

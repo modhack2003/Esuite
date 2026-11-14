@@ -62,3 +62,14 @@ Current implementation and next-agent entry point: [Agent handoff](AGENT_HANDOFF
 - [ ] Reachable-lab callback listener; no hosted OAST in local-only mode.
 
 Detailed capabilities and acceptance criteria: [Product plan](PRODUCT_PLAN.md).
+
+## Release delivery — Android 9–17
+
+- [x] Configure API 28 minimum / 37 target and current supporting toolchain.
+- [x] Add optimized non-debuggable release variant and separate optimized CI validation package.
+- [x] Add native project/observation/recreation test and API 28–37.0 emulator matrix.
+- [x] Implement signed GitHub Actions release workflow with certificate pin, integrity metadata and exact signed-APK smoke tests.
+- [ ] Pass migrated build/lint/JVM/native compatibility gates; record per-version results.
+- [ ] Configure durable private signer, backup and pinned public certificate (requires account-owner secret administration).
+- [ ] Publish verified APK/checksums/metadata as stable GitHub release and test update continuity.
+- [ ] Complete physical/OEM/accessibility and remaining production-readiness checks above.

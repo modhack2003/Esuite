@@ -98,19 +98,19 @@ Workspace protections include Keystore-backed authenticated encryption, bounded 
 
 ## Try ESuite
 
-### Android development build
+### Android builds and production delivery
 
-Declared minimum: Android 9 / API 28. Native boundary tests run on an Android 15 / API 35 emulator; broader physical/OEM coverage is pending. Development uses JDK 17 and Android SDK 35.
+Requested compatibility: **Android 9–17 (API 28–37)**. The build targets API 37 with the 37.0 platform, AGP 9.2.1, Gradle 9.4.1 and JDK 17. The expanded optimized-APK emulator matrix is pending verification; the earlier API 35 pass remains historical evidence. See [release delivery](docs/RELEASING.md) for signing and verification gates.
 
 ```bash
 git clone https://github.com/modhack2003/Esuite.git
 cd Esuite
-./gradlew testDebugUnitTest lintDebug assembleDebug
+./gradlew testDebugUnitTest lintDebug lintRelease assembleDebug assembleRelease
 ```
 
 Open the project in Android Studio, or use the command line with an installed SDK. On Windows use `gradlew.bat`. The debug APK is generated at `app/build/outputs/apk/debug/app-debug.apk`. The [build workflow](.github/workflows/ci.yml) uploads a debug APK when its Android job succeeds; this is a development build; full interception and physical-device validation are still pending.
 
-For phone-only use, download the `esuite-debug` artifact from a successful [Actions run](https://github.com/modhack2003/Esuite/actions), extract the APK, and install the development build. Debug signing keys may differ between builds, requiring removal of an older debug installation. Read the [usage guide](docs/GETTING_STARTED.md) for the browser → API → evidence workflow.
+The [production release workflow](.github/workflows/release.yml) builds an optimized, privately signed APK after successful exact-commit CI and publishes it to [GitHub Releases](https://github.com/modhack2003/Esuite/releases) only after signer/metadata/integrity checks and signed-APK device smoke tests. **Publication is currently blocked on one-time signing-secret setup and the migrated compatibility gates; no stable APK is available yet.** Never install the `.validation` APK as a production release. Read the [usage guide](docs/GETTING_STARTED.md) for the browser → API → evidence workflow.
 
 ### Offline UI concept
 

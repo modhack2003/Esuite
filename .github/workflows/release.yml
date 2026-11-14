@@ -1,0 +1,203 @@
+name: Signed production release
+on:
+  workflow_run:
+    workflows: [Build and verify]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: esuite-production-release
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+      version: ${{ steps.version.outputs.version }}
+      needed: ${{ steps.version.outputs.needed }}
+    steps:
+      - name: Resolve source and require passing CI for that exact commit
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          SOURCE_SHA="${EVENT_SHA:-$GITHUB_SHA}"
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&status=success" > ci.json
+          jq -e --arg sha "$SOURCE_SHA" '.workflow_runs | any(.head_sha == $sha and .head_branch == "main" and .conclusion == "success")' ci.json
+          echo "sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.sha }}
+          persist-credentials: false
+      - name: Resolve version and preserve immutable published versions
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          VERSION=$(sed -n 's/^versionName=//p' release/version.properties)
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          gh api "repos/$REPO/releases?per_page=100" > releases.json
+          if jq -e --arg tag "v$VERSION" 'any(.tag_name == $tag and .draft == false)' releases.json >/dev/null; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo 'Version already published; bump versionCode/versionName for a new release.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          fi
+  sign:
+    needs: prepare
+    if: needs.prepare.outputs.needed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SOURCE_SHA: ${{ needs.prepare.outputs.sha }}
+      ESUITE_KEYSTORE_PATH: ${{ runner.temp }}/esuite-production.jks
+      ESUITE_STORE_PASSWORD: ${{ secrets.ESUITE_STORE_PASSWORD }}
+      ESUITE_KEY_ALIAS: ${{ secrets.ESUITE_KEY_ALIAS }}
+      ESUITE_KEY_PASSWORD: ${{ secrets.ESUITE_KEY_PASSWORD }}
+      ESUITE_CERT_SHA256: ${{ vars.ESUITE_CERT_SHA256 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - name: Require durable private signer and pinned public certificate
+        env:
+          ESUITE_KEYSTORE_BASE64: ${{ secrets.ESUITE_KEYSTORE_BASE64 }}
+        run: |
+          python3 - <<'PY'
+          import base64, os
+          from pathlib import Path
+          required = ['ESUITE_KEYSTORE_BASE64', 'ESUITE_STORE_PASSWORD', 'ESUITE_KEY_ALIAS', 'ESUITE_KEY_PASSWORD', 'ESUITE_CERT_SHA256']
+          missing = [name for name in required if not os.environ.get(name)]
+          if missing:
+              raise SystemExit('Production signing is blocked. Configure: ' + ', '.join(missing) + '. See docs/RELEASING.md. No unsigned or debug-signed APK will be published.')
+          os.umask(0o077)
+          Path(os.environ['ESUITE_KEYSTORE_PATH']).write_bytes(base64.b64decode(os.environ['ESUITE_KEYSTORE_BASE64'], validate=True))
+          PY
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build optimized production APK and repeat release lint
+        run: ./gradlew testReleaseUnitTest lintRelease assembleRelease --no-daemon
+      - name: Verify signer, SDK range, package, version and alignment
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir release-assets
+          cp app/build/outputs/apk/release/app-release.apk "release-assets/ESuite-$VERSION.apk"
+          python3 tools/verify_release_apk.py "release-assets/ESuite-$VERSION.apk" --output release-assets/build-info.json
+          cp release/notes.md release-assets/RELEASE-NOTES.md
+          cd release-assets
+          sha256sum "ESuite-$VERSION.apk" build-info.json RELEASE-NOTES.md > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: esuite-signed-release
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: esuite-release-mapping
+          path: app/build/outputs/mapping/release/
+          retention-days: 90
+      - name: Remove temporary signer
+        if: always()
+        run: rm -f "$ESUITE_KEYSTORE_PATH"
+  smoke:
+    needs: [prepare, sign]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {api: '28', target: google_apis}
+          - {api: '35', target: google_apis}
+          - {api: '37.0', target: google_apis_ps16k}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: esuite-signed-release
+          path: release-assets
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Give ephemeral runner access to KVM
+        run: |
+          sudo chown "$(id -u):$(id -g)" /dev/kvm
+          sudo chmod 0600 /dev/kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          arch: x86_64
+          target: ${{ matrix.target }}
+          ram-size: 4096M
+          disable-animations: true
+          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu swiftshader_indirect
+          script: bash tools/smoke_release.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: signed-apk-smoke-api-${{ matrix.api }}
+          path: |
+            release-ui.xml
+            release-crash.txt
+          retention-days: 30
+  publish:
+    needs: [prepare, sign, smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      SOURCE_SHA: ${{ needs.prepare.outputs.sha }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: esuite-signed-release
+          path: release-assets
+      - name: Verify transferred artifact checksums
+        run: cd release-assets && sha256sum -c SHA256SUMS
+      - name: Publish stable release only after signed-APK smoke tests pass
+        run: |
+          set -euo pipefail
+          if gh release view "v$VERSION" --repo "$REPO" --json isDraft,targetCommitish > existing.json 2>/dev/null; then
+            jq -e --arg sha "$SOURCE_SHA" '.isDraft == true and .targetCommitish == $sha' existing.json
+          else
+            gh release create "v$VERSION" --repo "$REPO" --target "$SOURCE_SHA" --title "ESuite $VERSION" --notes-file release-assets/RELEASE-NOTES.md --draft
+          fi
+          gh release upload "v$VERSION" release-assets/* --repo "$REPO" --clobber
+          gh release edit "v$VERSION" --repo "$REPO" --draft=false --prerelease=false --latest
+          gh release view "v$VERSION" --repo "$REPO" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"

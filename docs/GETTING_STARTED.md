@@ -1,6 +1,6 @@
-# Use the ESuite development build
+# Use ESuite on Android 9–17
 
-The app runs on an unrooted Android phone. A computer is only needed to develop/build it yourself. A successful GitHub Actions run provides an `esuite-debug` artifact containing the installable APK. These are development artifacts with limited retention; no stable production release is claimed.
+The app is configured for an unrooted Android 9–17 phone. Runtime needs no computer. Production distribution is a privately signed, optimized APK in GitHub Releases, with SHA256SUMS and build-info.json. Publication is currently blocked on signing-secret setup and completion of the migrated compatibility gates; see [Release delivery](RELEASING.md). CI debug/validation artifacts are for verification and must not be presented as production downloads.
 
 ## Start an assessment
 
