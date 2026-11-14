@@ -52,6 +52,7 @@ android {
             applicationIdSuffix = ".validation"
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += "release"
+            testProguardFiles("test-proguard-rules.pro")
         }
     }
     testBuildType = "validation"
