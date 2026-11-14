@@ -4,7 +4,7 @@ Start with [the roadmap](docs/ROADMAP.md), [architecture](docs/ARCHITECTURE.md) 
 
 ## Development
 
-Native: JDK 17 (CI baseline), Android SDK 35 and the committed Gradle wrapper. Run `./gradlew testDebugUnitTest lintDebug assembleDebug`. The Gradle distribution checksum is pinned. Development needs an Android build environment; the intended app runtime does not need a computer.
+Native: JDK 17 (CI baseline), Android SDK 35 and the committed Gradle wrapper. Run `./gradlew testDebugUnitTest lintDebug assembleDebug`. The Gradle distribution checksum is pinned. Android native boundary tests run with `./gradlew connectedDebugAndroidTest` on an Android 15 emulator; the CI `android-device` job uploads their reports. Development needs an Android build environment; the intended app runtime does not need a computer.
 
 UI concept: Node 20+, then `cd design/prototype`, `npm ci`, `npm run typecheck`, `npm run build`. The build refreshes `docs/ui/index.html`. Open that file locally; no backend is required. The fixture notes reset on reload.
 
@@ -18,3 +18,7 @@ Browser verification: install `playwright==1.51.0` with Python, run `python -m p
 - No automatic uploads, remote AI, external callbacks or analytics. Changes to runtime data flows must be explicit and documented.
 - Preserve the existing MIT license. Identify provenance and licenses for third-party components.
 - Include what changed, why, relevant verification, and any actual limitations in the PR description.
+
+## Runtime constraints
+
+Android targets are HTTPS-only. Do not reintroduce globally permitted cleartext or trust-all certificate handling. The app can send real target requests; the independent React design concept cannot. Follow `AGENTS.md` and the detailed next-agent acceptance gates before claiming another capability implemented.

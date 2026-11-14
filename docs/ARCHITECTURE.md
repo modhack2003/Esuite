@@ -14,9 +14,9 @@
 | transport | Scoped API requests, TLS validation, identity jars | Implemented; JVM integration tests passed |
 | proxy | HTTP interception and scoped modification | Planned |
 | capture | VpnService, selected apps, userspace forwarding | Planned |
-| analysis | Passive observations and structured body comparison | Implemented; task scheduling planned |
+| analysis | Passive observations, body comparison, bounded payload/sequence execution | Implemented; broader scan scheduling planned |
 | storage | Keystore AES-GCM vault, bounded history, sanitized local export | Implemented; device checks pending |
-| cloud | Direct account audits and imported configurations | Planned |
+| cloud | Offline supplied AWS JSON observations | Implemented; account connectors planned |
 
 Start modular boundaries inside the app; split Gradle modules as implementations justify them. Do not create empty modules pretending to be engines.
 
@@ -35,3 +35,7 @@ Prove browser proxy routing, cookie metadata support, separate profiles, rootles
 Shipping design: no backend, telemetry or remote AI; local project storage with Keystore-protected keys; per-project retention; local CA private key protection; explicit redacted exports; backup exclusions; loopback-bound control surfaces. These storage and capture mechanisms are roadmap requirements, not current working security claims.
 
 Present native app: explicit INTERNET permission and exact-origin HTTP execution. Projects, evidence, saved requests and configured identity headers persist in the Keystore-encrypted workspace. API cookie jars remain in memory. WebView manages its own app-private profile cookie/cache data, separate from the planned encrypted project vault. Backups are excluded; platform behavior still needs device verification.
+
+## Native test scope
+
+The Android 15 emulator validates actual Keystore/AtomicFile round-trip, backup recovery and tamper rejection, plus isolated WebView cookie/HttpOnly behavior and inspector scripts. The final JVM suite has 23 passing tests. Full Compose workflows, physical/OEM coverage and proxy/VPN/TLS engines remain separate gates; see `VERIFICATION.md` and `AGENT_HANDOFF.md`.

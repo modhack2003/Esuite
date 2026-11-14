@@ -12,6 +12,8 @@ Read this file first, then `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md
 
 ## Implemented increments
 
+Latest tested application source: `6fc8be239dd7f1a7d5fc0ac665e22e3e6ca6a1bf`. Final run passed all jobs: https://github.com/modhack2003/Esuite/actions/runs/43584287247. Reports contain 23 JVM tests and 2 Android tests, with zero failures/errors/skips. Later documentation-only commits do not change that tested source.
+
 | Part | Working behavior | Validation reference |
 | --- | --- | --- |
 | 1 — core | Exact-origin scope, real cancellable HTTP engine, no redirects/retries, independent project/identity cookie jars, capped text/binary response capture, passive observations and comparison | https://github.com/modhack2003/Esuite/actions/runs/43580598882 |
@@ -19,7 +21,7 @@ Read this file first, then `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md
 | 3 — local evidence | Keystore-backed AES-256-GCM workspace, AtomicFile, request collections, configured identity headers, observations, sanitized local export, project/profile deletion | https://github.com/modhack2003/Esuite/actions/runs/43582195830 |
 | 4 — tasks / imports | Four payload substitution modes, bounded/cancellable execution, saved-request sequences, first-response JSON token extraction, cURL/raw HTTP/OpenAPI 3 JSON/textual HAR imports, offline AWS JSON review | https://github.com/modhack2003/Esuite/actions/runs/43583424635 |
 | Native boundary tests | Android 15 emulator: actual Keystore round-trip and tamper rejection; separate WebView cookies including HttpOnly/native visibility; page inspector execution. Two tests passed, none skipped | https://github.com/modhack2003/Esuite/actions/runs/43583424635 |
-| Storage hardening | AtomicFile backup recovery, missing-key failure without replacement, durable-data admission budgets and collection/observation removal | Final CI gate: https://github.com/modhack2003/Esuite/actions/runs/43583783633 |
+| Storage hardening | AtomicFile backup recovery, missing-key failure without replacement, durable-data admission budgets and collection/observation removal | Passed including native backup recovery: https://github.com/modhack2003/Esuite/actions/runs/43584287247 |
 
 ## Next tasks in dependency order
 
@@ -35,6 +37,7 @@ Read this file first, then `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md
 | DATA-02 | P1 | Move large import/budget validation off UI thread with version-safe state updates; add migrations | Bounded memory, no lost concurrent captures, unsupported versions fail closed |
 | RUN-01 | P1 | Four-list task UI, configurable result match/extract filters, pause/checkpoint controls | Respect budgets/cancellation; never replay uncertain non-idempotent sends automatically |
 | RUN-02 | P1 | Per-step macro extraction, CSRF refresh and explicit interactive login handoffs | No unattended MFA/passkey/CAPTCHA promise; session-isolation tests |
+| AUTH-01 | P1 | Explicit multi-origin login allowlists, preserving per-origin credential boundaries | Cross-origin redirects never forward credentials without an approved scope/configuration; auth fixtures |
 | API-01 | P1 | Multipart/file upload, YAML/OpenAPI references/schema scaffolds, more cURL syntax and HAR variants | Explicit supported subset; parser never invokes shell; imports do not execute requests |
 | API-02 | P1 | Supported WebSocket/SSE/gRPC workflows and protocol matrix | No claim that an HTTP body cap equals complete streaming capture |
 | SCAN-01 | P1 | Controlled crawler and selected active checks with baselines and reproducible evidence | Scope/rate/cancel controls; test fixtures; no reflection/timing/error-only confirmed-vulnerability claims |

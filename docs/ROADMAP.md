@@ -2,7 +2,7 @@
 
 All unchecked items are planned. A native build or a UI preview does not establish capture functionality.
 
-Current implementation and next-agent entry point: [Agent handoff](AGENT_HANDOFF.md). Part 1 API engine tests passed CI. Part 2 browser/API UI passed CI. Part 3 adds encrypted workspace, collections and exports; device verification remains tracked in the handoff. Do not infer native networking capability from the still-synthetic React concept.
+Current implementation and next-agent entry point: [Agent handoff](AGENT_HANDOFF.md). Four functional increments are implemented and have passed the Android build/lint, JVM tests, native Android 15 boundary tests and web-concept checks. See [Verification](VERIFICATION.md) for the latest source/run and scope. Full proxy/VPN interception is not implemented. Do not infer native capability from the synthetic React concept.
 
 ## Foundation delivered
 
@@ -10,24 +10,26 @@ Current implementation and next-agent entry point: [Agent handoff](AGENT_HANDOFF
 - [x] Product plan retaining phone-only, unrooted and local-processing constraints.
 - [x] UI specification with navigation, flows and state definitions.
 - [x] Interactive React design study with synthetic data.
-- [x] Kotlin/Compose starter with Home, Browser concept, Traffic fixtures, API concept and Tools.
+- [x] Native Home, live Browser, observed Traffic, API Lab, Findings and Tools.
 - [x] Local Base64, form URL and SHA-256 utilities with unit tests.
 - [x] Gradle wrapper, CI definition and contributor guidance.
 - [x] Canva concept board and MagicPath interaction design.
-- [ ] Superdesign output (connection unavailable; brief prepared).
+- [ ] Superdesign output (deferred at user request; existing brief retained).
 
 ## M0 — prove the capture design
 
 - [ ] Browser proxy routing and complete request/response fixtures.
-- [ ] Native cookie metadata and feature support matrix.
-- [ ] Separate account profiles / supported fallback behavior.
+- [x] Native cookie metadata inspection and Android 15 emulator test.
+- [ ] Expand WebView feature/version/OEM compatibility matrix.
+- [x] Separate WebView account profiles and per-project/identity API jars; unsupported profiles disable browser.
+- [x] Explicit native browser-to-API cookie-jar transfer implemented; metadata fallback disclosed.
 - [ ] Rootless selected-app VPN forwarding and immediate cancellation.
 - [ ] Local CA trust, upstream validation and honest pinning/trust failures.
 - [ ] HTTP/1.1, HTTP/2, redirects, uploads, streaming and WebSocket coverage matrix.
 
 ## M1 — manual testing workbench
 
-- [x] Live browser DOM/CSS inspector, console and storage views (built and page-side scripts tested; device tests pending).
+- [x] Live browser DOM/CSS inspector, console and storage views (page-side and Android emulator helper tests passed; full physical UI flow pending).
 - [ ] Scoped Proxy intercept/edit/forward/drop and history.
 - [x] Real API execution / Repeater and per-identity cookie jars (JVM integration tests passed).
 - [ ] Original/modified message provenance, Decoder and Comparer.
@@ -38,7 +40,8 @@ Current implementation and next-agent entry point: [Agent handoff](AGENT_HANDOFF
 
 - [ ] App capture integrated into the UI with visible foreground state.
 - [x] Bounded parameter runner and passive observations implemented; CI gates tracked in handoff.
-- [ ] Resource caps, retention and explicit export.
+- [x] Response/history limits, durable-data admission budget, encrypted retention and sanitized local export implemented.
+- [ ] Complete process-death/OEM/export-provider and large-input performance coverage.
 - [ ] Physical-device functional, privacy and accessibility verification.
 
 ## M3 — automation expansion

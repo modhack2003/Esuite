@@ -3,7 +3,7 @@
 <h1 align="center">ESuite</h1>
 <p align="center"><strong>Inspect. Intercept. Investigate.</strong><br>A security workbench being built for the Android device already in your pocket.</p>
 
-<p align="center"><a href="#try-the-foundation">Get started</a> · <a href="docs/UI_SPEC.md">UI & design</a> · <a href="docs/ROADMAP.md">Roadmap</a> · <a href="docs/PRODUCT_PLAN.md">Full specification</a> · <a href="CONTRIBUTING.md">Contribute</a></p>
+<p align="center"><a href="#try-esuite">Get started</a> · <a href="docs/UI_SPEC.md">UI & design</a> · <a href="docs/ROADMAP.md">Roadmap</a> · <a href="docs/PRODUCT_PLAN.md">Full specification</a> · <a href="CONTRIBUTING.md">Contribute</a></p>
 
 <p align="center"><a href="https://github.com/modhack2003/Esuite/actions/workflows/ci.yml"><img src="https://github.com/modhack2003/Esuite/actions/workflows/ci.yml/badge.svg" alt="Build and verify workflow status"></a></p>
 
@@ -80,7 +80,7 @@ Burp Suite is a workflow reference. ESuite is an independent Android project; it
 | Situation | Product commitment |
 | --- | --- |
 | Unrooted phone, no computer | Core runtime is designed to operate entirely on-device |
-| Our testing browser | Native cookie inspection and explicitly configured interception are planned |
+| Our testing browser | Native inspection/cookie tools implemented; full message interception is still planned |
 | Existing Chrome cookie store | No claim of direct access to another app's private cookie database |
 | Other apps' traffic | Rootless selected-app capture through a planned local VPN engine |
 | HTTPS from another app | Contents are inspectable only when trust, pinning and protocol behavior permit it |
@@ -94,13 +94,13 @@ These are engineering requirements and known constraints, not currently implemen
 
 The intended product has no mandatory account, analytics backend, hosted AI, automatic capture upload or remote worker. Target requests still travel to the target: local processing does not mean internet targets can be tested offline.
 
-Planned storage protections include Keystore-protected keys, encrypted sensitive records, protected interception CA keys, retention limits, backup exclusions and explicit redacted exports. The native workflow uses user-selected targets. Encrypted workspace storage is implemented; Android Keystore and vendor backup behavior still require physical-device verification. WebView profile storage remains a separate platform-managed store.
+Workspace protections include Keystore-backed authenticated encryption, bounded history, durable-data admission limits, backup exclusions and explicit sanitized exports. Interception CA management remains future work. The native workflow uses user-selected targets. Encrypted workspace storage is implemented; Android Keystore and vendor backup behavior still require physical-device verification. WebView profile storage remains a separate platform-managed store.
 
-## Try the foundation
+## Try ESuite
 
-### Android starter
+### Android development build
 
-Baseline: Android 9 / API 28 or newer; JDK 17 for development; Android SDK 35. Device coverage is not yet certified.
+Declared minimum: Android 9 / API 28. Native boundary tests run on an Android 15 / API 35 emulator; broader physical/OEM coverage is pending. Development uses JDK 17 and Android SDK 35.
 
 ```bash
 git clone https://github.com/modhack2003/Esuite.git
@@ -109,6 +109,8 @@ cd Esuite
 ```
 
 Open the project in Android Studio, or use the command line with an installed SDK. On Windows use `gradlew.bat`. The debug APK is generated at `app/build/outputs/apk/debug/app-debug.apk`. The [build workflow](.github/workflows/ci.yml) uploads a debug APK when its Android job succeeds; this is a development build; full interception and physical-device validation are still pending.
+
+For phone-only use, download the `esuite-debug` artifact from a successful [Actions run](https://github.com/modhack2003/Esuite/actions), extract the APK, and install the development build. Debug signing keys may differ between builds, requiring removal of an older debug installation. Read the [usage guide](docs/GETTING_STARTED.md) for the browser → API → evidence workflow.
 
 ### Offline UI concept
 
@@ -125,9 +127,9 @@ Open `docs/ui/index.html` from the repository root. All scripts and styles are b
 
 | Milestone | Outcome |
 | --- | --- |
-| **Foundation — current** | Identity, reviewed interaction concept, native UI starter and local utilities |
+| **Foundation — delivered** | Identity, interaction concept, native app, CI and local utilities |
 | **M0 — feasibility** | Prove browser capture, cookies/profiles, VPN forwarding, CA trust and protocol coverage on physical devices |
-| **M1 — manual workbench** | Live browser tools, Proxy, API execution, comparison, findings and local storage |
+| **M1 — partly delivered** | Live browser/API tools, comparison, findings and encrypted storage; Proxy remains unfinished |
 | **M2 — version 1** | Selected-app capture, bounded parameter runner, passive checks, resource controls and verified exports |
 | **M3 — automation** | Macros, discovery, active checks, WebSockets, Sequencer and GraphQL workflows |
 | **M4 — advanced / cloud** | Validated protocol tools, local extensions and cloud audits |
@@ -138,7 +140,7 @@ Track the [implementation checklist](docs/ROADMAP.md). Tests and device verifica
 
 | Path | Purpose |
 | --- | --- |
-| `app/` | Native Android Compose starter and codec unit tests |
+| `app/` | Native workbench, core/transport/browser/storage/task engines, JVM and Android tests |
 | `design/prototype/` | React/TypeScript interaction concept and deterministic offline build |
 | `design/EXTERNAL_DESIGNS.md` | Canva/MagicPath provenance and Superdesign connection status |
 | `docs/assets/` | Brand SVGs and actual concept screenshots |
@@ -147,7 +149,7 @@ Track the [implementation checklist](docs/ROADMAP.md). Tests and device verifica
 | `docs/UI_SPEC.md` | Tokens, navigation, state design and workflow definitions |
 | `docs/ARCHITECTURE.md` | Current and proposed module/data boundaries |
 | `docs/ROADMAP.md` | Honest completed/planned checklist |
-| `docs/VERIFICATION.md` | Passed foundation checks, source commit and explicit verification limits |
+| `docs/VERIFICATION.md` | JVM, emulator and concept verification evidence and limitations |
 
 Read [Contributing](CONTRIBUTING.md) before changing capture, authentication or data flows. Use the tool only for systems you own or have permission to test. For sensitive reports see [Security](SECURITY.md). The complete next-agent task queue and physical-device acceptance gates are in [Agent handoff](docs/AGENT_HANDOFF.md).
 
