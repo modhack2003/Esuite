@@ -19,6 +19,8 @@ jobs:
         with:
           cmdline-tools-version: '15859902' # Command-line Tools 22.0 supports minor API levels
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
+      - name: Keep emulator SDK tools on the pinned version
+        run: python3 tools/pin_android_tools.py
       - uses: gradle/actions/setup-gradle@v4
       - name: Unit tests, lint and debug APK
         run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease :ui-tests:assembleDebug --no-daemon
@@ -112,6 +114,8 @@ jobs:
         with:
           cmdline-tools-version: '15859902' # Command-line Tools 22.0 supports minor API levels
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
+      - name: Keep emulator SDK tools on the pinned version
+        run: python3 tools/pin_android_tools.py
       - uses: actions/download-artifact@v4
         with:
           name: esuite-device-test-bundle

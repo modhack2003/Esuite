@@ -5,7 +5,7 @@ The requested distribution is an installable, optimized, privately signed APK in
 ## Build contract
 
 - Android 9–17: minimum API 28, target API 37, compile platform 37.0; no maximum SDK.
-- AGP 9.2.1, Gradle 9.4.1 with distribution checksum, JDK 17 and built-in Kotlin 2.2.10. Command-line Tools 22.0/build 15859902 is pinned so API 37.0 AVD metadata is not truncated to android-0.
+- AGP 9.2.1, Gradle 9.4.1 with distribution checksum, JDK 17 and built-in Kotlin 2.2.10. Command-line Tools 22.0/build 15859902 is pinned, including emulator-runner's cmdline-tools/latest alias, so API 37.0 AVD metadata is not truncated to android-0. The old runner SDK alias is preserved in RUNNER_TEMP, and this adjustment never runs on a user device.
 - `release`: R8 optimization, resource shrinking, non-debuggable, production signing only when all signing inputs are configured.
 - Internal platform fixtures run in the debug app. A separate `ui-tests` APK drives the actual optimized release APK with a disposable CI signer, without linking app classes. The test harness, debug app and CI-signed APK are never production release assets.
 - Runtime remains HTTPS-only with system certificate trust, no telemetry, no root requirement and no automatic target requests.
