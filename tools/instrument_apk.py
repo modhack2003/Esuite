@@ -1,14 +1,43 @@
 #!/usr/bin/env python3
 """Run the exact optimized validation artifacts once per OS, preserving JUnit evidence."""
 from pathlib import Path
+import atexit
 import subprocess
 import sys
 import time
 import xml.etree.ElementTree as ET
 
 
+out = Path('native-test-results'); out.mkdir(exist_ok=True)
+
+
+def diagnostics():
+    for filename, args in [('crash.txt', ['adb', 'logcat', '-d', '-b', 'crash']),
+                           ('package.txt', ['adb', 'shell', 'dumpsys', 'package', 'dev.esuite.app.validation'])]:
+        try:
+            result = subprocess.run(args, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
+            (out / filename).write_text(result.stdout)
+            if filename == 'crash.txt' and result.stdout.strip():
+                print('Device crash diagnostics:\n' + result.stdout[-20000:])
+        except Exception as error:
+            print('Diagnostic capture failed:', error)
+    try:
+        image = subprocess.run(['adb', 'exec-out', 'screencap', '-p'], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=20)
+        if image.returncode == 0:
+            (out / 'device.png').write_bytes(image.stdout)
+    except Exception:
+        pass
+
+
+atexit.register(diagnostics)
+
+
 def command(*args):
-    return subprocess.check_output(args, text=True, stderr=subprocess.STDOUT, timeout=240)
+    try:
+        return subprocess.check_output(args, text=True, stderr=subprocess.STDOUT, timeout=240)
+    except subprocess.CalledProcessError as error:
+        print(error.output)
+        raise
 
 
 def unique(pattern):
