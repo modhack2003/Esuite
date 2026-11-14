@@ -59,9 +59,13 @@ def inspect(apk, sdk, fingerprint, version, code):
     if not modern_signature:
         raise ValueError("A verified APK v2 or v3 signature is required")
     badging = output(str(tools / "aapt2"), "dump", "badging", str(apk))
-    expected = ("name='dev.esuite.app'", f"versionCode='{code}'", f"versionName='{version}'", "sdkVersion:'28'", "targetSdkVersion:'37'")
-    if not all(item in badging for item in expected) or "application-debuggable" in badging:
-        raise ValueError("APK package/version/SDK/debuggable metadata does not match the release contract")
+    expected = ("name='dev.esuite.app'", f"versionCode='{code}'", f"versionName='{version}'")
+    # AAPT2 renamed sdkVersion to minSdkVersion; both formats describe the same field.
+    minimum = re.findall(r"^(?:minSdkVersion|sdkVersion):'(\d+)'$", badging, re.MULTILINE)
+    target = re.findall(r"^targetSdkVersion:'(\d+)'$", badging, re.MULTILINE)
+    if not all(item in badging for item in expected) or minimum != ['28'] or target != ['37'] or "application-debuggable" in badging:
+        metadata = "\n".join(line for line in badging.splitlines() if line.startswith(("package:", "sdkVersion:", "minSdkVersion:", "targetSdkVersion:", "application-debuggable")))
+        raise ValueError("APK metadata does not match the release contract:\n" + metadata)
     if "maxSdkVersion" in badging or ".validation" in badging:
         raise ValueError("A maximum SDK or validation package must not be distributed")
     output(str(tools / "zipalign"), "-c", "-P", "16", "4", str(apk))

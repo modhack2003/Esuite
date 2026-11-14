@@ -29,6 +29,7 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: esuite-unsigned-release-validation
           path: |
@@ -43,7 +44,8 @@ jobs:
           name: android-test-reports
           path: |
             app/build/reports/tests/
-            app/build/reports/lint-results-debug.html
+            app/build/reports/lint-results-*.html
+            app/build/reports/lint-results-*.xml
             app/build/test-results/
           retention-days: 7
   design:
