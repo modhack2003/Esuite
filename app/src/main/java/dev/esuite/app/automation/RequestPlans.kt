@@ -24,7 +24,7 @@ object RequestPlans {
         val rows = when (mode) {
             PayloadMode.ONE_POSITION -> active.flatMap { i -> sets[i].map { value -> baseline.toMutableList().apply { this[i] = value } } }
             PayloadMode.BROADCAST -> sets[0].map { value -> List(sets.size) { value } }
-            PayloadMode.PAIRED -> (0 until count.toInt()).map { n -> sets.map { it.getOrElse(n) { it.first() } } }
+            PayloadMode.PAIRED -> (0 until count.toInt()).map { n -> sets.map { values -> values.getOrElse(n) { values.first() } } }
             PayloadMode.COMBINATIONS -> active.fold(listOf(baseline)) { rows, i -> rows.flatMap { row -> sets[i].map { value -> row.toMutableList().apply { this[i] = value } } } }
         }
         fun replace(text: String, row: List<String>) = marker.replace(text) { row[it.groupValues[1].toInt() - 1] }
