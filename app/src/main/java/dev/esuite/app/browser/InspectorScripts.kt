@@ -17,9 +17,33 @@ object InspectorScripts {
         })()
     """.trimIndent()
     val selection = """
-        (() => { const e=window.__esuiteElement; if(!e) return 'No selected element'; const s=getComputedStyle(e);
+        (() => { const e=window.__esuiteElement; if(!e || !e.isConnected) return 'No selected element'; const s=getComputedStyle(e);
           return JSON.stringify({tag:e.tagName,html:e.outerHTML.slice(0,16000),css:e.style.cssText,
             computed:{display:s.display,color:s.color,background:s.backgroundColor,font:s.font,position:s.position}},null,2);
+        })()
+    """.trimIndent()
+    val html = """
+        (() => {
+          const e=window.__esuiteElement;
+          if(!e || !e.isConnected) return 'Select an element first';
+          if(!e.parentNode || e===document.documentElement) return 'Select a child element to edit';
+          const range=document.createRange(); range.selectNode(e);
+          const fragment=range.createContextualFragment(__ESUITE_VALUE__);
+          const replacement=fragment.firstElementChild;
+          e.replaceWith(fragment); window.__esuiteElement=replacement;
+          window.__esuiteOutline=replacement?.style.outline || '';
+          if(replacement) replacement.style.outline='2px solid #5BE0D6';
+          return 'HTML updated locally';
+        })()
+    """.trimIndent()
+    val css = """
+        (() => {
+          const e=window.__esuiteElement;
+          if(!e || !e.isConnected) return 'Select an element first';
+          e.style.cssText=__ESUITE_VALUE__;
+          window.__esuiteOutline=e.style.outline;
+          e.style.outline='2px solid #5BE0D6';
+          return 'CSS updated locally';
         })()
     """.trimIndent()
     val storage = """

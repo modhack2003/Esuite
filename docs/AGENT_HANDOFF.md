@@ -10,6 +10,12 @@ Read this file first, then `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md
 - No analytics, hosted AI, remote workers, automatic evidence uploads or external callback collectors. The design services received synthetic data only.
 - The React prototype is a synthetic design reference. Native features must be assessed from Kotlin source and tests.
 
+## Active browser audit (next patch; verification pending)
+
+User requested debugging of actual released behavior. Source review found a POST-navigation gap (shouldOverrideUrlLoading excludes POST), a detached DOM selection after outerHTML replacement, CSS outline restoration overwriting edits, and inherited scroll positions between tools. Current fixes add main-frame interception/early navigation rejection, retarget replacements, preserve edited outlines, independent destination scroll state, cookie flushing on native edits/profile disposal, renderer-exit recovery messaging, and provider diagnostics. These are pending full CI; do not call them verified until actual reports pass.
+
+Independent optimized-APK UI coverage now drives real HTTPS example.com loading, touch selection, HTML then CSS edits, storage snapshots, hidden/revealed HttpOnly cookies, explicit API transfer, A/B isolation and out-of-scope form POST. Only synthetic fixtures are used. Unsupported installed WebViews explicitly skip this browser case; every OS still runs persistence UI. Playwright adds DOM replacement/outline/text-only regression cases. The disposable-device test runner now refuses destructive setup outside Actions emulators. Next: inspect failures, fix and rerun, add same-signer upgrade verification, then publish a new patch without replacing v1.0.0.
+
 ## Implemented increments
 
 Released source: `98425c9e4bcc7ace1a56604b0d466859db3a8e5b`, ESuite **1.0.0/code 3**. [Full CI](https://github.com/modhack2003/Esuite/actions/runs/43623409210) passed all jobs; downloaded XML confirms 23 JVM passes and 30 native cases (24 passed, six unsupported-WebView-profile skips, zero failures/errors). [Signed release workflow](https://github.com/modhack2003/Esuite/actions/runs/43623797877) passed certificate/integrity/metadata checks and installed/relaunched the exact production-signed APK on API 28, 35 and 37.0. [Stable release](https://github.com/modhack2003/Esuite/releases/tag/v1.0.0) is published. Public download checksums/certificate/source metadata were independently verified. Later documentation-only commits do not change the released application source.

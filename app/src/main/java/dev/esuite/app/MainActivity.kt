@@ -59,6 +59,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
         }
         return
     }
+    val pageScroll = key(screen, state.projectId, state.identity) { rememberScrollState() }
     Scaffold(modifier = Modifier.semantics { testTagsAsResourceId = true }, containerColor = Midnight, bottomBar = {
         NavigationBar(containerColor = Midnight) {
             Screen.entries.filter { it != Screen.Tools }.forEach { target ->
@@ -66,7 +67,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
             }
         }
     }) { inset ->
-        Column(Modifier.fillMaxSize().padding(inset).imePadding().padding(horizontal = 18.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.fillMaxSize().padding(inset).imePadding().verticalScroll(pageScroll).padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("E  ESuite", style = MaterialTheme.typography.titleLarge, color = Signal)
@@ -74,7 +75,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
             }
             Text(project?.let { "${it.name} · ${it.origin} · identity ${state.identity}" } ?: "No active project", color = Signal, style = MaterialTheme.typography.bodySmall)
             if (project != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("A", "B").forEach { identity -> FilterChip(selected = state.identity == identity, onClick = { model.identity(identity) }, label = { Text("Identity $identity") }) }
+                listOf("A", "B").forEach { identity -> FilterChip(modifier = Modifier.testTag("identity_$identity"), selected = state.identity == identity, onClick = { model.identity(identity) }, label = { Text("Identity $identity") }) }
             }
             Text(state.message, style = MaterialTheme.typography.bodySmall, color = Muted)
             when (screen) {
@@ -155,7 +156,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     state.selected?.let { e -> Panel("${e.status ?: "Error"} · ${e.durationMs} ms · ${e.response.encoding}${if (e.response.truncated) " · TRUNCATED" else ""}", e.error ?: e.responseHeaders.joinToString("\n") { "${it.name}: ${it.value}" } + "\n\n" + e.response.value) }
     OutlinedTextField(raw, { raw = it }, label = { Text("Import raw HTTP/1.x message") }, minLines = 3, modifier = Modifier.fillMaxWidth())
     OutlinedButton(onClick = { model.currentProject()?.let { p -> runCatching { DraftParser.raw(raw, p.origin) }.onSuccess(model::draft).onFailure { model.message(it.message ?: "Invalid request") } } }) { Text("Import into editor") }
-    OutlinedButton(onClick = { model.message(model.currentProject()?.let { model.engine.sessions.jar(it.id, state.identity).describe() }.orEmpty().ifBlank { "No session cookies for this identity" }) }) { Text("Show API session metadata") }
+    OutlinedButton(modifier = Modifier.testTag("api_session_metadata"), onClick = { model.message(model.currentProject()?.let { model.engine.sessions.jar(it.id, state.identity).describe() }.orEmpty().ifBlank { "No session cookies for this identity" }) }) { Text("Show API session metadata") }
     OutlinedButton(onClick = { model.clearSessions() }) { Text("Clear API sessions") }
     OutlinedTextField(identityHeaders, { identityHeaders = it }, label = { Text("Identity ${state.identity} headers (encrypted)") }, minLines = 2, modifier = Modifier.fillMaxWidth())
     OutlinedButton(onClick = { model.configureIdentity(identityHeaders) }) { Text("Save this identity's auth headers") }

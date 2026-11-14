@@ -74,3 +74,5 @@ Detailed capabilities and acceptance criteria: [Product plan](PRODUCT_PLAN.md).
 - [x] Publish verified APK/checksums/metadata as stable GitHub release v1.0.0; exact signed APK installation/relaunch checks passed.
 - [ ] Test the first cross-version production upgrade when the next release exists.
 - [ ] Complete physical/OEM/accessibility and remaining production-readiness checks above.
+
+- [ ] Browser audit patch: actual optimized-APK HTTPS/inspector/cookie/storage/transfer/POST-scope controls pass on compatible WebViews; publish only after CI and same-signer upgrade checks. Source fixes and regression cases are in progress.

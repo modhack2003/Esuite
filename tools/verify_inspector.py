@@ -23,5 +23,18 @@ with sync_playwright() as p:
     assert page.evaluate("window.clicked") is None, "Inspection click must not activate page behavior"
     page.locator("#profile").click()
     assert page.evaluate("window.clicked") is True, "Picker must detach after selection"
+    # HTML replacement must retarget selection; CSS edits must affect the new node.
+    page.evaluate(scripts["html"].replace("__ESUITE_VALUE__", json.dumps('<p id="replacement">Edited</p>')))
+    replaced = json.loads(page.evaluate(scripts["selection"]))
+    assert replaced["tag"] == "P" and 'id="replacement"' in replaced["html"]
+    page.evaluate(scripts["css"].replace("__ESUITE_VALUE__", json.dumps('color: rgb(255, 0, 0); outline: 1px solid blue')))
+    assert page.locator("#replacement").evaluate("e=>getComputedStyle(e).color") == "rgb(255, 0, 0)"
+    page.evaluate(scripts["select"])
+    page.evaluate("document.body.dispatchEvent(new MouseEvent('click', {bubbles:true}))")
+    assert page.locator("#replacement").evaluate("e=>e.style.outlineColor==='blue' && e.style.outlineWidth==='1px'"), "Changing selection must preserve edited outline"
+    page.evaluate(scripts["select"])
+    page.locator("#replacement").click()
+    page.evaluate(scripts["html"].replace("__ESUITE_VALUE__", json.dumps('text only')))
+    assert page.evaluate(scripts["selection"]) == "No selected element"
     browser.close()
 print("PASS: inspector selection, click suppression/detach and storage snapshots. Native WebView behavior still requires device tests.")

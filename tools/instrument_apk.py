@@ -6,6 +6,7 @@ between phases. No production key is generated or used by this test runner.
 """
 from pathlib import Path
 import atexit
+import os
 import subprocess
 import sys
 import time
@@ -58,7 +59,7 @@ def suite(component, name, minimum, test_class=None):
         args += ['-e', 'class', test_class]
     args.append(component)
     result = subprocess.run(args,
-                            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=240)
+                            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=600)
     print(result.stdout)
     (out / (name + '.txt')).write_text(result.stdout)
     status, last_key, count = {}, None, 0
@@ -84,6 +85,8 @@ def suite(component, name, minimum, test_class=None):
 
 
 try:
+    if os.environ.get('GITHUB_ACTIONS') != 'true' or command('adb', 'shell', 'getprop', 'ro.kernel.qemu').strip() != '1':
+        raise RuntimeError('Refusing destructive fixture setup outside a disposable Actions emulator')
     command('adb', 'logcat', '-c')
     command('adb', 'install', '-r', '-t', unique('**/app/build/outputs/apk/debug/app-debug.apk'))
     command('adb', 'install', '-r', '-t', unique('**/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'))
@@ -92,7 +95,7 @@ try:
     command('adb', 'uninstall', 'dev.esuite.app')
     command('adb', 'install', unique('**/app/build/outputs/apk/ci/app-release-ci.apk'))
     command('adb', 'install', '-r', '-t', unique('**/ui-tests/build/outputs/apk/debug/ui-tests-debug.apk'))
-    suite('dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner', 'OptimizedUi', 1, 'dev.esuite.uitests.ProductionUiTest')
+    suite('dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner', 'OptimizedUi', 2, 'dev.esuite.uitests.ProductionUiTest')
 except Exception as error:
     case = ET.SubElement(root, 'testcase', classname='Instrumentation', name='setupAndExecution')
     ET.SubElement(case, 'failure', message=str(error)).text = repr(error)
