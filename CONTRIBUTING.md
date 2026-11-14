@@ -8,6 +8,8 @@ Native: JDK 17 (CI baseline), Android SDK 35 and the committed Gradle wrapper. R
 
 UI concept: Node 20+, then `cd design/prototype`, `npm ci`, `npm run typecheck`, `npm run build`. The build refreshes `docs/ui/index.html`. Open that file locally; no backend is required. The fixture notes reset on reload.
 
+Browser verification: install `playwright==1.51.0` with Python, run `python -m playwright install chromium`, then `python tools/verify_ui.py` from the repository root. Add `--screenshots` to regenerate the README images. The CI design job runs these flows and checks that the concept makes no HTTP requests.
+
 ## Contribution expectations
 
 - Keep synthetic fixtures under reserved `.test` domains. Never commit cookies, tokens, captures, private keys or real target evidence.

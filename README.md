@@ -5,6 +5,8 @@
 
 <p align="center"><a href="#try-the-foundation">Get started</a> · <a href="docs/UI_SPEC.md">UI & design</a> · <a href="docs/ROADMAP.md">Roadmap</a> · <a href="docs/PRODUCT_PLAN.md">Full specification</a> · <a href="CONTRIBUTING.md">Contribute</a></p>
 
+<p align="center"><a href="https://github.com/modhack2003/Esuite/actions/workflows/ci.yml"><img src="https://github.com/modhack2003/Esuite/actions/workflows/ci.yml/badge.svg" alt="Build and verify workflow status"></a></p>
+
 ![ESuite — Your pocket. Full visibility. Android security workbench. UI foundation; capture engines planned.](docs/assets/esuite-banner.svg)
 
 <p align="center"><strong>Native Android</strong> &nbsp; / &nbsp; <strong>No root required</strong> &nbsp; / &nbsp; <strong>No computer during use</strong> &nbsp; / &nbsp; <strong>Local processing</strong></p>
@@ -31,7 +33,7 @@ The product brings familiar proxy and API-testing workflows together with Androi
 | --- | --- | --- |
 | ![Cookie inspection concept with synthetic metadata](docs/assets/ui-browser.png) | ![Traffic filtering concept with bundled fixtures](docs/assets/ui-traffic.png) | ![API request editor and simulated identity comparison](docs/assets/ui-api.png) |
 
-Explore the [self-contained UI concept](docs/ui/index.html), [editable Canva concept board](https://canva.link/pcvozypdf3nm0q0), and [UI specification](docs/UI_SPEC.md). Download the HTML file and open it locally to interact; GitHub's file view displays its source. The concept has no backend and makes no network requests after loading.
+Explore the [self-contained UI concept](docs/ui/index.html), [editable Canva concept board](https://www.canva.com/d/dmVejIKALymdO6b), and [UI specification](docs/UI_SPEC.md). Download the HTML file and open it locally to interact; GitHub's file view displays its source. The concept has no backend and makes no network requests after loading.
 
 ## What works today
 
@@ -140,6 +142,7 @@ Track the [implementation checklist](docs/ROADMAP.md). Tests and device verifica
 | `docs/UI_SPEC.md` | Tokens, navigation, state design and workflow definitions |
 | `docs/ARCHITECTURE.md` | Current and proposed module/data boundaries |
 | `docs/ROADMAP.md` | Honest completed/planned checklist |
+| `docs/VERIFICATION.md` | Passed foundation checks, source commit and explicit verification limits |
 
 Read [Contributing](CONTRIBUTING.md) before changing capture, authentication or data flows. Use the tool only for systems you own or have permission to test. For sensitive reports see [Security](SECURITY.md).
 
