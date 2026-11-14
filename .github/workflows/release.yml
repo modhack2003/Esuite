@@ -163,6 +163,7 @@ jobs:
           api-level: ${{ matrix.api }}
           arch: x86_64
           target: ${{ matrix.target }}
+          disk-size: 8192M
           ram-size: 4096M
           disable-animations: true
           emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu swiftshader_indirect
