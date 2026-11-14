@@ -100,7 +100,7 @@ Workspace protections include Keystore-backed authenticated encryption, bounded 
 
 ### Android builds and production delivery
 
-Requested compatibility: **Android 9–17 (API 28–37)**. The build targets API 37 with the 37.0 platform, AGP 9.2.1, Gradle 9.4.1 and JDK 17. The expanded optimized-APK emulator matrix is pending verification; the earlier API 35 pass remains historical evidence. See [release delivery](docs/RELEASING.md) for signing and verification gates.
+Requested compatibility: **Android 9–17 (API 28–37)**. The build targets API 37 with the 37.0 platform, AGP 9.2.1, Gradle 9.4.1 and JDK 17. All ten Android 9–17 emulator jobs passed (24 native passes; six unsupported-WebView capability skips). Full workflow/release verification is completing after pinning its browser-check host to Ubuntu 24.04. See [release delivery](docs/RELEASING.md) for signing and verification gates.
 
 ```bash
 git clone https://github.com/modhack2003/Esuite.git
@@ -110,7 +110,7 @@ cd Esuite
 
 Open the project in Android Studio, or use the command line with an installed SDK. On Windows use `gradlew.bat`. The debug APK is generated at `app/build/outputs/apk/debug/app-debug.apk`. The [build workflow](.github/workflows/ci.yml) uploads internal fixture artifacts and an unsigned optimized APK for verification. Installable production downloads are published only by the signed release workflow. Full interception and physical-device validation are still pending.
 
-The [production release workflow](.github/workflows/release.yml) builds an optimized, privately signed APK after successful exact-commit CI and publishes it to [GitHub Releases](https://github.com/modhack2003/Esuite/releases) only after signer/metadata/integrity checks and signed-APK device smoke tests. **Publication is currently blocked on one-time signing-secret setup and the migrated compatibility gates; no stable APK is available yet.** Never distribute the internal test bundle or disposable CI-signed APK as production. Read the [usage guide](docs/GETTING_STARTED.md) for the browser → API → evidence workflow.
+The [production release workflow](.github/workflows/release.yml) builds an optimized, privately signed APK after successful exact-commit CI and publishes it to [GitHub Releases](https://github.com/modhack2003/Esuite/releases) only after signer/metadata/integrity checks and signed-APK device smoke tests. **Production signing is configured. First publication awaits the full CI and exact signed-APK smoke gates; no stable APK is available yet.** Never distribute the internal test bundle or disposable CI-signed APK as production. Read the [usage guide](docs/GETTING_STARTED.md) for the browser → API → evidence workflow.
 
 ### Offline UI concept
 

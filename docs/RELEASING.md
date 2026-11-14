@@ -27,7 +27,15 @@ Configure these **repository Actions secrets** in GitHub Settings → Secrets an
 
 Configure repository **Actions variable** `ESUITE_CERT_SHA256` with the signing certificate SHA-256 fingerprint: 64 hexadecimal characters, no colons. Obtain it with `keytool -list -v` from the same keystore. This public pin prevents an accidental signer change. Record the public fingerprint in this document once configured; keep the private keystore/password out of chat, source, logs and artifacts.
 
-**Signing status:** the GitHub connector can update source but has no Actions-secret administration capability. The shell has no GitHub login; secure browser sign-in was blocked by an approval-review usage limit, without credential submission. This session has not configured a production signer or published a release. Account-owner access is needed for one-time setup; the release job reports missing inputs explicitly.
+**Signing status:** configured and verified by the repository owner through authenticated GitHub CLI. All four Actions secrets and the public certificate pin exist. A private PKCS12 keystore and verified local recovery copy are retained on the owner's device; no private signing material is committed or uploaded as an artifact. The owner must retain an offline backup with the password stored separately.
+
+Production certificate SHA-256:
+
+```text
+55800cce75d814b64a1f9663463da2f0521cd0da55541ff56449f5a94fb88e12
+```
+
+CI uses Ubuntu 24.04 explicitly: ubuntu-latest moved to 26.04 and the pinned Playwright 1.51 verification package does not support that host. Signing credentials are exposed only to the restore/build steps after build-tool setup, and the temporary keystore is removed on exit.
 
 ## Automated path
 

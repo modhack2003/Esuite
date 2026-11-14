@@ -18,7 +18,7 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_repository.full_name == github.repository)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       sha: ${{ steps.source.outputs.sha }}
       version: ${{ steps.version.outputs.version }}
@@ -62,22 +62,31 @@ jobs:
   sign:
     needs: prepare
     if: needs.prepare.outputs.needed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
       SOURCE_SHA: ${{ needs.prepare.outputs.sha }}
-      ESUITE_STORE_PASSWORD: ${{ secrets.ESUITE_STORE_PASSWORD }}
-      ESUITE_KEY_ALIAS: ${{ secrets.ESUITE_KEY_ALIAS }}
-      ESUITE_KEY_PASSWORD: ${{ secrets.ESUITE_KEY_PASSWORD }}
       ESUITE_CERT_SHA256: ${{ vars.ESUITE_CERT_SHA256 }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.sha }}
           persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+        with:
+          cmdline-tools-version: '15859902' # Command-line Tools 22.0 supports minor API levels
+          packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
       - name: Require durable private signer and pinned public certificate
         env:
           ESUITE_KEYSTORE_BASE64: ${{ secrets.ESUITE_KEYSTORE_BASE64 }}
+          ESUITE_STORE_PASSWORD: ${{ secrets.ESUITE_STORE_PASSWORD }}
+          ESUITE_KEY_ALIAS: ${{ secrets.ESUITE_KEY_ALIAS }}
+          ESUITE_KEY_PASSWORD: ${{ secrets.ESUITE_KEY_PASSWORD }}
         run: |
           python3 - <<'PY'
           import base64, os
@@ -89,19 +98,13 @@ jobs:
           os.umask(0o077)
           key_path = Path(os.environ['RUNNER_TEMP']) / 'esuite-production.jks'
           key_path.write_bytes(base64.b64decode(os.environ['ESUITE_KEYSTORE_BASE64'], validate=True))
-          with open(os.environ['GITHUB_ENV'], 'a') as env:
-              env.write(f'ESUITE_KEYSTORE_PATH={key_path}\n')
           PY
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: android-actions/setup-android@v4
-        with:
-          cmdline-tools-version: '15859902' # Command-line Tools 22.0 supports minor API levels
-          packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
-      - uses: gradle/actions/setup-gradle@v4
       - name: Build optimized production APK and repeat release lint
+        env:
+          ESUITE_KEYSTORE_PATH: ${{ runner.temp }}/esuite-production.jks
+          ESUITE_STORE_PASSWORD: ${{ secrets.ESUITE_STORE_PASSWORD }}
+          ESUITE_KEY_ALIAS: ${{ secrets.ESUITE_KEY_ALIAS }}
+          ESUITE_KEY_PASSWORD: ${{ secrets.ESUITE_KEY_PASSWORD }}
         run: ./gradlew :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease --no-daemon
       - name: Verify signer, SDK range, package, version and alignment
         env:
@@ -130,7 +133,7 @@ jobs:
         run: rm -f "$RUNNER_TEMP/esuite-production.jks"
   smoke:
     needs: [prepare, sign]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -181,7 +184,7 @@ jobs:
           retention-days: 30
   publish:
     needs: [prepare, sign, smoke]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     env:
