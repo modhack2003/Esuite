@@ -35,13 +35,26 @@ public class ProductionUiTest {
         assertEquals("UI fixture runner supports disposable emulators only", "1", device.executeShellCommand("getprop ro.kernel.qemu").trim());
         assertTrue(device.executeShellCommand("pm clear dev.esuite.app").contains("Success"));
     }
+    private boolean usable(UiObject2 node) {
+        if(node==null) return false;
+        try {
+            android.graphics.Rect bounds=node.getVisibleBounds();
+            if(bounds.width()<8 || bounds.height()<8) return false;
+            String id=node.getResourceName();
+            if(id!=null && id.startsWith("nav_")) return true;
+            UiObject2 home=device.findObject(By.res("nav_home"));
+            int bottom=home==null?device.getDisplayHeight():home.getVisibleBounds().top;
+            // Accessibility can expose controls clipped by the scroll viewport or covered by navigation.
+            return bounds.top>device.getDisplayHeight()/24 && bounds.bottom<bottom-3;
+        } catch(androidx.test.uiautomator.StaleObjectException ignored) { return false; }
+    }
     private UiObject2 find(BySelector selector) {
         UiObject2 visible = device.wait(Until.findObject(selector), 700);
-        if (visible != null) return visible;
+        if (usable(visible)) return visible;
         top();
         for (int attempt = 0; attempt < 10; attempt++) {
             UiObject2 found = device.wait(Until.findObject(selector), 700);
-            if (found != null) return found;
+            if (usable(found)) return found;
             device.swipe(device.getDisplayWidth()/100, device.getDisplayHeight()*3/4,
                     device.getDisplayWidth()/100, device.getDisplayHeight()/3, 25);
         }
