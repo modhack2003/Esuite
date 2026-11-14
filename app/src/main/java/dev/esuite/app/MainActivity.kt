@@ -95,7 +95,9 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Raised)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, color = Ink, style = MaterialTheme.typography.titleMedium)
-            SelectionContainer { Text(body, color = Muted, style = MaterialTheme.typography.bodySmall) }
+            Box(Modifier.fillMaxWidth().heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                SelectionContainer { Text(body, color = Muted, style = MaterialTheme.typography.bodySmall) }
+            }
         }
     }
 }

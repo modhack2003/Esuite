@@ -7,7 +7,7 @@ Install this update over the production 1.0.0 APK to retain your encrypted works
 - Cross-origin form POST navigation now receives a blocked response, covering the WebView callback gap for POST. Early main-frame navigation also stops outside-origin pages. Third-party subresources can still load; this is not a network firewall or full interception engine.
 - HTML replacement retargets the selected element so further inspection and CSS edits operate on the replacement. CSS changes preserve the intended outline when selecting another element.
 - Same-origin URL fragments remain usable by navigation, inspection and cookie controls.
-- Native cookie edits and profile disposal flush cookie storage. Switching tools resets the page scroll position, browser actions dismiss the keyboard, and the installed WebView provider/version is visible.
+- Native cookie edits and profile disposal flush cookie storage. Switching tools resets the page scroll position, browser actions dismiss the keyboard, and the installed WebView provider/version is visible. Narrow-screen tabs fit their labels, and output/evidence readouts have bounded scroll areas with accessible text.
 - A stopped renderer reports recovery instructions instead of terminating the app.
 - Failed API sends replace the previous response display and retain the actual attempted comparison identity in history.
 

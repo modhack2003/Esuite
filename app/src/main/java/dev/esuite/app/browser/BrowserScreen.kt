@@ -161,6 +161,8 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel) {
                 Text(console.joinToString("\n"), style = MaterialTheme.typography.bodySmall)
             }
         }
-        SelectionContainer { Text(output, Modifier.testTag("browser_output").fillMaxWidth().heightIn(max = 260.dp).verticalScroll(rememberScrollState()), style = MaterialTheme.typography.bodySmall) }
+        Box(Modifier.fillMaxWidth().heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
+            SelectionContainer { Text(output, Modifier.testTag("browser_output").fillMaxWidth(), style = MaterialTheme.typography.bodySmall) }
+        }
     }
 }
