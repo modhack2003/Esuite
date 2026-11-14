@@ -18,8 +18,8 @@ def unique(pattern):
     return str(matches[0])
 
 
-command('adb', 'install', unique('**/validation/app-validation.apk'))
-command('adb', 'install', unique('**/validation/app-validation-androidTest.apk'))
+command('adb', 'install', '-r', '-t', unique('**/validation/app-validation.apk'))
+command('adb', 'install', '-r', '-t', unique('**/validation/app-validation-androidTest.apk'))
 started = time.monotonic()
 result = subprocess.run(['adb', 'shell', 'am', 'instrument', '-w', '-r',
                          'dev.esuite.app.validation.test/androidx.test.runner.AndroidJUnitRunner'],
