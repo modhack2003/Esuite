@@ -15,8 +15,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
         with:
+          cmdline-tools-version: '15859902' # Command-line Tools 22.0 supports minor API levels
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
       - uses: gradle/actions/setup-gradle@v4
       - name: Unit tests, lint and debug APK
@@ -89,16 +90,16 @@ jobs:
       max-parallel: 10
       matrix:
         include:
-          - {api: '28', target: google_apis}
-          - {api: '29', target: google_apis}
-          - {api: '30', target: google_apis}
-          - {api: '31', target: google_apis}
-          - {api: '32', target: google_apis}
-          - {api: '33', target: google_apis}
-          - {api: '34', target: google_apis}
-          - {api: '35', target: google_apis}
-          - {api: '36', target: google_apis_ps16k}
-          - {api: '37.0', target: google_apis_ps16k}
+          - {api: '28', target: google_apis, gpu: swiftshader_indirect}
+          - {api: '29', target: google_apis, gpu: swiftshader_indirect}
+          - {api: '30', target: google_apis, gpu: swiftshader_indirect}
+          - {api: '31', target: google_apis, gpu: swiftshader_indirect}
+          - {api: '32', target: google_apis, gpu: swiftshader_indirect}
+          - {api: '33', target: google_apis, gpu: swiftshader_indirect}
+          - {api: '34', target: google_apis, gpu: swiftshader_indirect}
+          - {api: '35', target: google_apis, gpu: swiftshader_indirect}
+          - {api: '36', target: google_apis_ps16k, gpu: swiftshader_indirect}
+          - {api: '37.0', target: google_apis_ps16k, gpu: software}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -107,8 +108,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
         with:
+          cmdline-tools-version: '15859902' # Command-line Tools 22.0 supports minor API levels
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
       - uses: actions/download-artifact@v4
         with:
@@ -127,7 +129,7 @@ jobs:
           disable-animations: true
           disk-size: 8192M
           ram-size: 4096M
-          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu swiftshader_indirect
+          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu ${{ matrix.gpu }}
           script: |
             python3 tools/instrument_apk.py
             adb shell am start -W -n dev.esuite.app/.MainActivity

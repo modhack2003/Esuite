@@ -96,8 +96,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
         with:
+          cmdline-tools-version: '15859902' # Command-line Tools 22.0 supports minor API levels
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
       - uses: gradle/actions/setup-gradle@v4
       - name: Build optimized production APK and repeat release lint
@@ -135,9 +136,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {api: '28', target: google_apis}
-          - {api: '35', target: google_apis}
-          - {api: '37.0', target: google_apis_ps16k}
+          - {api: '28', target: google_apis, gpu: swiftshader_indirect}
+          - {api: '35', target: google_apis, gpu: swiftshader_indirect}
+          - {api: '37.0', target: google_apis_ps16k, gpu: software}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -151,8 +152,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
         with:
+          cmdline-tools-version: '15859902'
           packages: platform-tools
       - name: Give ephemeral runner access to KVM
         run: |
@@ -166,7 +168,7 @@ jobs:
           disk-size: 8192M
           ram-size: 4096M
           disable-animations: true
-          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu swiftshader_indirect
+          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu ${{ matrix.gpu }}
           script: bash tools/smoke_release.sh
       - uses: actions/upload-artifact@v4
         if: always()
