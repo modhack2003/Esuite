@@ -1,42 +1,67 @@
-# ESuite implementation handoff
+# ESuite — next-agent handoff
 
-## Active increment
+Read this file first, then `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md` and the relevant source. Continue the implementation; do not restart branding or design.
 
-Part 1 is implemented and passed CI: https://github.com/modhack2003/Esuite/actions/runs/43580598882. Part 2 passed CI: https://github.com/modhack2003/Esuite/actions/runs/43581714048. Part 3 passed CI: https://github.com/modhack2003/Esuite/actions/runs/43582195830. Part 4 adds bounded tasks and imports. Browser functionality still needs physical-device verification. Do not mark an engine delivered solely because its UI exists.
+## Product contract
 
-## Permanent requirements
+- Native Android, unrooted phone, no computer during use. Runtime processing and saved evidence remain on-device.
+- User authorized incremental implementation and pushes to `modhack2003/Esuite/main`. Make coherent commits and keep this checklist current.
+- HTTPS-only runtime: automatic approval review rejected global cleartext HTTP. Do not reintroduce globally permitted cleartext or trust-all TLS. HTTP MockWebServer fixtures are JVM-only.
+- No analytics, hosted AI, remote workers, automatic evidence uploads or external callback collectors. The design services received synthetic data only.
+- The React prototype is a synthetic design reference. Native features must be assessed from Kotlin source and tests.
 
-Unrooted Android; no computer at runtime; processing/evidence local. Continue pushing coherent tested increments to `modhack2003/Esuite`. Preserve visual identity. No further Superdesign login attempts are required.
+## Implemented increments
 
-## Parts and acceptance gates
+| Part | Working behavior | Validation reference |
+| --- | --- | --- |
+| 1 — core | Exact-origin scope, real cancellable HTTP engine, no redirects/retries, independent project/identity cookie jars, capped text/binary response capture, passive observations and comparison | https://github.com/modhack2003/Esuite/actions/runs/43580598882 |
+| 2 — browser / API UI | Compatible isolated WebView profiles, native cookie read/set/clear/explicit transfer, touch element selection, local HTML/CSS edits, console, storage, request metadata history, native API execution and A/B comparison | https://github.com/modhack2003/Esuite/actions/runs/43581714048 |
+| 3 — local evidence | Keystore-backed AES-256-GCM workspace, AtomicFile, request collections, configured identity headers, observations, sanitized local export, project/profile deletion | https://github.com/modhack2003/Esuite/actions/runs/43582195830 |
+| 4 — tasks / imports | Four payload substitution modes, bounded/cancellable execution, saved-request sequences, first-response JSON token extraction, cURL/raw HTTP/OpenAPI 3 JSON/textual HAR imports, offline AWS JSON review | https://github.com/modhack2003/Esuite/actions/runs/43583424635 |
+| Native boundary tests | Android 15 emulator: actual Keystore round-trip and tamper rejection; separate WebView cookies including HttpOnly/native visibility; page inspector execution. Two tests passed, none skipped | https://github.com/modhack2003/Esuite/actions/runs/43583424635 |
+| Storage hardening | AtomicFile backup recovery, missing-key failure without replacement, durable-data admission budgets and collection/observation removal | Final CI gate: https://github.com/modhack2003/Esuite/actions/runs/43583783633 |
 
-| Part | Work | Status | Acceptance |
+## Next tasks in dependency order
+
+| ID | Priority | Task | Acceptance gate |
 | --- | --- | --- | --- |
-| 1 | Project scope, HTTP replay, cancellation, per-project/identity cookie jars, binary/truncated body provenance, pure comparison/passive checks | Complete; CI passed | MockWebServer tests: scope escape rejection, redirects not followed, cookie isolation, cancellation and body caps |
-| 2 | Real native browser, cookie tools, DOM/CSS, console, storage, browser metadata history, API editor UI | Complete; CI passed | Build/lint; no dangerous JS bridge; feature detection; explicit missing-body labels; on-device gates tracked |
-| 3 | Encrypted workspace, findings/export, saved requests and local analysis UI | Complete; CI passed | AES-GCM tamper/round-trip tests; no plaintext evidence on disk; redacted export defaults |
-| 4 | Parameter runner, macros, cloud config review and token tools | Implemented; CI pending | Bounded/cancellable tasks, exact scope, no automatic mutation retries, fixture-based checks |
-| 5 | Local proxy and rootless selected-app forwarding | Queued | Select licensed stack, implement actual forwarding; no empty VPN that blackholes traffic |
-| 6 | TLS interception, advanced protocols/scanner/extensions | Queued | Protocol matrix and physical-device tests; no pinning bypass or blanket decryption claim |
+| CAP-01 | P0 | Select a permissively licensed Android userspace forwarding stack. Inspect actual transitive licenses and pin upstream revisions. `heiher/sockstun` is only a candidate, not an integrated dependency | Reproducible Android build; license inventory; no silent MIT-to-GPL change |
+| CAP-02 | P0 | Implement loopback proxy transport, scoped routing and actual request/response provenance | Controlled tests for redirects, uploads, duplicate headers, binary bodies, compression and cancellation; distinguish normalized messages from wire bytes |
+| CAP-03 | P0 | Implement selected-app VpnService with userspace TCP/UDP/DNS and IPv4/IPv6 forwarding, foreground status, consent, conflict handling and immediate stop | Real unrooted device tests; preserve connectivity; no empty TUN service that blackholes traffic; socket protection prevents loops |
+| CAP-04 | P0 | Add local CA generation/protection, explicit installation/trust flow and scoped TLS interception where supported | Upstream certificate validation; per-install key; pinned/non-trusting apps retain honest metadata-only/failure states |
+| UI-01 | P1 | Replace long native tool pages with editor tabs, drill-down screens, lazy history rendering and landscape comparison | Portrait/landscape, font scaling, TalkBack, soft keyboard and full browser-to-finding flow on a physical phone |
+| UI-02 | P1 | Add native interaction tests for project creation, cookie-to-API transfer, auth configuration, findings and export/delete flows | Exercise actual Compose controls, not only helper APIs; account-switch body/header behavior is explicit |
+| DATA-01 | P1 | Expand Android/OEM backup, profile-deletion, process-death, interrupted-save and export-provider coverage | Recovery preserves prior data; failures never silently reset state; no private evidence leaves to remote document providers |
+| DATA-02 | P1 | Move large import/budget validation off UI thread with version-safe state updates; add migrations | Bounded memory, no lost concurrent captures, unsupported versions fail closed |
+| RUN-01 | P1 | Four-list task UI, configurable result match/extract filters, pause/checkpoint controls | Respect budgets/cancellation; never replay uncertain non-idempotent sends automatically |
+| RUN-02 | P1 | Per-step macro extraction, CSRF refresh and explicit interactive login handoffs | No unattended MFA/passkey/CAPTCHA promise; session-isolation tests |
+| API-01 | P1 | Multipart/file upload, YAML/OpenAPI references/schema scaffolds, more cURL syntax and HAR variants | Explicit supported subset; parser never invokes shell; imports do not execute requests |
+| API-02 | P1 | Supported WebSocket/SSE/gRPC workflows and protocol matrix | No claim that an HTTP body cap equals complete streaming capture |
+| SCAN-01 | P1 | Controlled crawler and selected active checks with baselines and reproducible evidence | Scope/rate/cancel controls; test fixtures; no reflection/timing/error-only confirmed-vulnerability claims |
+| CLOUD-01 | P2 | Direct AWS/Azure/GCP account connectors, imported policy variants and effective-permission context | Scoped credentials, local analysis, provider fixtures and accurate resource attribution |
+| EXT-01 | P2 | Declarative local rule packs, later a bounded script/plugin interface | Enforced resource/access limits; no assumption of unchanged BApp/BCheck compatibility |
+| REPORT-01 | P2 | Rich local report formats, explicit evidence selection, manual verification/retest state and metadata redaction | Preview every export; arbitrary secrets cannot be guessed; expired evidence attachments are labelled |
 
-## How to continue
+## Current runtime limits and semantics
 
-Read `AGENTS.md` and inspect actual source plus the latest CI run. Before implementing Part 5 inspect third-party licenses and upstream pinned revision; a permissive Android tun2socks candidate is `heiher/sockstun` / its actual dependencies, but no component has been selected or integrated yet. Never silently change repository licensing.
+- API requests are limited to 256 KiB bodies and 64 KiB total headers; response capture is capped at 256 KiB and explicitly labelled when truncated or Base64 encoded.
+- Exact scheme/host/port scope. Android UI projects require HTTPS; API redirects and automatic retries are disabled.
+- Identity switches, replay and comparison strip observed/known/configured authentication headers. Body credentials remain unchanged and require review. Explicit manual cookies override the selected jar.
+- API cookie jars are memory-only. The browser’s explicit To API jar action replaces the current identity jar with cookies matching the selected URL; metadata-supported transfers preserve domain/path/Secure/HttpOnly. This supports real A/B comparison after signing into each isolated browser profile. Without cookie metadata support, fallback transfer uses host/root-path defaults and says so. Configured auth headers, saved requests and evidence are encrypted. WebView cookies/cache are separate platform-managed app-private profile data, outside the workspace cipher.
+- History is capped at 100 exchanges. Durable collections/config/notes have a 16 MiB admission budget; the whole encrypted vault is capped at 32 MiB. History may be pruned to fit. Saved collections and observations are rejected at capacity rather than silently dropped.
+- Workspace write failures preserve the previous AtomicFile. Unknown/missing keys and corrupt files do not trigger plaintext fallback or automatic replacement. Native backup recovery is part of the latest emulator test.
+- Sanitized exports omit bodies, paths, query values, headers, identity config and finding free text. The origin/generated IDs remain. Export requires preview and a known on-device provider. Rich raw evidence export is not implemented.
+- Browser history is **URL/method/request-header metadata only**. No browser response/body capture is claimed. Unsupported profile features disable this browser rather than sharing test identities silently.
+- Browser navigation is scoped; third-party subresources can load normally but are not recorded. No native JavaScript bridge is exposed. TLS errors are cancelled.
+- Parameter runs: up to 50 sequential requests, at least one second apart, stop on 429/503 or transport failure. UI exposes two payload lists; engine supports four substitution positions. No automatic retry/resume.
+- Sequences: up to 10 saved requests; optional first-response JSON Pointer extraction into `{{token}}`; stop on non-2xx. URL tokens are encoded, header/body substitutions are literal.
+- cURL import is a conservative parser, not shell execution. OpenAPI supports JSON 3.x; HAR import supports textual request drafts and filters exact origin.
+- AWS review analyzes supplied JSON structurally; it does not contact an account or fully evaluate conditions, SCPs or effective privileges. JWT claims remain unverified; token statistics do not prove cryptographic randomness.
 
-Update this file with each pushed part: changed paths, working behavior, CI URL, known gaps and next action. Keep `docs/ROADMAP.md` and README capability claims aligned with the native app. The React concept stays synthetic and should not be rewritten to claim native completion.
+## Handoff / verification procedure
 
-## Runtime transport decision
-
-Automatic approval review rejected global cleartext HTTP. Part 2 uses HTTPS-only Android configuration and rejects HTTP project origins in its UI. MockWebServer HTTP runs only in JVM tests; do not reintroduce globally permitted cleartext.
-
-## Part 3 storage behavior
-
-Workspace evidence, saved requests and configured identity headers are encrypted with AES-256-GCM using an Android Keystore key, stored via AtomicFile under noBackupFilesDir. API cookie jars remain memory-only. WebView cookies/cache use separate app-private profiles managed by the platform and are not encrypted by the workspace cipher. Sanitized exports omit bodies, paths, query values, headers, identity config and finding free text; they require a preview and a known local device-storage provider. No raw evidence upload occurs.
-
-Durable saved collections/config/notes have a 16 MiB admission budget; the full encrypted vault is capped at 32 MiB. Old capture history may be pruned to fit, but saved collections and findings are rejected at capacity rather than silently dropped. AtomicFile backup recovery and unknown/missing-key failure behavior are explicit. Browser profile deletion can fail while the profile is loaded; the project is retained on failure. Real OEM cleanup/backup behavior remains a device gate.
-
-## Part 4 task behavior
-
-Part 4 CI caught a lambda-variable shadowing error and an input-error exception-type mismatch. Both are corrected. A native Android 35 emulator job now verifies Keystore round-trip/tamper handling and compatible WebView profile-cookie isolation/inspection. Use the latest run rather than intermediate failed commits as the validation gate.
-
-The parameter runner exposes two payload lists in UI, four supported substitution modes, a 50-request engine cap, sequential execution and at least one second between requests. Stop cancels the underlying call; HTTP 429/503 stops the run with no retry. Saved-request sequences have at most 10 steps, fail on non-2xx responses, and can extract one token from the first response using a JSON Pointer. cURL is parsed as data, not executed. OpenAPI 3 JSON and textual HAR imports become reviewed collection drafts, never automatic requests. AWS JSON review is offline structural analysis, not an authenticated cloud audit or effective-permissions verdict.
+1. Read the latest remote HEAD and CI before editing; preserve any concurrent user changes.
+2. Run `./gradlew testDebugUnitTest lintDebug assembleDebug`; native boundary tests use `./gradlew connectedDebugAndroidTest` with Android 15 emulator. The workflow uploads APK and all reports.
+3. Run the existing web concept checks when changing its source or inspector scripts. Use no captured credentials in fixtures.
+4. Update this file, roadmap, capability claims and verification record in each implemented increment. Name unfinished items and actual blockers honestly.
+5. Do not claim a production-ready suite: full proxy/VPN/TLS interception, broad active scanning, provider-account audits and physical/OEM coverage remain incomplete.

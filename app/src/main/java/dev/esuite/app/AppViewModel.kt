@@ -231,6 +231,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         currentProject()?.let { p -> engine.sessions.clearProject(p.id); mutable.update { it.copy(workspace = it.workspace.copy(identityConfigs = it.workspace.identityConfigs.filterNot { c -> c.projectId == p.id })) } }
         message("API sessions and saved identity headers cleared. Browser profiles have separate controls.")
     }
+    fun transferBrowserCookies(url: String, cookies: List<String>): Boolean {
+        val project = currentProject() ?: return false
+        return runCatching {
+            val target = ScopePolicy(project.origin).requireAllowed(url)
+            val count = engine.sessions.jar(project.id, state.value.identity).replaceFromBrowser(target, cookies)
+            draft(RequestDraft(url = target.toString()))
+            message("Replaced API identity ${state.value.identity}'s memory-only cookie jar with $count browser cookies for this URL. Review API Lab before sending.")
+        }.onFailure { message(it.message ?: "Cookie transfer failed") }.isSuccess
+    }
     fun saveDraft(name: String) {
         val p = currentProject() ?: return
         runCatching {

@@ -111,11 +111,12 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel) {
                     TextButton(onClick = { cookieManager()?.removeAllCookies { output = "Cookies cleared for this isolated profile" } }) { Text("Clear profile") }
                     TextButton(onClick = {
                         runCatching { policy.requireAllowed(address) }.onSuccess { url ->
-                            val cookie = cookieManager()?.getCookie(url.toString()).orEmpty()
-                            model.draft(RequestDraft(url = url.toString(), headers = if (cookie.isBlank()) emptyList() else listOf(Header("Cookie", cookie))))
-                            output = "Cookie header copied to API draft. Review it in API Lab before sending."
+                            val manager = cookieManager() ?: return@onSuccess
+                            val cookies = if (WebViewFeature.isFeatureSupported(WebViewFeature.GET_COOKIE_INFO)) CookieManagerCompat.getCookieInfo(manager, url.toString())
+                                else manager.getCookie(url.toString())?.split(';')?.map { it.trim() + "; Path=/; Secure" }.orEmpty()
+                            output = if (model.transferBrowserCookies(url.toString(), cookies)) "API identity $identity's memory-only cookie jar replaced. Switch to API Lab to review. Without metadata support, only the current URL's cookies are transferred with host/root-path defaults." else "Transfer failed; see workspace status."
                         }.onFailure { output = "Invalid cookie origin" }
-                    }) { Text("To API") }
+                    }) { Text("To API jar") }
                 }
             }
             "Storage" -> {

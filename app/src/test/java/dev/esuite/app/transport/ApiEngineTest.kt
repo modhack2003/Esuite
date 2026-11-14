@@ -4,11 +4,21 @@ import dev.esuite.app.core.*
 import kotlinx.coroutines.*
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.Assert.*
 import org.junit.Test
 import java.util.concurrent.TimeUnit
 
 class ApiEngineTest {
+    @Test fun browserTransferPreservesMetadataAndDoesNotCrossIdentity() {
+        val sessions = IdentitySessions(); val target = "https://example.test/api".toHttpUrl()
+        val count = sessions.jar("p", "A").replaceFromBrowser(target, listOf("session=native_A; Domain=example.test; Path=/api; Secure; HttpOnly"))
+        assertEquals(1, count)
+        val cookie = sessions.jar("p", "A").loadForRequest(target).single()
+        assertTrue(cookie.secure); assertTrue(cookie.httpOnly); assertEquals("/api", cookie.path)
+        assertTrue(sessions.jar("p", "B").loadForRequest(target).isEmpty())
+        assertTrue(sessions.jar("p", "A").loadForRequest("https://example.test/other".toHttpUrl()).isEmpty())
+    }
     @Test fun replayCapturesHeadersBodyAndStatus() = runBlocking {
         val server = MockWebServer(); server.start(); val engine = ApiEngine()
         try {

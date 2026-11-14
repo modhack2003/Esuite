@@ -20,6 +20,12 @@ class IdentityCookieJar : CookieJar {
         return cookies.filter { it.matches(url) }
     }
     @Synchronized fun clear() = cookies.clear()
+    @Synchronized fun replaceFromBrowser(url: HttpUrl, setCookies: List<String>): Int {
+        require(setCookies.size <= 200) { "Too many cookies to transfer" }
+        val parsed = setCookies.map { Cookie.parse(url, it) ?: throw IllegalArgumentException("A browser cookie could not be parsed") }
+        cookies.clear(); saveFromResponse(url, parsed)
+        return cookies.size
+    }
     @Synchronized fun describe(): String = cookies.joinToString("\n") { "${it.name} · ${it.domain}${it.path} · secure=${it.secure} · HttpOnly=${it.httpOnly}" }
 }
 
