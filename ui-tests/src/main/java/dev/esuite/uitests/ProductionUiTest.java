@@ -91,10 +91,26 @@ public class ProductionUiTest {
         click("nav_findings");
         assertNotNull(find(By.textContains("Synthetic local evidence")));
     }
+    private boolean containsText(UiObject2 node, String expected) {
+        String text=node.getText();
+        if(text!=null && text.contains(expected)) return true;
+        for(UiObject2 child:node.getChildren()) if(containsText(child,expected)) return true;
+        return false;
+    }
+    private boolean waitText(String name, String expected, long timeout) {
+        tag(name);
+        long until=android.os.SystemClock.uptimeMillis()+timeout;
+        do {
+            try {
+                UiObject2 node=device.findObject(By.res(name));
+                if(node!=null && containsText(node,expected)) return true;
+            } catch(androidx.test.uiautomator.StaleObjectException ignored) { /* Reacquire after Compose reflow. */ }
+            android.os.SystemClock.sleep(150);
+        } while(android.os.SystemClock.uptimeMillis()<until);
+        return false;
+    }
     private void output(String expected) {
-        tag("browser_output");
-        assertTrue("Browser output missing: " + expected,
-                device.wait(Until.hasObject(By.res("browser_output").textContains(expected)), 15000));
+        assertTrue("Browser output missing: " + expected, waitText("browser_output", expected,15000));
     }
     private void evaluate(String script, String expected) {
         top(); click("browser_tab_console");
@@ -153,15 +169,15 @@ public class ProductionUiTest {
         launch(); enter("project_name", "API UI fixture");
         enter("project_origin", "https://example.com"); click("create_project");
         click("nav_api"); click("api_send"); top();
-        assertTrue("HTTPS API request did not complete", device.wait(Until.hasObject(By.res("workspace_status").textContains("HTTP 200")), 45000));
+        assertTrue("HTTPS API request did not complete", waitText("workspace_status", "HTTP 200", 45000));
         click("api_compare"); top();
-        assertTrue("A/B comparison did not finish", device.wait(Until.hasObject(By.res("workspace_status").textContains("Separate session jars used")), 90000));
+        assertTrue("A/B comparison did not finish", waitText("workspace_status", "Separate session jars used", 90000));
         enter("api_saved_name", "Synthetic GET"); click("api_save_draft");
         assertNotNull(find(By.text("Load: Synthetic GET")));
         enter("api_url", "https://outside.invalid/"); click("api_send");
         assertNotNull(find(By.text(java.util.regex.Pattern.compile("Error · .*"))));
         // The failed send must replace the old 200 result, with no request to outside.invalid.
-        top(); assertTrue(device.wait(Until.hasObject(By.res("workspace_status").textContains("outside the selected project origin")), 15000));
+        top(); assertTrue(waitText("workspace_status", "outside the selected project origin", 15000));
         click("nav_traffic"); assertNotNull(find(By.textContains("Identity comparison · identity B · 200")));
     }
 

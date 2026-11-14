@@ -133,6 +133,7 @@ jobs:
           disable-animations: true
           disk-size: 8192M
           ram-size: 4096M
+          heap-size: 512M
           emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu ${{ matrix.gpu }}
           script: |
             python3 tools/instrument_apk.py

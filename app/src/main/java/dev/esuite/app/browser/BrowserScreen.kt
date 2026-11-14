@@ -120,7 +120,7 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel) {
             })
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            listOf("Elements", "Cookies", "Storage", "Console").forEach { tab -> TextButton(modifier = Modifier.testTag("browser_tab_${tab.lowercase()}"), onClick = { dismissEditor(); panel = tab; output = "" }) { Text(tab, style = MaterialTheme.typography.labelSmall) } }
+            listOf("Elements", "Cookies", "Storage", "Console").forEach { tab -> TextButton(modifier = Modifier.weight(1f).testTag("browser_tab_${tab.lowercase()}"), contentPadding = PaddingValues(horizontal = 4.dp), onClick = { dismissEditor(); panel = tab; output = "" }) { Text(tab, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) } }
         }
         when (panel) {
             "Elements" -> {
