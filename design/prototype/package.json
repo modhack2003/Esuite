@@ -1,0 +1,9 @@
+{
+  "name": "esuite-ui-concept",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local, synthetic ESuite interaction prototype; not a traffic interception engine.",
+  "scripts": { "build": "node build.mjs", "typecheck": "tsc --noEmit" },
+  "dependencies": { "react": "19.1.0", "react-dom": "19.1.0" },
+  "devDependencies": { "@types/react": "19.1.6", "@types/react-dom": "19.1.5", "esbuild": "0.25.5", "typescript": "5.8.3" }
+}

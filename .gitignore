@@ -1,0 +1,25 @@
+# Android / Gradle
+.gradle/
+.kotlin/
+**/build/
+local.properties
+.idea/
+*.iml
+*.jks
+*.keystore
+# UI development
+node_modules/
+design/prototype/out/
+# Device data and secrets
+.env
+.env.*
+*.har
+*.pcap
+*.pcapng
+*.pem
+*.key
+captures/
+exports/
+# Local tools
+__pycache__/
+.DS_Store

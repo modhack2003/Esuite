@@ -1,0 +1,13 @@
+import { build } from 'esbuild';
+import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+const root = path.dirname(fileURLToPath(import.meta.url));
+const result = await build({absWorkingDir:root,entryPoints:['src/main.tsx'],bundle:true,write:false,outdir:'out',minify:true,legalComments:'none',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'}});
+const js=result.outputFiles.find(f=>f.path.endsWith('.js')).text.replace(/<\/script/gi,'<\\/script');
+const css=result.outputFiles.find(f=>f.path.endsWith('.css')).text;
+const html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="ESuite Android UI concept with synthetic data. No network requests or live security scanning."><title>ESuite — Android security workbench · UI concept</title><style>body{margin:0}'+css+'</style></head><body><div id="root"></div><script>'+js+'</script></body></html>';
+const destination=path.resolve(root,'../../docs/ui');
+await mkdir(destination,{recursive:true});
+await writeFile(path.join(destination,'index.html'),html);
+console.log('Built self-contained docs/ui/index.html');
