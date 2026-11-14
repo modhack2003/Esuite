@@ -71,7 +71,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
                 Screen.Traffic -> TrafficScreen(state, model) { selectedName = Screen.Api.name }
                 Screen.Api -> ApiScreen(state, model)
                 Screen.Findings -> FindingsScreen(state, model)
-                Screen.Tools -> ToolsScreen()
+                Screen.Tools -> ToolsScreen(state, model)
             }
             Spacer(Modifier.height(20.dp))
         }
@@ -136,7 +136,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
         OutlinedButton(onClick = { model.cancelRequest() }, enabled = state.busy) { Text("Cancel") }
     }
     OutlinedButton(onClick = { prepare { model.send(compare = true) } }, enabled = !state.busy && state.projectId != null) { Text("Send as A then B (two requests)") }
-    Text("Redirects and automatic retries are disabled. Comparison omits explicit Cookie/Authorization headers and uses each identity's own jar.", style = MaterialTheme.typography.bodySmall)
+    Text("Redirects/retries are disabled. Comparison strips known auth headers and uses each identity's configuration/jar. Body credentials remain unchanged; review them before comparing.", style = MaterialTheme.typography.bodySmall)
     if (state.comparison.isNotBlank()) Panel("Comparison", state.comparison)
     state.selected?.let { e -> Panel("${e.status ?: "Error"} · ${e.durationMs} ms · ${e.response.encoding}${if (e.response.truncated) " · TRUNCATED" else ""}", e.error ?: e.responseHeaders.joinToString("\n") { "${it.name}: ${it.value}" } + "\n\n" + e.response.value) }
     OutlinedTextField(raw, { raw = it }, label = { Text("Import raw HTTP/1.x message") }, minLines = 3, modifier = Modifier.fillMaxWidth())
@@ -165,13 +165,17 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     state.workspace.findings.filter { it.projectId == state.projectId }.forEach { Panel("${it.state}: ${it.title}", it.detail + "\nEvidence: " + it.evidenceIds.joinToString()) }
 }
 
-@Composable private fun ToolsScreen() {
+@Composable private fun ToolsScreen(state: AppState, model: AppViewModel) {
     var input by remember { mutableStateOf("") }; var output by remember { mutableStateOf("") }
     fun transform(action: (String) -> String) { output = runCatching { action(input) }.getOrElse { it.message ?: "Invalid input" } }
     Text("Local utilities.", style = MaterialTheme.typography.headlineLarge)
     OutlinedTextField(input, { input = it }, label = { Text("Input") }, minLines = 4, modifier = Modifier.fillMaxWidth())
     listOf<Pair<String, (String) -> String>>("Base64 encode" to Codec::base64Encode, "Base64 decode" to Codec::base64Decode, "Form URL encode" to Codec::formEncode, "Form URL decode" to Codec::formDecode, "SHA-256" to Codec::sha256, "JWT claims (unverified)" to TokenTools::jwtClaims,
-        "Token sample statistics" to { TokenTools.sample(it.lines().filter(String::isNotBlank)) }).forEach { (name, action) -> OutlinedButton(onClick = { transform(action) }, modifier = Modifier.fillMaxWidth()) { Text(name) } }
+        "Token sample statistics" to { TokenTools.sample(it.lines().filter(String::isNotBlank)) }, "Review AWS JSON offline" to CloudConfigReview::review).forEach { (name, action) -> OutlinedButton(onClick = { transform(action) }, modifier = Modifier.fillMaxWidth()) { Text(name) } }
+    OutlinedButton(onClick = { model.importCurl(input) }, modifier = Modifier.fillMaxWidth()) { Text("Import cURL into API Lab (no execution)") }
+    OutlinedButton(onClick = { model.importOpenApi(input) }, modifier = Modifier.fillMaxWidth()) { Text("Import OpenAPI 3 JSON to collection") }
+    OutlinedButton(onClick = { model.importHar(input) }, modifier = Modifier.fillMaxWidth()) { Text("Import in-scope HAR request drafts") }
     OutlinedTextField(output, {}, readOnly = true, label = { Text("Output") }, minLines = 4, modifier = Modifier.fillMaxWidth())
     Text("All transformations run locally. JWT decoding is not verification; sample statistics do not prove unpredictability.", style = MaterialTheme.typography.bodySmall)
+    WorkflowsScreen(state, model)
 }

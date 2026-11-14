@@ -37,14 +37,16 @@ Current implementation and next-agent entry point: [Agent handoff](AGENT_HANDOFF
 ## M2 — version 1 completion
 
 - [ ] App capture integrated into the UI with visible foreground state.
-- [ ] Bounded parameter runner and passive checks.
+- [x] Bounded parameter runner and passive observations implemented; CI gates tracked in handoff.
 - [ ] Resource caps, retention and explicit export.
 - [ ] Physical-device functional, privacy and accessibility verification.
 
 ## M3 — automation expansion
 
-- [ ] Intruder-style substitution modes and result extraction.
-- [ ] Session macros, CSRF/nonces and token refresh.
+- [x] Four bounded substitution modes implemented; two-list UI available.
+- [ ] Add configurable match/extract result filters and four-list UI.
+- [x] Saved-request sequences with first-response JSON token extraction implemented.
+- [ ] Extend sequences with per-step extractors, refresh rules and interactive authentication handling.
 - [ ] Controlled crawler and selected active audit checks.
 - [ ] WebSocket replay, Sequencer and GraphQL workflows.
 
@@ -52,7 +54,8 @@ Current implementation and next-agent entry point: [Agent handoff](AGENT_HANDOFF
 
 - [ ] DOM instrumentation and validated raw protocol tooling.
 - [ ] Local extension/rule interface with validated execution bounds.
-- [ ] Cloud configuration imports and direct provider audits.
+- [x] Offline supplied AWS JSON structural review implemented.
+- [ ] Native authenticated AWS/Azure/GCP account connectors and effective-permission analysis.
 - [ ] Reachable-lab callback listener; no hosted OAST in local-only mode.
 
 Detailed capabilities and acceptance criteria: [Product plan](PRODUCT_PLAN.md).

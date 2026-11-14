@@ -11,7 +11,7 @@
 
 <p align="center"><strong>Native Android</strong> &nbsp; / &nbsp; <strong>No root required</strong> &nbsp; / &nbsp; <strong>No computer during use</strong> &nbsp; / &nbsp; <strong>Local processing</strong></p>
 
-> **Development stage: native implementation.** API Lab now executes scoped HTTP requests with separate identity cookie jars; the native browser implements local page inspection, cookie tools, console and storage views on compatible WebViews. Browser history currently contains **request metadata only**, without response bodies. Full proxy interception, VPN capture, active scanning and cloud account connectors remain planned. The web concept below stays synthetic. See [the current agent handoff](docs/AGENT_HANDOFF.md).
+> **Development stage: native implementation.** API Lab now executes scoped HTTP requests with separate identity cookie jars; the native browser implements local page inspection, cookie tools, console and storage views on compatible WebViews. Browser history currently contains **request metadata only**, without response bodies. Bounded parameter tasks, saved-request sequences and offline AWS JSON review are also implemented. Full proxy interception, VPN capture, active scanning and cloud account connectors remain planned. The web concept below stays synthetic. See [the current agent handoff](docs/AGENT_HANDOFF.md).
 
 ## A connected workflow, built for a phone
 
@@ -43,6 +43,8 @@ Explore the [self-contained UI concept](docs/ui/index.html), [editable Canva con
 | Native utilities | UTF-8 Base64 encode/decode, form URL encode/decode and SHA-256 hashing |
 | Native request editor | Real scoped HTTP, cancellation, response limits, raw HTTP import and account A/B comparison |
 | Browser | Compatible per-project/identity WebView profiles, element selection, HTML/CSS edits, native cookies, console, storage and request metadata |
+| Task tools | Four bounded payload modes (two-list UI), cancellable sequences and first-response JSON token extraction |
+| Imports & cloud review | cURL/raw HTTP, OpenAPI 3 JSON, textual HAR request drafts and offline AWS configuration observations |
 | Local evidence | AES-GCM project persistence, request collections, observations, sanitized report preview/export and project deletion |
 | Passive observations | Inspect selected API responses for cookie/header hardening observations; no extra scan requests |
 | Web concept | Six views, searchable fixtures, request-detail transfer, simulated account comparison and in-memory notes |
@@ -147,7 +149,7 @@ Track the [implementation checklist](docs/ROADMAP.md). Tests and device verifica
 | `docs/ROADMAP.md` | Honest completed/planned checklist |
 | `docs/VERIFICATION.md` | Passed foundation checks, source commit and explicit verification limits |
 
-Read [Contributing](CONTRIBUTING.md) before changing capture, authentication or data flows. Use the tool only for systems you own or have permission to test. For sensitive reports see [Security](SECURITY.md).
+Read [Contributing](CONTRIBUTING.md) before changing capture, authentication or data flows. Use the tool only for systems you own or have permission to test. For sensitive reports see [Security](SECURITY.md). The complete next-agent task queue and physical-device acceptance gates are in [Agent handoff](docs/AGENT_HANDOFF.md).
 
 ---
 

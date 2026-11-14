@@ -7,6 +7,8 @@ import dev.esuite.app.core.*
 import dev.esuite.app.transport.ApiEngine
 import dev.esuite.app.storage.WorkspaceVault
 import dev.esuite.app.browser.BrowserProfiles
+import dev.esuite.app.automation.PayloadMode
+import dev.esuite.app.automation.RequestPlans
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,6 +22,7 @@ data class AppState(
     val workspace: Workspace = Workspace(), val projectId: String? = null, val identity: String = "A",
     val draft: RequestDraft = RequestDraft(), val selected: Exchange? = null, val busy: Boolean = false,
     val message: String = "Opening encrypted workspace…", val comparison: String = "", val ready: Boolean = false,
+    val taskProgress: String = "No automation task running",
 )
 
 @OptIn(FlowPreview::class)
@@ -83,10 +86,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             current.copy(projectId = id, draft = RequestDraft(url = project.origin + "/"), selected = null, comparison = "", message = "Selected ${project.name}")
         }
     }
-    fun identity(value: String) { require(value in listOf("A", "B")); mutable.update { it.copy(identity = value, selected = null) } }
+    fun identity(value: String) {
+        require(value in listOf("A", "B"))
+        mutable.update { if (it.identity == value) it else it.copy(identity = value, selected = null,
+            draft = CredentialPolicy.strip(it.draft, it.workspace.identityConfigs.filter { c -> c.projectId == it.projectId }),
+            message = "Identity changed; observed auth headers removed. Body values remain unchanged and must be reviewed.") }
+    }
     fun draft(value: RequestDraft) = mutable.update { it.copy(draft = value) }
     fun select(exchange: Exchange) = mutable.update { it.copy(selected = exchange) }
-    fun replay(exchange: Exchange) = mutable.update { it.copy(draft = exchange.request, selected = exchange, message = if (exchange.source == "Browser metadata") "Browser bodies are unavailable. Supply any missing body before sending." else "Draft loaded; sending is always explicit.") }
+    fun replay(exchange: Exchange) = mutable.update { it.copy(draft = CredentialPolicy.strip(exchange.request, it.workspace.identityConfigs.filter { c -> c.projectId == it.projectId }), selected = exchange,
+        message = if (exchange.source == "Browser metadata") "Browser bodies are unavailable. Supply missing bodies before sending. Observed auth headers were removed." else "Draft loaded with observed auth headers removed. Review body values; sending is explicit.") }
     fun record(exchange: Exchange) {
         mutable.update { it.copy(workspace = it.workspace.copy(exchanges = (listOf(exchange) + it.workspace.exchanges).take(Limits.HISTORY))) }
     }
@@ -101,7 +110,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             mutable.update { it.copy(busy = true, comparison = "", message = "Sending to ${project.origin}…") }
             try {
                 if (compare) {
-                    val draft = snapshot.draft.copy(headers = snapshot.draft.headers.filterNot { it.name.equals("Cookie", true) || it.name.equals("Authorization", true) })
+                    val draft = CredentialPolicy.strip(snapshot.draft, snapshot.workspace.identityConfigs.filter { it.projectId == project.id })
                     val a = engine.execute(project, "A", withIdentity(draft, project.id, "A"), "Identity comparison"); record(a)
                     val b = engine.execute(project, "B", withIdentity(draft, project.id, "B"), "Identity comparison"); record(b)
                     mutable.update { it.copy(selected = b, comparison = ResponseComparer.compare(a, b), message = "Separate session jars used; explicit Cookie/Authorization headers omitted.") }
@@ -118,6 +127,84 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     fun cancelRequest() { requestJob?.cancel() }
+    fun previewPayloads(a: String, b: String, mode: PayloadMode): List<RequestDraft> {
+        val sets = mutableListOf(a.lines().filter(String::isNotBlank))
+        if (b.isNotBlank() || (state.value.draft.url + state.value.draft.body + state.value.draft.headers.joinToString { it.value }).contains("{{P2}}")) sets += b.lines().filter(String::isNotBlank)
+        return RequestPlans.payloads(state.value.draft, sets, mode).also { drafts ->
+            val project = currentProject() ?: error("Create a project first")
+            drafts.forEach { DraftParser.validate(it); ScopePolicy(project.origin).requireAllowed(it.url) }
+        }
+    }
+    fun runPayloads(a: String, b: String, mode: PayloadMode) {
+        if (state.value.busy) return
+        val project = currentProject() ?: return
+        val identity = state.value.identity
+        val drafts = runCatching { previewPayloads(a, b, mode) }.getOrElse { message(it.message ?: "Invalid plan"); return }
+        requestJob = viewModelScope.launch {
+            mutable.update { it.copy(busy = true, taskProgress = "Parameter task: 0/${drafts.size}") }
+            try {
+                for ((index, draft) in drafts.withIndex()) {
+                    ensureActive()
+                    val result = engine.execute(project, identity, withIdentity(draft, project.id, identity), "Parameter runner")
+                    record(result); mutable.update { it.copy(selected = result, taskProgress = "Parameter task: ${index + 1}/${drafts.size}") }
+                    if (result.status in listOf(429, 503)) { message("Task stopped on HTTP ${result.status}; no automatic retry."); return@launch }
+                    if (index != drafts.lastIndex) delay(1000)
+                }
+                message("Parameter task complete; inspect results in Traffic")
+            } catch (e: CancellationException) { message("Parameter task cancelled"); throw e }
+            catch (e: Exception) { message("Task stopped: ${e.message}") }
+            finally { mutable.update { it.copy(busy = false, taskProgress = "Task stopped / completed; captured results retained") } }
+        }
+    }
+    fun runMacro(names: String, tokenPath: String) {
+        if (state.value.busy) return
+        val project = currentProject() ?: return
+        val identity = state.value.identity
+        val steps = runCatching {
+            val requested = names.lines().filter(String::isNotBlank)
+            require(requested.size in 1..10) { "Provide 1–10 exact saved-request names" }
+            requested.map { name ->
+                val matches = state.value.workspace.savedRequests.filter { it.projectId == project.id && it.name == name.trim() }
+                require(matches.size == 1) { "Saved request '$name' is missing or ambiguous" }
+                matches.single().draft.also { DraftParser.validate(it); ScopePolicy(project.origin).requireAllowed(it.url) }
+            }
+        }.getOrElse { message(it.message ?: "Invalid sequence"); return }
+        requestJob = viewModelScope.launch {
+            mutable.update { it.copy(busy = true, taskProgress = "Sequence: 0/${steps.size}") }
+            try {
+                var token: String? = null
+                for ((index, template) in steps.withIndex()) {
+                    ensureActive()
+                    if ((template.url + template.body + template.headers.joinToString { it.value }).contains("{{token}}")) require(token != null) { "{{token}} is unavailable before the first extraction" }
+                    val draft = token?.let { RequestPlans.applyToken(template, it) } ?: template
+                    val result = engine.execute(project, identity, withIdentity(draft, project.id, identity), "Request sequence")
+                    record(result); mutable.update { it.copy(selected = result, taskProgress = "Sequence: ${index + 1}/${steps.size}") }
+                    require(result.status != null && result.status in 200..299) { "Sequence stopped at non-success HTTP ${result.status}" }
+                    if (index == 0 && steps.size > 1 && tokenPath.isNotBlank()) token = RequestPlans.extractToken(result.response.value, tokenPath.trim())
+                    if (index != steps.lastIndex) delay(1000)
+                }
+                message("Sequence complete. No automatic retries or unattended MFA handling.")
+            } catch (e: CancellationException) { message("Sequence cancelled"); throw e }
+            catch (e: Exception) { message("Sequence stopped: ${e.message}") }
+            finally { mutable.update { it.copy(busy = false, taskProgress = "Task stopped / completed; captured results retained") } }
+        }
+    }
+    fun importCurl(text: String) {
+        val p = currentProject() ?: return message("Create a project first")
+        runCatching { ApiImports.curl(text, p.origin) }.onSuccess { draft(it); message("cURL imported as data; no command or network request was executed.") }.onFailure { message(it.message ?: "Import failed") }
+    }
+    fun importOpenApi(text: String) {
+        val p = currentProject() ?: return message("Create a project first")
+        runCatching { ApiImports.openApi(text, p) }.onSuccess { requests ->
+            mutable.update { it.copy(workspace = it.workspace.copy(savedRequests = (requests + it.workspace.savedRequests).take(100)), message = "Imported ${requests.size} operation drafts. Fill path parameters and bodies before sending.") }
+        }.onFailure { message(it.message ?: "Import failed") }
+    }
+    fun importHar(text: String) {
+        val p = currentProject() ?: return message("Create a project first")
+        runCatching { ApiImports.har(text, p) }.onSuccess { requests ->
+            mutable.update { it.copy(workspace = it.workspace.copy(savedRequests = (requests + it.workspace.savedRequests).take(100)), message = "Imported ${requests.size} in-scope HAR request drafts; no requests were executed.") }
+        }.onFailure { message(it.message ?: "HAR import failed") }
+    }
     private fun withIdentity(draft: RequestDraft, project: String, identity: String): RequestDraft {
         val configured = state.value.workspace.identityConfigs.firstOrNull { it.projectId == project && it.identity == identity }?.headers.orEmpty()
         return draft.copy(headers = draft.headers + configured.filterNot { incoming -> draft.headers.any { it.name.equals(incoming.name, true) } })

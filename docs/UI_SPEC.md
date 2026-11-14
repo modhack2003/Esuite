@@ -55,7 +55,7 @@ A future live capture must never use a decorative active dot when capture has fa
 
 The web concept includes six interactive views, traffic filtering, fixture details, transfer to an editable request, fixture identity switching, simulated response comparison, session notes and real local Base64 transforms. It performs no HTTP testing. Notes are only in component memory. A reload resets them.
 
-The native starter includes five Compose views, fixture filtering, an editable request, identity-specific fixture responses and working Base64, form URL and SHA-256 transformations. No WebView, native cookie API, HTTP client, VPN engine, scanner or encrypted project database is implemented yet. The manifest deliberately has no INTERNET permission.
+The native app now has Home, Browser, Traffic, API Lab, Findings and Tools. It implements compatible isolated WebView profiles, local inspection/cookies/storage/console, request metadata observation, actual HTTPS replay, independent API sessions, encrypted evidence, collections, sanitized exports, bounded tasks and offline configuration review. The INTERNET permission is present; globally cleartext HTTP remains disabled. Full interception, VPN forwarding and active scanning remain unfinished. The web concept above remains synthetic and is not a native capability test.
 
 ## Visual source workflow
 
