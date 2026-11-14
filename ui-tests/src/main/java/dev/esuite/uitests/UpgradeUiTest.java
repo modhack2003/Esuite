@@ -23,6 +23,8 @@ public class UpgradeUiTest {
         assertEquals("1",device.executeShellCommand("getprop ro.kernel.qemu").trim());
         device.executeShellCommand("am force-stop dev.esuite.app");
         device.executeShellCommand("am start -W -n dev.esuite.app/.MainActivity");
+        UiObject2 home=device.wait(Until.findObject(By.res("nav_home")),20000);
+        assertNotNull(home); home.click();
         assertTrue(device.wait(Until.hasObject(By.text("Your workspace.")),20000));
     }
     @Test public void seedPreviousRelease() throws Exception {

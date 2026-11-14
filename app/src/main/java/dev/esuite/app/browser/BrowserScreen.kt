@@ -128,7 +128,7 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel) {
                     OutlinedButton(modifier = Modifier.testTag("browser_select"), onClick = { evaluate(InspectorScripts.select) }) { Text("Select element") }
                     OutlinedButton(modifier = Modifier.testTag("browser_read_selection"), onClick = { evaluate(InspectorScripts.selection) }) { Text("Read selection") }
                 }
-                OutlinedTextField(edit, { edit = it }, label = { Text("HTML or CSS edit (local page only)") }, modifier = Modifier.fillMaxWidth().testTag("browser_edit"))
+                OutlinedTextField(edit, { edit = it }, maxLines = 5, label = { Text("HTML or CSS edit (local page only)") }, modifier = Modifier.fillMaxWidth().testTag("browser_edit"))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(modifier = Modifier.testTag("browser_apply_html"), onClick = { evaluate(InspectorScripts.html.replace("__ESUITE_VALUE__", JsonPrimitive(edit).toString())) }) { Text("Apply HTML") }
                     TextButton(modifier = Modifier.testTag("browser_apply_css"), onClick = { evaluate(InspectorScripts.css.replace("__ESUITE_VALUE__", JsonPrimitive(edit).toString())) }) { Text("Apply CSS") }
@@ -137,7 +137,7 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel) {
             "Cookies" -> {
                 Row { Text("Reveal cookie values", Modifier.weight(1f)); Switch(reveal, modifier = Modifier.testTag("browser_reveal"), onCheckedChange = { reveal = it; output = "Refresh to apply visibility choice" }) }
                 OutlinedButton(modifier = Modifier.testTag("browser_read_cookies"), onClick = { dismissEditor(); readCookies() }) { Text("Read native cookies") }
-                OutlinedTextField(edit, { edit = it }, label = { Text("Set-Cookie value including attributes") }, modifier = Modifier.fillMaxWidth().testTag("browser_cookie_input"))
+                OutlinedTextField(edit, { edit = it }, maxLines = 5, label = { Text("Set-Cookie value including attributes") }, modifier = Modifier.fillMaxWidth().testTag("browser_cookie_input"))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     TextButton(modifier = Modifier.testTag("browser_set_cookie"), onClick = { dismissEditor(); runCatching { policy.requireAllowed(address.substringBefore('#')) }.onSuccess { cookieManager()?.setCookie(it.toString(), edit) { ok -> cookieManager()?.flush(); output = if (ok) "Cookie stored" else "Cookie rejected" } }.onFailure { output = "Invalid cookie origin" } }) { Text("Set") }
                     TextButton(onClick = { cookieManager()?.removeAllCookies { cookieManager()?.flush(); output = "Cookies cleared for this isolated profile" } }) { Text("Clear profile") }
@@ -156,7 +156,7 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel) {
                 OutlinedButton(onClick = { evaluate("(() => {localStorage.clear();sessionStorage.clear();return 'Page storage cleared';})()") }) { Text("Clear page storage") }
             }
             "Console" -> {
-                OutlinedTextField(script, { script = it }, label = { Text("JavaScript in current page") }, modifier = Modifier.fillMaxWidth().testTag("browser_script"))
+                OutlinedTextField(script, { script = it }, maxLines = 5, label = { Text("JavaScript in current page") }, modifier = Modifier.fillMaxWidth().testTag("browser_script"))
                 OutlinedButton(modifier = Modifier.testTag("browser_evaluate"), onClick = { evaluate(script) }) { Text("Evaluate") }
                 Text(console.joinToString("\n"), style = MaterialTheme.typography.bodySmall)
             }
