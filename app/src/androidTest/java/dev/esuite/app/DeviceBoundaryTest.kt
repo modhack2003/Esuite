@@ -35,6 +35,9 @@ class DeviceBoundaryTest {
             vault.save(workspace)
             assertEquals(workspace, WorkspaceVault(context).load())
             val file = File(context.noBackupFilesDir, "workspace.esv")
+            val backup = File(file.path + ".bak")
+            assertTrue(file.renameTo(backup))
+            assertEquals(workspace, WorkspaceVault(context).load()) // recover legacy AtomicFile backup instead of resetting
             val bytes = file.readBytes()
             assertFalse(bytes.toString(Charsets.ISO_8859_1).contains("secret-device-evidence"))
             bytes[20] = (bytes[20].toInt() xor 1).toByte(); file.writeBytes(bytes)

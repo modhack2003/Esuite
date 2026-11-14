@@ -30,4 +30,10 @@ class VaultCipherTest {
         listOf("sensitive-name", "secret-path", "secret-query", "secret-body", "secret-header", "secret-response", "secret-title", "secret-detail", "secret-auth").forEach { assertFalse(it, report.contains(it)) }
         assertTrue(report.contains("PATH OMITTED"))
     }
+    @Test fun durableBudgetRejectsOversizedCollectionsInsteadOfDroppingThem() {
+        val draft = RequestDraft("POST", "https://example.test", body = "x".repeat(Limits.REQUEST_BYTES))
+        val workspace = Workspace(savedRequests = List(70) { SavedRequest(projectId = "p", name = "r$it", draft = draft) })
+        assertThrows(IllegalArgumentException::class.java) { WorkspaceBudget.requireDurableCapacity(workspace) }
+        WorkspaceBudget.requireDurableCapacity(Workspace(savedRequests = workspace.savedRequests.take(1)))
+    }
 }

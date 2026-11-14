@@ -28,9 +28,12 @@ class WorkspaceVault(context: Context) {
         }.generateKey()
     }
     @Synchronized fun load(): Workspace {
-        if (!file.baseFile.exists()) return Workspace()
-        require(file.baseFile.length() <= Limits.VAULT_BYTES + 32) { "Workspace file exceeds limit" }
-        val decoded = VaultCipher.open(file.openRead().use { it.readBytes() }, key(create = false))
+        if (!file.baseFile.exists() && !File(file.baseFile.path + ".bak").exists()) return Workspace()
+        val envelope = file.openRead().use {
+            require(it.channel.size() <= Limits.VAULT_BYTES + 32) { "Workspace file exceeds limit" }
+            it.readBytes()
+        }
+        val decoded = VaultCipher.open(envelope, key(create = false))
         return json.decodeFromString<Workspace>(decoded.toString(Charsets.UTF_8)).also {
             require(it.version == 1) { "Unsupported workspace version" }
             require(it.projects.size <= 20 && it.savedRequests.size <= 100 && it.findings.size <= Limits.FINDINGS && it.exchanges.size <= Limits.HISTORY) { "Workspace record limits exceeded" }

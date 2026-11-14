@@ -29,6 +29,7 @@ object DraftParser {
     }.toList().also(::validateHeaders)
     fun validateHeaders(headers: List<Header>) {
         require(headers.size <= 100) { "Too many headers" }
+        require(headers.sumOf { it.name.toByteArray().size + it.value.toByteArray().size } <= 64 * 1024) { "Headers exceed 64 KiB total" }
         headers.forEach { require(token.matches(it.name) && !it.value.contains('\r') && !it.value.contains('\n') && it.value.length <= 8192) { "Invalid header name or value" } }
     }
     fun validate(draft: RequestDraft) {

@@ -33,6 +33,8 @@ Automatic approval review rejected global cleartext HTTP. Part 2 uses HTTPS-only
 
 Workspace evidence, saved requests and configured identity headers are encrypted with AES-256-GCM using an Android Keystore key, stored via AtomicFile under noBackupFilesDir. API cookie jars remain memory-only. WebView cookies/cache use separate app-private profiles managed by the platform and are not encrypted by the workspace cipher. Sanitized exports omit bodies, paths, query values, headers, identity config and finding free text; they require a preview and a known local device-storage provider. No raw evidence upload occurs.
 
+Durable saved collections/config/notes have a 16 MiB admission budget; the full encrypted vault is capped at 32 MiB. Old capture history may be pruned to fit, but saved collections and findings are rejected at capacity rather than silently dropped. AtomicFile backup recovery and unknown/missing-key failure behavior are explicit. Browser profile deletion can fail while the profile is loaded; the project is retained on failure. Real OEM cleanup/backup behavior remains a device gate.
+
 ## Part 4 task behavior
 
 Part 4 CI caught a lambda-variable shadowing error and an input-error exception-type mismatch. Both are corrected. A native Android 35 emulator job now verifies Keystore round-trip/tamper handling and compatible WebView profile-cookie isolation/inspection. Use the latest run rather than intermediate failed commits as the validation gate.

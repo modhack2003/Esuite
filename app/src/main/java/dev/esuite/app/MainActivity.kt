@@ -147,7 +147,10 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     OutlinedButton(onClick = { model.configureIdentity(identityHeaders) }) { Text("Save this identity's auth headers") }
     OutlinedTextField(savedName, { savedName = it }, label = { Text("Saved request name") }, modifier = Modifier.fillMaxWidth())
     OutlinedButton(onClick = { prepare { model.saveDraft(savedName) } }) { Text("Save request to collection") }
-    state.workspace.savedRequests.filter { it.projectId == state.projectId }.forEach { saved -> OutlinedButton(onClick = { model.draft(saved.draft) }, modifier = Modifier.fillMaxWidth()) { Text("Load: ${saved.name}") } }
+    state.workspace.savedRequests.filter { it.projectId == state.projectId }.forEach { saved ->
+        OutlinedButton(onClick = { model.draft(saved.draft) }, modifier = Modifier.fillMaxWidth()) { Text("Load: ${saved.name}") }
+        TextButton(onClick = { model.deleteSavedRequest(saved.id) }) { Text("Remove saved request") }
+    }
 }
 
 @Composable private fun FindingsScreen(state: AppState, model: AppViewModel) {
@@ -161,8 +164,11 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     }
     OutlinedTextField(title, { title = it }, label = { Text("Observation title") }, modifier = Modifier.fillMaxWidth())
     OutlinedTextField(detail, { detail = it }, label = { Text("Evidence / reproduction / next test") }, minLines = 3, modifier = Modifier.fillMaxWidth())
-    Button(onClick = { model.addFinding(title, detail); title = ""; detail = "" }, enabled = state.projectId != null) { Text("Save observation") }
-    state.workspace.findings.filter { it.projectId == state.projectId }.forEach { Panel("${it.state}: ${it.title}", it.detail + "\nEvidence: " + it.evidenceIds.joinToString()) }
+    Button(onClick = { if (model.addFinding(title, detail)) { title = ""; detail = "" } }, enabled = state.projectId != null) { Text("Save observation") }
+    state.workspace.findings.filter { it.projectId == state.projectId }.forEach { finding ->
+        Panel("${finding.state}: ${finding.title}", finding.detail + "\nEvidence: " + finding.evidenceIds.joinToString())
+        TextButton(onClick = { model.deleteFinding(finding.id) }) { Text("Remove observation") }
+    }
 }
 
 @Composable private fun ToolsScreen(state: AppState, model: AppViewModel) {

@@ -195,15 +195,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun importOpenApi(text: String) {
         val p = currentProject() ?: return message("Create a project first")
-        runCatching { ApiImports.openApi(text, p) }.onSuccess { requests ->
-            mutable.update { it.copy(workspace = it.workspace.copy(savedRequests = (requests + it.workspace.savedRequests).take(100)), message = "Imported ${requests.size} operation drafts. Fill path parameters and bodies before sending.") }
-        }.onFailure { message(it.message ?: "Import failed") }
+        runCatching { val requests = ApiImports.openApi(text, p); mergeSaved(requests); requests.size }
+            .onSuccess { message("Imported $it operation drafts. Fill path parameters and bodies before sending.") }.onFailure { message(it.message ?: "Import failed") }
     }
     fun importHar(text: String) {
         val p = currentProject() ?: return message("Create a project first")
-        runCatching { ApiImports.har(text, p) }.onSuccess { requests ->
-            mutable.update { it.copy(workspace = it.workspace.copy(savedRequests = (requests + it.workspace.savedRequests).take(100)), message = "Imported ${requests.size} in-scope HAR request drafts; no requests were executed.") }
-        }.onFailure { message(it.message ?: "HAR import failed") }
+        runCatching { val requests = ApiImports.har(text, p); mergeSaved(requests); requests.size }
+            .onSuccess { message("Imported $it in-scope HAR drafts; no requests were executed.") }.onFailure { message(it.message ?: "HAR import failed") }
+    }
+    private fun mergeSaved(requests: List<SavedRequest>) {
+        mutable.update {
+            require(requests.size + it.workspace.savedRequests.size <= 100) { "Collection limit is 100 requests. Remove saved items before importing more." }
+            val next = it.workspace.copy(savedRequests = requests + it.workspace.savedRequests)
+            WorkspaceBudget.requireDurableCapacity(next); it.copy(workspace = next)
+        }
     }
     private fun withIdentity(draft: RequestDraft, project: String, identity: String): RequestDraft {
         val configured = state.value.workspace.identityConfigs.firstOrNull { it.projectId == project && it.identity == identity }?.headers.orEmpty()
@@ -213,7 +218,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val p = currentProject() ?: return
         runCatching { DraftParser.headers(text) }.onSuccess { headers ->
             val config = IdentityConfig(p.id, state.value.identity, headers)
-            mutable.update { it.copy(workspace = it.workspace.copy(identityConfigs = it.workspace.identityConfigs.filterNot { c -> c.projectId == p.id && c.identity == config.identity } + config), message = "Identity headers saved to the encrypted workspace. Cookie jar sessions remain memory-only.") }
+            runCatching {
+                mutable.update {
+                    val next = it.workspace.copy(identityConfigs = it.workspace.identityConfigs.filterNot { c -> c.projectId == p.id && c.identity == config.identity } + config)
+                    WorkspaceBudget.requireDurableCapacity(next)
+                    it.copy(workspace = next, message = "Identity headers saved to the encrypted workspace. Cookie jar sessions remain memory-only.")
+                }
+            }.onFailure { message(it.message ?: "Identity storage budget exceeded") }
         }.onFailure { message(it.message ?: "Invalid identity headers") }
     }
     fun clearSessions() {
@@ -223,9 +234,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun saveDraft(name: String) {
         val p = currentProject() ?: return
         runCatching {
-            require(name.isNotBlank()) { "Enter a saved request name" }; DraftParser.validate(state.value.draft); ScopePolicy(p.origin).requireAllowed(state.value.draft.url)
-            val saved = SavedRequest(projectId = p.id, name = name.take(100), draft = state.value.draft)
-            mutable.update { it.copy(workspace = it.workspace.copy(savedRequests = (listOf(saved) + it.workspace.savedRequests).take(100)), message = "Request added to the encrypted collection") }
+            require(name.isNotBlank() && name.length <= 100) { "Saved request name must be 1–100 characters" }; DraftParser.validate(state.value.draft); ScopePolicy(p.origin).requireAllowed(state.value.draft.url)
+            val saved = SavedRequest(projectId = p.id, name = name, draft = state.value.draft)
+            mergeSaved(listOf(saved)); message("Request added to the encrypted collection")
         }.onFailure { message(it.message ?: "Cannot save request") }
     }
     fun exportSanitized(): String = currentProject()?.let { ReportExporter.sanitized(state.value.workspace, it.id) } ?: "{}"
@@ -238,12 +249,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             findings = it.workspace.findings.filterNot { f -> f.projectId == p.id }, savedRequests = it.workspace.savedRequests.filterNot { r -> r.projectId == p.id },
             identityConfigs = it.workspace.identityConfigs.filterNot { c -> c.projectId == p.id }), message = "Project, API evidence and isolated browser profiles removed.") }
     }
-    fun addFinding(title: String, detail: String, evidence: Exchange? = state.value.selected) {
-        val project = currentProject() ?: return
-        if (title.isBlank() || detail.isBlank()) return message("Finding title and details are required")
-        val finding = Finding(projectId = project.id, title = title.take(200), detail = detail.take(16000), evidenceIds = listOfNotNull(evidence?.id))
-        mutable.update { it.copy(workspace = it.workspace.copy(findings = (listOf(finding) + it.workspace.findings).take(Limits.FINDINGS)), message = "Observation added; not automatically verified.") }
+    fun addFinding(title: String, detail: String, evidence: Exchange? = state.value.selected): Boolean {
+        val project = currentProject() ?: return false
+        return runCatching {
+            require(title.isNotBlank() && title.length <= 200 && detail.isNotBlank() && detail.length <= 16000) { "Use a 1–200 character title and 1–16000 character detail" }
+            val finding = Finding(projectId = project.id, title = title, detail = detail, evidenceIds = listOfNotNull(evidence?.id))
+            mutable.update {
+                require(it.workspace.findings.size < Limits.FINDINGS) { "Observation limit reached. Remove saved items before adding more." }
+                val next = it.workspace.copy(findings = listOf(finding) + it.workspace.findings)
+                WorkspaceBudget.requireDurableCapacity(next)
+                it.copy(workspace = next, message = "Observation added; not automatically verified.")
+            }
+        }.onFailure { message(it.message ?: "Observation budget exceeded") }.isSuccess
     }
+    fun deleteSavedRequest(id: String) { mutable.update { it.copy(workspace = it.workspace.copy(savedRequests = it.workspace.savedRequests.filterNot { r -> r.id == id })) } }
+    fun deleteFinding(id: String) { mutable.update { it.copy(workspace = it.workspace.copy(findings = it.workspace.findings.filterNot { f -> f.id == id })) } }
     fun clearHistory() { mutable.update { it.copy(workspace = it.workspace.copy(exchanges = it.workspace.exchanges.filterNot { e -> e.projectId == it.projectId }), selected = null) } }
     override fun onCleared() { engine.close(); super.onCleared() }
 }
