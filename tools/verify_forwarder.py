@@ -12,7 +12,11 @@ LOCK = json.loads((ROOT / 'native/forwarder-lock.json').read_text())
 
 
 def run(*args, cwd=None):
-    return subprocess.check_output(args, cwd=cwd, text=True, stderr=subprocess.STDOUT)
+    try:
+        return subprocess.check_output(args, cwd=cwd, text=True, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as error:
+        print(error.output)
+        raise
 
 
 def verify():
@@ -20,10 +24,13 @@ def verify():
     ndk = sdk / 'ndk' / LOCK['ndk']
     if not (ndk / 'ndk-build').is_file():
         raise RuntimeError('Install the pinned Android NDK before running this Linux build check')
+    if 'Pkg.Revision = ' + LOCK['ndk'] not in (ndk / 'source.properties').read_text():
+        raise RuntimeError('Android NDK revision does not match lock')
     with tempfile.TemporaryDirectory(prefix='esuite-forwarder-') as temporary:
         work = Path(temporary)
         source = work / 'source'
         run('git', 'clone', '--no-checkout', LOCK['url'], str(source))
+        run('git', 'fetch', 'origin', LOCK['revision'], cwd=source)
         run('git', 'checkout', '--detach', LOCK['revision'], cwd=source)
         run('git', 'submodule', 'update', '--init', '--recursive', cwd=source)
         actual = {}

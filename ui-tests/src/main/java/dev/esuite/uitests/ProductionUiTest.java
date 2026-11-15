@@ -68,6 +68,7 @@ public class ProductionUiTest extends NativeUiDriver {
         evaluate("document.getElementById('replacement').textContent='x'.repeat(17000); 'Large fixture ready'", "Large fixture ready");
         top(); click("browser_tab_elements"); click("browser_read_selection"); output("\"htmlTruncated\": true");
         evaluate("'x'.repeat(25000)", "TRUNCATED: showing first 24000 of 25000 characters");
+        top(); click("browser_tab_elements");
         enter("browser_edit", "color: rgb(255, 0, 0); outline: 1px solid blue");
         click("browser_apply_css"); output("CSS updated locally");
         evaluate("getComputedStyle(document.getElementById('replacement')).color", "rgb(255, 0, 0)");

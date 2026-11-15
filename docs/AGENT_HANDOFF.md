@@ -33,7 +33,7 @@ The unreleased follow-up below updates the pinned upgrade baseline to 1.0.1 and 
 
 ## CAP-01 candidate build gate (unreleased)
 
-The recursive forwarding candidate and transitive license/build review is recorded in `native/README.md`; exact revisions and license hashes are in `native/forwarder-lock.json`. `tools/verify_forwarder.py` check API 28 builds across four ABIs, 16 KiB ELF alignment and equality of two clean stripped builds. Direct Linux build pending; the connected GitHub credential cannot publish a new workflow because it lacks workflow scope. Nothing is packaged into the app. CAP-01 remains open until actual build evidence and a complete distributable notice inventory are recorded; CAP-02/CAP-03 runtime transport/forwarding are untouched.
+The recursive forwarding candidate and transitive license/build review is recorded in `native/README.md`; exact revisions and license hashes are in `native/forwarder-lock.json`. `tools/verify_forwarder.py` checks API 28 builds across four ABIs, 16 KiB ELF alignment and equality of two clean stripped builds. Direct Linux build pending; the connected GitHub credential cannot publish a new workflow because it lacks workflow scope. Nothing is packaged into the app. CAP-01 remains open until actual build evidence and a complete distributable notice inventory are recorded; CAP-02/CAP-03 runtime transport/forwarding are untouched.
 
 ## Implemented increments
 
@@ -108,3 +108,5 @@ Earlier production baseline: `98425c9e4bcc7ace1a56604b0d466859db3a8e5b`, ESuite 
 3. Run the existing web concept checks when changing its source or inspector scripts. Use no captured credentials in fixtures.
 4. Update this file, roadmap, capability claims and verification record in each implemented increment. Name unfinished items and actual blockers honestly.
 5. Do not claim a production-ready suite: full proxy/VPN/TLS interception, broad active scanning, provider-account audits and physical/OEM coverage remain incomplete.
+
+Follow-up harness correction: return to Elements after testing Console truncation before applying CSS. The native build fetches the exact pinned commit explicitly (it is not necessarily in the default branch history) and validates the installed NDK revision. New verification pending.
