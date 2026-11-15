@@ -25,6 +25,13 @@ import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(AndroidJUnit4::class)
 class DeviceBoundaryTest {
+    @Test fun payloadMarkersInitializeAndSubstituteOnAndroidIcu() {
+        val draft = RequestDraft(url = "https://example.test/?a={{P1}}&b={{P2}}&c={{P3}}&d={{P4}}")
+        val plan = dev.esuite.app.automation.RequestPlans.payloadsFromText(draft,
+            listOf("a", "b", "c", "d"), dev.esuite.app.automation.PayloadMode.ONE_POSITION)
+        assertEquals(4, plan.size)
+        assertEquals("https://example.test/?a=a&b=b&c=c&d=d", plan.first().url)
+    }
     @Test fun androidKeystoreWorkspaceRoundTripAndTamperFailure() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val vault = WorkspaceVault(context)

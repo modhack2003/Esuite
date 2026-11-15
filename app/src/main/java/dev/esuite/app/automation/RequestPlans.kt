@@ -6,7 +6,7 @@ import kotlinx.serialization.json.*
 enum class PayloadMode { ONE_POSITION, BROADCAST, PAIRED, COMBINATIONS }
 
 object RequestPlans {
-    private val marker = Regex("\\{\\{P([1-4])}}")
+    private val marker = Regex("\\{\\{P([1-4])\\}\\}")
     fun payloadsFromText(template: RequestDraft, inputs: List<String>, mode: PayloadMode): List<RequestDraft> {
         require(inputs.size in 1..4) { "Use 1–4 payload lists" }
         val text = template.url + template.body + template.headers.joinToString { it.value }

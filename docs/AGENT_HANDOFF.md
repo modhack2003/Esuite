@@ -114,3 +114,5 @@ Follow-up harness correction: return to Elements after testing Console truncatio
 Device diagnostics on the first follow-up run found that Tools is entered from Home, not a bottom navigation item. The harness now uses the real Home → Tools control, which has a stable test tag. The isolated pinned candidate passed API 28 builds on all four ABIs, two equal clean stripped builds and 16 KiB ELF LOAD alignment on the connected Linux device; distribution notices and runtime forwarding remain pending.
 
 The four-list native preview fixture now puts markers in the GET query. A GET body correctly fails the existing transport validator; the previous fixture accidentally exercised that rejection instead of its intended valid-plan count. No validation was weakened.
+
+Android-only runner defect found by actual UI verification: ICU rejects unescaped literal closing braces in the payload regex, causing RequestPlans initialization to fail despite passing desktop JVM tests. Both closing braces are now escaped, with a direct platform regression in DeviceBoundaryTest in addition to the real four-input UI checks. Verification pending corrected source.
