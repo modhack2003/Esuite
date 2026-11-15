@@ -19,6 +19,10 @@ Released version: **1.0.1**, version code **4**, source `2e9910360de64a0f21bc7f5
 
 Later documentation-only commits do not change the tested/released application source. Published v1.0.0 assets remain immutable; the same production signer is retained.
 
+## Unreleased follow-up validation
+
+Four-list task inputs, sparse/missing-list and budget regressions, selected-HTML truncation metadata and evaluation truncation notices are implemented. The optimized-APK UI suite now exercises all four inputs, missing P4 validation and both inspector limits. Latest CI before editing was successful run 43672555295; new checks are pending and must not be confused with the published 1.0.1 evidence below. The future signed upgrade fixture pins 1.0.1; no subsequent signed upgrade is claimed yet.
+
 ## Android matrix — optimized APK
 
 | Android | API | Native passes | Skips | Observation |

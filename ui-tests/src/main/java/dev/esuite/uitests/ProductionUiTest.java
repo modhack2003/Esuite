@@ -36,6 +36,14 @@ public class ProductionUiTest extends NativeUiDriver {
         launch();
         click("nav_findings");
         assertNotNull(find(By.textContains("Synthetic local evidence")));
+        // Validate four real task inputs without sending a target request.
+        click("nav_api"); enter("api_body", "{{P1}}:{{P2}}:{{P3}}:{{P4}}");
+        click("nav_tools");
+        enter("task_payload_1", "a"); enter("task_payload_2", "b");
+        enter("task_payload_3", "c"); enter("task_payload_4", "d");
+        click("task_preview"); assertTrue(waitText("task_preview_result", "4 requests", 10000));
+        enter("task_payload_4", ""); click("task_preview");
+        assertTrue(waitText("task_preview_result", "Provide values for P4", 10000));
     }
     @Test public void browserHttpsCookiesStorageEditsAndPostScopeThroughRealControls() throws Exception {
         launch();
@@ -57,6 +65,9 @@ public class ProductionUiTest extends NativeUiDriver {
         enter("browser_edit", "<p id='replacement'>Replacement element</p>");
         click("browser_apply_html"); output("HTML updated locally");
         click("browser_read_selection"); output("replacement");
+        evaluate("document.getElementById('replacement').textContent='x'.repeat(17000); 'Large fixture ready'", "Large fixture ready");
+        top(); click("browser_tab_elements"); click("browser_read_selection"); output("\"htmlTruncated\": true");
+        evaluate("'x'.repeat(25000)", "TRUNCATED: showing first 24000 of 25000 characters");
         enter("browser_edit", "color: rgb(255, 0, 0); outline: 1px solid blue");
         click("browser_apply_css"); output("CSS updated locally");
         evaluate("getComputedStyle(document.getElementById('replacement')).color", "rgb(255, 0, 0)");

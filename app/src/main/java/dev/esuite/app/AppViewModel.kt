@@ -134,19 +134,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     fun cancelRequest() { requestJob?.cancel() }
-    fun previewPayloads(a: String, b: String, mode: PayloadMode): List<RequestDraft> {
-        val sets = mutableListOf(a.lines().filter(String::isNotBlank))
-        if (b.isNotBlank() || (state.value.draft.url + state.value.draft.body + state.value.draft.headers.joinToString { it.value }).contains("{{P2}}")) sets += b.lines().filter(String::isNotBlank)
-        return RequestPlans.payloads(state.value.draft, sets, mode).also { drafts ->
+    fun previewPayloads(inputs: List<String>, mode: PayloadMode): List<RequestDraft> {
+        return RequestPlans.payloadsFromText(state.value.draft, inputs, mode).also { drafts ->
             val project = currentProject() ?: error("Create a project first")
             drafts.forEach { DraftParser.validate(it); ScopePolicy(project.origin).requireAllowed(it.url) }
         }
     }
-    fun runPayloads(a: String, b: String, mode: PayloadMode) {
+    fun runPayloads(inputs: List<String>, mode: PayloadMode) {
         if (state.value.busy) return
         val project = currentProject() ?: return
         val identity = state.value.identity
-        val drafts = runCatching { previewPayloads(a, b, mode) }.getOrElse { message(it.message ?: "Invalid plan"); return }
+        val drafts = runCatching { previewPayloads(inputs, mode) }.getOrElse { message(it.message ?: "Invalid plan"); return }
         requestJob = viewModelScope.launch {
             mutable.update { it.copy(busy = true, taskProgress = "Parameter task: 0/${drafts.size}") }
             try {

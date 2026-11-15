@@ -20,6 +20,12 @@ with sync_playwright() as p:
     page.locator("#profile").click()
     selected = json.loads(page.evaluate(scripts["selection"]))
     assert selected["tag"] == "BUTTON" and 'id="profile"' in selected["html"]
+    assert selected["htmlTruncated"] is False
+    page.locator("#profile").evaluate("e=>e.textContent='x'.repeat(17000)")
+    partial = json.loads(page.evaluate(scripts["selection"]))
+    assert partial["htmlTruncated"] is True and partial["htmlCharacters"] > 17000
+    assert len(partial["html"]) == partial["htmlLimit"] == 16000
+    page.locator("#profile").evaluate("e=>e.textContent='Profile'")
     assert page.evaluate("window.clicked") is None, "Inspection click must not activate page behavior"
     page.locator("#profile").click()
     assert page.evaluate("window.clicked") is True, "Picker must detach after selection"

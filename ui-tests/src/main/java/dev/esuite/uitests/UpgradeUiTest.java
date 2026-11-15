@@ -6,7 +6,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import static org.junit.Assert.*;
 
-/** Seed the immutable v1.0.0 baseline, then verify the update without clearing app data. */
+/** Seed the immutable v1.0.1 baseline, then verify the update without clearing app data. */
 @RunWith(AndroidJUnit4.class)
 public class UpgradeUiTest extends NativeUiDriver {
     private static final String NOTE="Synthetic upgrade evidence retained";
@@ -15,8 +15,6 @@ public class UpgradeUiTest extends NativeUiDriver {
         assertNotNull(find(By.textContains(NOTE)));
     }
     @Test public void seedPreviousRelease() throws Exception {
-        // v1.0.0 placed horizontal padding outside its scroll viewport; use its content center.
-        legacyScroll=true;
         launch(); enter("project_name","Same signer upgrade fixture");
         enter("project_origin","https://example.test"); click("create_project");
         click("nav_findings"); enter("finding_title","Preserve on upgrade");

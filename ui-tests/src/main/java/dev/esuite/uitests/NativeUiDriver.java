@@ -43,8 +43,7 @@ public abstract class NativeUiDriver {
             return bounds.top>device.getDisplayHeight()/24 && bounds.bottom<bottom-3;
         } catch(androidx.test.uiautomator.StaleObjectException ignored) { return false; }
     }
-    protected boolean legacyScroll=false;
-    protected int scrollX() { return legacyScroll ? device.getDisplayWidth()/2 : device.getDisplayWidth()/100; }
+    protected int scrollX() { return device.getDisplayWidth()/100; }
     protected UiObject2 find(BySelector selector) {
         UiObject2 visible = device.wait(Until.findObject(selector), 700);
         if (usable(visible)) return visible;

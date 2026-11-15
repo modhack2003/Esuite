@@ -51,7 +51,7 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel) {
     fun evaluate(js: String) {
         dismissEditor()
         if (!policy.allows((webView?.url ?: "").substringBefore('#'))) { output = "Load an in-scope page first"; return }
-        webView?.evaluateJavascript(js) { result -> output = runCatching { val e = Json.parseToJsonElement(result); if (e is JsonPrimitive && e.isString) e.content else e.toString() }.getOrDefault(result).take(24000) }
+        webView?.evaluateJavascript(js) { result -> output = runCatching { val e = Json.parseToJsonElement(result); if (e is JsonPrimitive && e.isString) e.content else e.toString() }.getOrDefault(result).let { text -> if (text.length > 24000) "TRUNCATED: showing first 24000 of ${text.length} characters.\n" + text.take(24000) else text } }
     }
     fun cookieManager(): CookieManager? = webView?.let { if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) WebViewCompat.getProfile(it).cookieManager else null }
     fun readCookies() {

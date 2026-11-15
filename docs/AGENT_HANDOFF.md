@@ -22,7 +22,14 @@ Fixed and regression-covered: initial main-frame POST rejection, same-origin fra
 
 Harness lessons: a lookup may scroll; wait AFTER it, verify stable usable bounds and reacquire before touching. Direct scroll semantics on Text hid its accessible text; scroll a separate container. NativeUiDriver is shared and has NO @Before data reset. Only ProductionUiTest clears disposable app data; NEVER add a reset to the base or upgrade suite. UpgradeUiTest must scroll to the saved note and prove baseline durability before updating. Its center-swipe compatibility flag is for v1.0.0's old padding/viewport layout. Per-failure and before/after screenshots/trees contain synthetic data and are CI artifacts. AVD heap is explicitly 512 MiB after a Google-services update crashed system_server at 16 MiB. Never hide failures by retrying non-idempotent network sends.
 
-Next release maintenance: update the pinned baseline URL/SHA in tools/verify_signed_ui.py to 1.0.1 and update/remove UpgradeUiTest's legacy-scroll flag. Then follow CAP-01 onward below. Physical/OEM/TalkBack/font scaling, renderer crash, in-flight identity switching, richer auth/export/delete, migrations and performance remain open. Keep all unchecked scope and acceptance gates below.
+The unreleased follow-up below updates the pinned upgrade baseline to 1.0.1 and removes the legacy-scroll flag. Follow CAP-01 onward below. Physical/OEM/TalkBack/font scaling, renderer crash, in-flight identity switching, richer auth/export/delete, migrations and performance remain open. Keep all unchecked scope and acceptance gates below.
+
+## Unreleased follow-up — task controls and bounded inspector output
+
+- Four payload lists are exposed in native Tools, with exact P1–P4 positions, missing-list errors, sparse-list support and the existing 50-request/rate/cancel bounds. Broadcast explicitly uses P1. Preview clears when inputs or the API draft change. Filters, pause/checkpoints and per-step extraction remain RUN-01/RUN-02 work.
+- Inspector selection reports HTML length/limit/truncation; evaluation output puts a truncation notice before its 24,000-character prefix. JVM four-list regression cases, page-side large-selection assertions and actual optimized-APK control assertions were added.
+- Future signed upgrade checks now pin the published 1.0.1 URL/SHA and use its normal scroll viewport. The obsolete v1.0.0 driver flag is removed. This does not constitute a new signed upgrade run or a new release.
+- Verification: local Android checks started; CI result pending. Production remains 1.0.1. Next: obtain passing exact-source CI/device results, then continue CAP-01 license/build selection. Physical/OEM/accessibility and all unchecked scope below remain open.
 
 ## Implemented increments
 
@@ -82,10 +89,10 @@ Earlier production baseline: `98425c9e4bcc7ace1a56604b0d466859db3a8e5b`, ESuite 
 - History is capped at 100 exchanges. Durable collections/config/notes have a 16 MiB admission budget; the whole encrypted vault is capped at 32 MiB. History may be pruned to fit. Saved collections and observations are rejected at capacity rather than silently dropped.
 - Workspace write failures preserve the previous AtomicFile. Unknown/missing keys and corrupt files do not trigger plaintext fallback or automatic replacement. Native backup recovery is part of the latest emulator test.
 - Sanitized exports omit bodies, paths, query values, headers, identity config and finding free text. The origin/generated IDs remain. Export requires preview and a known on-device provider. Rich raw evidence export is not implemented.
-- Inspector snapshots are capped at 16,000 selected-HTML characters and 24,000 displayed evaluation characters; large snapshots can be partial. Add explicit UI truncation markers in the UI refinement work.
+- Inspector snapshots are capped at 16,000 selected-HTML characters and 24,000 displayed evaluation characters; selection metadata and a display prefix explicitly identify truncation.
 - Browser history is **URL/method/request-header metadata only**. No browser response/body capture is claimed. Unsupported profile features disable this browser rather than sharing test identities silently.
 - Browser navigation is scoped; third-party subresources can load normally but are not recorded. No native JavaScript bridge is exposed. TLS errors are cancelled.
-- Parameter runs: up to 50 sequential requests, at least one second apart, stop on 429/503 or transport failure. UI exposes two payload lists; engine supports four substitution positions. No automatic retry/resume.
+- Parameter runs: up to 50 sequential requests, at least one second apart, stop on 429/503 or transport failure. UI exposes four payload lists with matching substitution positions. No automatic retry/resume.
 - Sequences: up to 10 saved requests; optional first-response JSON Pointer extraction into `{{token}}`; stop on non-2xx. URL tokens are encoded, header/body substitutions are literal.
 - cURL import is a conservative parser, not shell execution. OpenAPI supports JSON 3.x; HAR import supports textual request drafts and filters exact origin.
 - AWS review analyzes supplied JSON structurally; it does not contact an account or fully evaluate conditions, SCPs or effective privileges. JWT claims remain unverified; token statistics do not prove cryptographic randomness.

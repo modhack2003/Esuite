@@ -7,6 +7,19 @@ enum class PayloadMode { ONE_POSITION, BROADCAST, PAIRED, COMBINATIONS }
 
 object RequestPlans {
     private val marker = Regex("\\{\\{P([1-4])}}")
+    fun payloadsFromText(template: RequestDraft, inputs: List<String>, mode: PayloadMode): List<RequestDraft> {
+        require(inputs.size in 1..4) { "Use 1–4 payload lists" }
+        val text = template.url + template.body + template.headers.joinToString { it.value }
+        val positions = marker.findAll(text).map { it.groupValues[1].toInt() - 1 }.toSet()
+        require(positions.isNotEmpty() && positions.all { it < inputs.size }) { "Use {{P1}}…{{P4}} markers with corresponding lists" }
+        val sets = inputs.mapIndexed { index, input ->
+            val values = input.lines().filter(String::isNotBlank)
+            val required = if (mode == PayloadMode.BROADCAST) index == 0 else index in positions
+            require(values.isNotEmpty() || !required) { "Provide values for P${index + 1}" }
+            values.ifEmpty { listOf("") }
+        }
+        return payloads(template, sets, mode)
+    }
     fun payloads(template: RequestDraft, sets: List<List<String>>, mode: PayloadMode): List<RequestDraft> {
         require(sets.size in 1..4 && sets.all { it.isNotEmpty() && it.size <= 50 && it.all { value -> value.length <= 4096 } }) { "Use 1–4 non-empty lists with up to 50 bounded values" }
         val text = template.url + template.body + template.headers.joinToString { it.value }

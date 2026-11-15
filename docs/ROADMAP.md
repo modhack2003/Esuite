@@ -46,8 +46,9 @@ Current implementation and next-agent entry point: [Agent handoff](AGENT_HANDOFF
 
 ## M3 — automation expansion
 
-- [x] Four bounded substitution modes implemented; two-list UI available.
-- [ ] Add configurable match/extract result filters and four-list UI.
+- [x] Four bounded substitution modes and four-list native UI implemented; sparse/missing-list validation and count preview included.
+- [x] Add four-list native parameter inputs and count preview.
+- [ ] Add configurable match/extract result filters and pause/checkpoint controls.
 - [x] Saved-request sequences with first-response JSON token extraction implemented.
 - [ ] Extend sequences with per-step extractors, refresh rules and interactive authentication handling.
 - [ ] Controlled crawler and selected active audit checks.
@@ -76,5 +77,6 @@ Detailed capabilities and acceptance criteria: [Product plan](PRODUCT_PLAN.md).
 - [ ] Complete physical/OEM/accessibility and remaining production-readiness checks above.
 
 - [x] Publish 1.0.1 browser audit patch after actual optimized/signed-APK HTTPS, inspector, cookie/storage/transfer, API/error-state, POST-scope and same-signer upgrade gates pass. See VERIFICATION.md for exact provider skips.
-- [ ] Before the next release, pin the upgrade baseline URL/SHA to 1.0.1 and update/remove the old-baseline scroll flag.
-- [ ] Extend UI coverage for renderer termination, in-flight identity changes, rich auth/export/delete and explicit inspector truncation markers.
+- [x] Pin the next upgrade baseline URL/SHA to 1.0.1 and remove the old-baseline scroll flag (signed execution pending next release).
+- [ ] Extend UI coverage for renderer termination, in-flight identity changes, rich auth/export/delete flows.
+- [x] Expose selected-HTML truncation metadata and a visible evaluation-output truncation notice (verification tracked in handoff).

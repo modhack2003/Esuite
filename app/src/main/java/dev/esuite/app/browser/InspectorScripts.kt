@@ -18,7 +18,8 @@ object InspectorScripts {
     """.trimIndent()
     val selection = """
         (() => { const e=window.__esuiteElement; if(!e || !e.isConnected) return 'No selected element'; const s=getComputedStyle(e);
-          return JSON.stringify({tag:e.tagName,html:e.outerHTML.slice(0,16000),css:e.style.cssText,
+          return JSON.stringify({htmlTruncated:e.outerHTML.length>16000,htmlCharacters:e.outerHTML.length,htmlLimit:16000,
+            tag:e.tagName,html:e.outerHTML.slice(0,16000),css:e.style.cssText,
             computed:{display:s.display,color:s.color,background:s.backgroundColor,font:s.font,position:s.position}},null,2);
         })()
     """.trimIndent()

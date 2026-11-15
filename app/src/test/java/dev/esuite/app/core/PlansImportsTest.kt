@@ -5,6 +5,29 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PlansImportsTest {
+    @Test fun fourTextListsPreservePositionsAcrossUrlHeadersAndBody() {
+        val template = RequestDraft(url = "https://example.test/{{P1}}", headers = listOf(Header("X-Test", "{{P3}}")), body = "{{P2}}:{{P4}}")
+        val inputs = listOf("a\nb", "c\nd", "e\nf", "g\nh")
+        assertEquals(8, RequestPlans.payloadsFromText(template, inputs, PayloadMode.ONE_POSITION).size)
+        assertEquals(16, RequestPlans.payloadsFromText(template, inputs, PayloadMode.COMBINATIONS).size)
+        val paired = RequestPlans.payloadsFromText(template, inputs, PayloadMode.PAIRED)
+        assertEquals("https://example.test/b", paired.last().url)
+        assertEquals("d:h", paired.last().body)
+        assertEquals("f", paired.last().headers.single().value)
+        val broadcast = RequestPlans.payloadsFromText(template, inputs, PayloadMode.BROADCAST)
+        assertEquals("b:b", broadcast.last().body)
+        assertEquals("b", broadcast.last().headers.single().value)
+    }
+    @Test fun sparseTextListsRejectMissingValuesAndOversizedPlans() {
+        val template = RequestDraft(url = "https://example.test/{{P4}}")
+        assertEquals("https://example.test/z", RequestPlans.payloadsFromText(template, listOf("", "", "", "z"), PayloadMode.PAIRED).single().url)
+        assertEquals("https://example.test/a", RequestPlans.payloadsFromText(template, listOf("a", "", "", ""), PayloadMode.BROADCAST).single().url)
+        assertThrows(IllegalArgumentException::class.java) { RequestPlans.payloadsFromText(template, listOf("a", "", "", ""), PayloadMode.PAIRED) }
+        assertThrows(IllegalArgumentException::class.java) { RequestPlans.payloadsFromText(template, listOf("", "", "", "z"), PayloadMode.BROADCAST) }
+        assertThrows(IllegalArgumentException::class.java) { RequestPlans.payloadsFromText(template, listOf("", "", "", List(51) { "z" }.joinToString("\n")), PayloadMode.PAIRED) }
+        val all = RequestDraft(url = "https://example.test/{{P1}}/{{P2}}/{{P3}}/{{P4}}")
+        assertThrows(IllegalArgumentException::class.java) { RequestPlans.payloadsFromText(all, List(4) { "a\nb\nc" }, PayloadMode.COMBINATIONS) }
+    }
     @Test fun payloadModesBoundCountsAndSubstituteWithoutRecursiveExpansion() {
         val template = RequestDraft(url = "https://example.test/?a={{P1}}&b={{P2}}")
         val lists = listOf(listOf("1", "2"), listOf("x", "y", "z"))
