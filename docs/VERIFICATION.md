@@ -21,7 +21,13 @@ Later documentation-only commits do not change the tested/released application s
 
 ## Unreleased follow-up validation
 
-Four-list task inputs, sparse/missing-list and budget regressions, selected-HTML truncation metadata and evaluation truncation notices are implemented. The optimized-APK UI suite now exercises all four inputs, missing P4 validation and both inspector limits. Latest CI before editing was successful run 43672555295; new checks are pending and must not be confused with the published 1.0.1 evidence below. The future signed upgrade fixture pins 1.0.1; no subsequent signed upgrade is claimed yet.
+Source `2edb9f75ad27f612d69f06816553576206014fa5` passed [full CI](https://github.com/modhack2003/Esuite/actions/runs/43682611496), all twelve jobs. The full local command `./gradlew testDebugUnitTest lintDebug lintRelease assembleDebug assembleRelease` also passed. JVM XML reports 25 tests, zero failures/errors. CI additionally passed publication guards, web typecheck/build/UI checks and page-side inspector regressions.
+
+Decoded device logs report **60 native cases: 48 passes, 12 explicit capability skips, zero failures/errors** across API 28–37.0. Each OS passed the direct Android ICU payload-marker initialization regression and the actual optimized-APK four-list preview/missing-P4 controls, along with existing API/persistence boundaries. API 32/35/36/37.0 passed complete browser flows including selected-HTML truncation metadata and the visible 24,000-character output limit notice. The other six providers each skipped the same two unsupported-profile cases; skipped capability is not a browser pass.
+
+Actual UI testing found an Android-only failure missed by desktop JVM tests: literal closing braces in the marker regex must be escaped for ICU. This is fixed and covered on every OS. Initial fixture-navigation/GET-body errors were also corrected without weakening transport validation; the final source above passed all gates.
+
+The future signed upgrade fixture now pins the immutable 1.0.1 URL/SHA and uses its normal scrolling. There is no new signed upgrade run or published release. Production remains the 1.0.1 checkpoint above. Physical/OEM/accessibility and the full proxy/VPN/TLS stack remain open.
 
 ## Android matrix — optimized APK
 
@@ -85,4 +91,4 @@ Continue from [Agent handoff](AGENT_HANDOFF.md), not from an intermediate failed
 
 ## Forwarding candidate gate
 
-Pinned recursive source/license inventory and isolated four-ABI/API 28 native build checks added; first CI execution pending. No native library has been packaged or device forwarding verified. See native/README.md for audit boundaries.
+Pinned recursive source/license inventory and isolated four-ABI/API 28 native builds passed on the connected Linux device with NDK r29: two clean stripped builds produced equal hashes and every ELF LOAD alignment was at least 16 KiB. Hashes and audit limits are in native/README.md. A subsequent repeat result was unavailable after the device connection timed out. The connected CLI credential lacked workflow scope, so the attempted dedicated workflow was removed before publishing; no native-build CI pass is claimed. No native library has been packaged or device forwarding verified.

@@ -18,3 +18,14 @@ The recursive C/header/assembly review found no GPL-only source notice. That obs
 `python3 tools/verify_forwarder.py` uses Linux with `ANDROID_HOME` and NDK `29.0.14206865`. It checks exact dependency/license pins, builds only the shared library for API 28 on armeabi-v7a, arm64-v8a, x86 and x86_64, then repeats a clean build and compares stripped output hashes. Every ELF LOAD segment must have at least 16 KiB alignment. Run this check with the pinned NDK; actual results are recorded in VERIFICATION.md. Adding a dedicated CI workflow requires a GitHub credential with workflow scope. No generated native files are committed.
 
 This is a build feasibility gate. It does not establish packet forwarding, UDP/DNS correctness, socket protection, connectivity, cancellation, TLS inspection or Android/OEM compatibility. The existing app still has no VPN capture service. Next: finish the distribution notice inventory, implement CAP-02's scoped loopback transport, then integrate the candidate with selected-app VpnService and controlled unrooted device fixtures under CAP-03. Do not introduce an empty TUN service.
+
+## Direct Linux build evidence — 15 November 2026
+
+The isolated build passed on the connected Linux device using the official NDK r29 archive. Its SHA-1 matched Google's SDK repository manifest (`87e2bb7e9be5d6a1c6cdf5ec40dd4e0c6d07c30b`). Two clean stripped builds matched for all four ABIs, targeting API 28; every ELF LOAD alignment was at least 16 KiB. This proves build feasibility only. A subsequent repeat's result could not be retrieved after the device connection timed out.
+
+| ABI | Shared-library SHA-256 |
+| --- | --- |
+| armeabi-v7a | `4ff5175660535c237dce5b898ac89b2182ea6f7720a1f8728eb01ca66fce924f` |
+| arm64-v8a | `88265a62d80e2aeb380ab40c53a74daa1a2d8eabf63d0c025b6d0498dba77461` |
+| x86 | `ef7249d3fd05f44f72e6775e1b3712d6012878cc71bf9a1ccf52e5299696cc28` |
+| x86_64 | `22971a01062911941825ebc724e6f919c4c330b963b4ba9ead26c8a0039066fc` |

@@ -79,7 +79,10 @@ Detailed capabilities and acceptance criteria: [Product plan](PRODUCT_PLAN.md).
 - [x] Publish 1.0.1 browser audit patch after actual optimized/signed-APK HTTPS, inspector, cookie/storage/transfer, API/error-state, POST-scope and same-signer upgrade gates pass. See VERIFICATION.md for exact provider skips.
 - [x] Pin the next upgrade baseline URL/SHA to 1.0.1 and remove the old-baseline scroll flag (signed execution pending next release).
 - [ ] Extend UI coverage for renderer termination, in-flight identity changes, rich auth/export/delete flows.
-- [x] Expose selected-HTML truncation metadata and a visible evaluation-output truncation notice (verification tracked in handoff).
+- [x] Expose selected-HTML truncation metadata and a visible evaluation-output truncation notice (passed in full CI 43682611496).
 
 - [x] Pin the forwarding candidate and transitive license hashes; add isolated API 28/four-ABI reproducibility gate.
-- [ ] Pass candidate native builds and finish distributable per-file third-party notices before native integration (CAP-01).
+- [x] Pass isolated candidate API 28 native builds for four ABIs, equal clean rebuilds and 16 KiB ELF alignment (direct Linux evidence in native/README.md).
+- [ ] Finish distributable per-file third-party notices before native integration (CAP-01).
+
+- [x] Fix Android ICU payload-marker initialization and verify actual four-list controls across API 28–37.0 (full CI 43682611496; 60 native cases, 12 profile-capability skips).
