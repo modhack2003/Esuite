@@ -25,6 +25,69 @@ import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(AndroidJUnit4::class)
 class DeviceBoundaryTest {
+    @Test fun keyLossDuringAnOpenSessionCannotReplaceExistingVault() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val vault = WorkspaceVault(context)
+        vault.erase()
+        try {
+            vault.save(Workspace())
+            val file = File(context.noBackupFilesDir, "workspace.esv")
+            val previous = file.readBytes()
+            val store = java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            store.deleteEntry("esuite_workspace_aes_v1")
+            assertThrows(IllegalStateException::class.java) { vault.save(Workspace()) }
+            assertArrayEquals(previous, file.readBytes())
+            assertFalse(store.containsAlias("esuite_workspace_aes_v1"))
+        } finally { vault.erase() }
+    }
+    @Test fun silentAtomicFinishFailureCannotAcknowledgeUnreplacedBytes() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val file = android.util.AtomicFile(File(context.noBackupFilesDir, "atomic-commit-fixture"))
+        try {
+            val previous = byteArrayOf(1, 2, 3)
+            dev.esuite.app.storage.VerifiedAtomicWrite.write(file, previous)
+            assertThrows(java.io.IOException::class.java) {
+                dev.esuite.app.storage.VerifiedAtomicWrite.write(file, byteArrayOf(4, 5, 6)) { stream -> stream.close() }
+            }
+            assertArrayEquals(previous, file.baseFile.readBytes())
+        } finally { file.delete() }
+    }
+
+    @Test fun deployedVersionOneMigratesAndUnknownNewerVersionRetainsBytes() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val vault = WorkspaceVault(context)
+        vault.erase()
+        try {
+            val project = Project(name = "Upgrade fixture", origin = "https://example.test")
+            val old = Workspace(version = 1, projects = listOf(project),
+                findings = listOf(Finding(projectId = project.id, title = "Old note", detail = "Preserve all evidence")),
+                savedRequests = listOf(SavedRequest(projectId = project.id, name = "Old request", draft = RequestDraft(url = project.origin))),
+                identityConfigs = listOf(IdentityConfig(project.id, "A", listOf(Header("X-Test", "synthetic")))))
+            vault.save(old)
+            assertEquals(old.copy(version = WorkspaceSchema.CURRENT_VERSION), WorkspaceVault(context).load())
+            vault.save(old.copy(version = 999))
+            val file = File(context.noBackupFilesDir, "workspace.esv")
+            val before = file.readBytes()
+            assertThrows(IllegalArgumentException::class.java) { WorkspaceVault(context).load() }
+            assertArrayEquals(before, file.readBytes())
+        } finally { vault.erase() }
+    }
+
+    @Test fun encryptedSaveReturnsTheActualPrunedSnapshot() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val vault = WorkspaceVault(context)
+        vault.erase()
+        try {
+            val project = Project(name = "Prune fixture", origin = "https://example.test")
+            val body = "x".repeat(Limits.RESPONSE_BYTES)
+            val snapshot = Workspace(projects = listOf(project), exchanges = List(80) {
+                Exchange(projectId = project.id, identity = "A", request = RequestDraft(url = project.origin, body = body), response = StoredBody(body)) })
+            val persisted = vault.save(snapshot)
+            assertTrue(persisted.exchanges.size < snapshot.exchanges.size)
+            assertEquals(persisted, WorkspaceVault(context).load())
+        } finally { vault.erase() }
+    }
+
     @Test fun payloadMarkersInitializeAndSubstituteOnAndroidIcu() {
         val draft = RequestDraft(url = "https://example.test/?a={{P1}}&b={{P2}}&c={{P3}}&d={{P4}}")
         val plan = dev.esuite.app.automation.RequestPlans.payloadsFromText(draft,

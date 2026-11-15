@@ -1,24 +1,24 @@
-# ESuite 1.0.1 — browser and API reliability fixes
+# ESuite 1.0.2 — browser viewport and evidence reliability
 
-Install this update over the production 1.0.0 APK to retain your encrypted workspace. The production signing certificate is unchanged.
+Install over production 1.0.1 to retain the encrypted workspace. This update uses the existing production signing certificate.
 
 ## Fixed
 
-- Cross-origin form POST navigation now receives a blocked response, covering the WebView callback gap for POST. Early main-frame navigation also stops outside-origin pages. Third-party subresources can still load; this is not a network firewall or full interception engine.
-- HTML replacement retargets the selected element so further inspection and CSS edits operate on the replacement. CSS changes preserve the intended outline when selecting another element.
-- Same-origin URL fragments remain usable by navigation, inspection and cookie controls.
-- Native cookie edits and profile disposal flush cookie storage. Switching tools resets the page scroll position, browser actions dismiss the keyboard, and the installed WebView provider/version is visible. Narrow-screen tabs fit their labels, and output/evidence readouts have bounded scroll areas with accessible text.
-- A stopped renderer reports recovery instructions instead of terminating the app.
-- Failed API sends replace the previous response display and retain the actual attempted comparison identity in history.
+- The browser page has a bounded viewport outside the inspector's scrolling container. Page and inspector tabs retain the same isolated WebView; Page displays the actual website, while Elements, Cookies, Storage and Console have their own reachable scrolling area. An explicit readable blank background is paired with a page-pattern screenshot regression that a blank view cannot pass.
+- Encrypted-save status acknowledges the actual committed workspace snapshot. Durable edits queue a save immediately, pending/failed edits stay visible as unsaved, and the UI cannot mistake an older project's save for a newer finding's commit. Background save is best effort; arbitrary process death before the saved indicator can still lose pending edits.
+- Deployed version-1 workspace documents migrate through the version-2 schema while retaining all evidence and identity configuration. Unknown newer or corrupt documents fail closed without replacing the encrypted file or key.
+- Loss/invalidation of the Keystore key during an open session now rejects a save without generating a replacement key or overwriting the existing vault.
+- History pruning returns the snapshot actually persisted. Reconciliation removes only the pruned snapshot IDs and preserves captures/edits arriving while storage is busy. Oversized durable data fails before a vault write begins.
+- OpenAPI/HAR parsing and import budget encoding run off the UI thread. Prepared imports commit only against the validated durable state and originating project/workspace; conflicts are revalidated off main with bounded retries. Imports never execute target requests.
+- Truncated text omits an incomplete final character without silently dropping malformed interior server bytes. UTF-8, UTF-16 and Shift_JIS boundaries are regression-tested; binary capture and existing caps are retained.
+- Four-list native parameter controls, Android ICU marker parsing and explicit inspector truncation indicators are included from the verified unreleased follow-up.
 
 ## Verification gates
 
-Publication requires unit/lint/optimized-build checks, expanded inspector regressions, and Android API 28–37.0 emulator verification. The independent UI harness drives real HTTPS loading, touch selection, HTML/CSS edits, storage, hidden/revealed HttpOnly cookies, API transfer and A/B isolation on compatible WebViews. API controls exercise HTTPS sends, comparison, collection saving and scope rejection after a success.
-
-The exact production-signed APK also passes these UI checks on API 28/35/37.0, plus an install-over-1.0.0 test preserving encrypted evidence. Unsupported installed WebViews explicitly skip browser cases; API and persistence checks still run. Raw results are attached to the source commit's Actions runs. These checks do not establish perfection across every website, provider or physical phone.
+Publication requires the exact-source JVM/lint/debug/release build, page-side inspector checks and the API 28–37.0 emulator matrix. The independent UI harness verifies real HTTPS/browser controls, visible synthetic page pixels, API/profile isolation, committed-save acknowledgement and process restart. The exact production-signed APK additionally passes API 28/35/37.0 install-over-1.0.1 encrypted-evidence retention checks. Unsupported WebView profile capabilities are explicit skips.
 
 ## Remaining boundaries
 
-Unrooted Android 9–17, HTTPS with system trust, on-device storage and no telemetry. The browser requires an installed WebView with isolated-profile support; some emulator providers do not provide it. Browser history is request metadata only. Full proxy/VPN/TLS interception, direct cloud account audits, WebSocket replay and active scanner parity remain unfinished. Physical/OEM/accessibility and broader export/data-lifecycle checks remain tracked in docs/AGENT_HANDOFF.md.
+No root or computer is required during use. Processing/storage stays on device, with normal HTTPS system trust and no telemetry. Browser history remains request metadata only. Full proxy/VPN/TLS interception, cloud-account auditing, physical/OEM/accessibility validation and broader lifecycle/export checks remain tracked in docs/AGENT_HANDOFF.md. A browser fixture pass does not establish rendering compatibility with every website/provider. No TLS-pinning bypass is claimed.
 
-Download the APK and verify SHA256SUMS and build-info.json against the production certificate in docs/RELEASING.md. Never install internal debug or CI-signed test artifacts as updates.
+Verify the APK with SHA256SUMS and build-info.json against the durable public certificate in docs/RELEASING.md. Internal/debug/CI-signed APKs are not production updates.

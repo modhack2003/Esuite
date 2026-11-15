@@ -62,7 +62,7 @@ class ApiEngine(val sessions: IdentitySessions = IdentitySessions()) {
                             Exchange(projectId = project.id, identity = identity, source = source,
                                 request = draft.copy(headers = sent.headers.map { h -> Header(h.first, h.second) }), status = it.code,
                                 responseHeaders = it.headers.map { h -> Header(h.first, h.second) },
-                                response = StoredBody(if (textual) String(bytes, media?.charset(Charsets.UTF_8) ?: Charsets.UTF_8) else Base64.getEncoder().encodeToString(bytes), if (textual) "utf8" else "base64", truncated),
+                                response = StoredBody(if (textual) CapturedText.decode(bytes, media?.charset(Charsets.UTF_8) ?: Charsets.UTF_8, truncated) else Base64.getEncoder().encodeToString(bytes), if (textual) "utf8" else "base64", truncated),
                                 durationMs = (System.nanoTime() - start) / 1_000_000)
                         }
                         if (continuation.isActive) continuation.resume(exchange)

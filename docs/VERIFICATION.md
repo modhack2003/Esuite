@@ -98,3 +98,9 @@ Pinned recursive source/license inventory and isolated four-ABI/API 28 native bu
 Focused EGM reviewers inspected Kiro's changing persistence/browser/runtime work and recorded snapshot hashes in `docs/reviews`. These reviews did not run Kiro's tests or establish acceptance; run 43682611496 predates those uncommitted Android edits. The reports identify both current implementation issues and planned-test/fix risks.
 
 Separately, two focused notice-tool unit tests passed, including multiple pin/unsafe-path/dirty-source rejection cases. The real pinned recursive candidate produced a 450-file conservative source/header/build inventory; 12 files have no leading comment and remain listed for component attribution. Exact source-byte comparisons found seven fork files identical to original libyaml 0.2.5; the original permission/copyright text is retained with provenance. This audit produces no native binary and does not establish runtime forwarding or final distribution clearance.
+
+## Candidate 1.0.2 verification (pending)
+
+The takeover candidate adds committed-snapshot/pending-writer status, verified atomic commits using OS recovery semantics, actual v1-to-v2 migration, guarded off-main collection imports, prune reconciliation, tail-only character decoding and bounded browser Page/inspector hosting. The optimized UI harness asserts a recognizable actual page pixel pattern with blank-surface negative controls; DOM/metadata alone cannot pass this visual assertion. Focused EGM source audits found and resolved atomic-commit, stale-load, scroll-gutter and navigation-boundary issues before publishing.
+
+Initial local execution found one test-only thread-name mismatch from coroutine debug suffixes; its assertion now accepts the worker name prefix. Final local/CI/native/signed-artifact results remain pending. Do not reuse the earlier green CI as proof of these new changes. Physical/OEM/accessibility and deterministic ViewModel race tests remain open.

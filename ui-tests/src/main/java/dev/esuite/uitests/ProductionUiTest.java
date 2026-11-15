@@ -30,7 +30,7 @@ public class ProductionUiTest extends NativeUiDriver {
         enter("finding_detail", "Synthetic local evidence");
         click("save_finding");
         top();
-        assertTrue("Explicit encrypted save did not finish", device.wait(Until.hasObject(By.textContains("Workspace saved with AES-GCM")), 15000));
+        assertTrue("Explicit encrypted save did not finish", waitText("workspace_save_status", "Workspace saved with AES-GCM", 15000));
         // Fresh process, not just recreation with a retained ViewModel.
         device.executeShellCommand("am force-stop dev.esuite.app");
         launch();
@@ -55,6 +55,9 @@ public class ProductionUiTest extends NativeUiDriver {
                 device.wait(Until.hasObject(By.res("browser_unsupported")), 2000));
         click("browser_go"); output("Page loaded");
         evaluate("document.title", "Example Domain");
+        evaluate("document.body.style.margin='0'; document.body.innerHTML='<div style=\"position:fixed;inset:0 0 50% 0;background:#ff00ff\"></div><div style=\"position:fixed;inset:50% 0 0 0;background:#00ffff\"></div>'; 'Paint fixture ready'", "Paint fixture ready");
+        click("browser_tab_page"); assertVisiblePagePattern();
+
         evaluate("location.hash='inspector'; 'Anchor ready'", "Anchor ready");
         evaluate("document.title", "Example Domain");
         // Real HTTPS loaded above. Only synthetic DOM/storage/cookies are added below.
@@ -106,6 +109,38 @@ public class ProductionUiTest extends NativeUiDriver {
         // The failed send must replace the old 200 result, with no request to outside.invalid.
         top(); assertTrue(waitText("workspace_status", "outside the selected project origin", 15000));
         click("nav_traffic"); assertNotNull(find(By.textContains("Identity comparison · identity B · 200")));
+    }
+
+    private boolean hasPagePattern(android.graphics.Bitmap bitmap, android.graphics.Rect bounds) {
+        if (bounds.width() < 40 || bounds.height() < 40 || bounds.left < 0 || bounds.top < 0 || bounds.right > bitmap.getWidth() || bounds.bottom > bitmap.getHeight()) return false;
+        int matches = 0, total = 0;
+        for (int x = 2; x < 8; x++) for (int y = 1; y < 9; y++) {
+            int color = bitmap.getPixel(bounds.left + bounds.width() * x / 10, bounds.top + bounds.height() * y / 10);
+            int expected = y < 5 ? android.graphics.Color.MAGENTA : android.graphics.Color.CYAN;
+            if (Math.abs(android.graphics.Color.red(color)-android.graphics.Color.red(expected)) < 24 &&
+                Math.abs(android.graphics.Color.green(color)-android.graphics.Color.green(expected)) < 24 &&
+                Math.abs(android.graphics.Color.blue(color)-android.graphics.Color.blue(expected)) < 24) matches++;
+            total++;
+        }
+        return matches >= total * 9 / 10;
+    }
+    private void assertVisiblePagePattern() throws Exception {
+        android.graphics.Bitmap blank = android.graphics.Bitmap.createBitmap(100, 100, android.graphics.Bitmap.Config.ARGB_8888);
+        blank.eraseColor(android.graphics.Color.WHITE);
+        assertFalse("A blank white WebView must fail the paint oracle", hasPagePattern(blank, new android.graphics.Rect(0,0,100,100)));
+        blank.eraseColor(android.graphics.Color.rgb(7,16,25));
+        assertFalse("The window background must fail the paint oracle", hasPagePattern(blank, new android.graphics.Rect(0,0,100,100)));
+        blank.recycle();
+        long until = android.os.SystemClock.uptimeMillis() + 15000;
+        do {
+            UiObject2 page = device.findObject(By.clazz("android.webkit.WebView"));
+            android.graphics.Bitmap shot = InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();
+            boolean painted = page != null && shot != null && hasPagePattern(shot, page.getVisibleBounds());
+            if (shot != null) shot.recycle();
+            if (painted) { checkpoint("visible-page-pattern"); return; }
+            android.os.SystemClock.sleep(250);
+        } while (android.os.SystemClock.uptimeMillis() < until);
+        fail("Loaded page pattern did not paint inside actual hosted WebView bounds");
     }
 
 }

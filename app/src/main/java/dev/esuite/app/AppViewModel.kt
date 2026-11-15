@@ -23,6 +23,7 @@ data class AppState(
     val draft: RequestDraft = RequestDraft(), val selected: Exchange? = null, val busy: Boolean = false,
     val message: String = "Opening encrypted workspace…", val comparison: String = "", val ready: Boolean = false,
     val taskProgress: String = "No automation task running",
+    val persistedWorkspace: Workspace? = null, val saveError: String? = null, val pendingWrites: Int = 0,
 )
 
 @OptIn(FlowPreview::class)
@@ -34,30 +35,62 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val vault = WorkspaceVault(application)
     private val storageDispatcher = Dispatchers.IO.limitedParallelism(1)
     private var persistenceJob: Job? = null
+    private var loadJob: Job? = null
+    private var workspaceGeneration = 0
+    private val importer = CollectionImporter()
     init { loadWorkspace() }
     fun loadWorkspace() {
+        workspaceGeneration += 1
+        val generation = workspaceGeneration
+        loadJob?.cancel()
         persistenceJob?.cancel()
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             mutable.update { it.copy(ready = false) }
             try {
                 val workspace = withContext(storageDispatcher) { vault.load() }
+                if (generation != workspaceGeneration) return@launch
                 val project = workspace.projects.firstOrNull()
                 mutable.update { it.copy(workspace = workspace, projectId = project?.id, draft = RequestDraft(url = project?.origin?.plus("/").orEmpty()), ready = true,
-                    selected = null, message = "Encrypted workspace open. Requests only run when you explicitly start them.") }
+                    selected = null, persistedWorkspace = workspace, saveError = null, pendingWrites = 0, message = "Encrypted workspace open. Requests only run when you explicitly start them.") }
                 persistenceJob?.cancel()
                 persistenceJob = viewModelScope.launch {
                     state.map { it.workspace }.distinctUntilChanged().drop(1).debounce(500).collect { _ ->
-                        try { withContext(storageDispatcher) { vault.save(state.value.workspace) } }
-                        catch (e: CancellationException) { throw e }
-                        catch (_: Exception) { message("Encrypted save failed. Previous disk state retained; current edits remain in memory. Use Save now to retry.") }
+                        saveWorkspace()
                     }
                 }
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { message("Workspace could not be opened. No file was overwritten. ${e.message ?: e.javaClass.simpleName}") }
+            catch (e: Exception) { if (generation == workspaceGeneration) message("Workspace could not be opened. No file was overwritten. ${e.message ?: e.javaClass.simpleName}") }
         }
     }
-    fun saveNow() { viewModelScope.launch { runCatching { withContext(storageDispatcher) { vault.save(state.value.workspace) } }.onSuccess { message("Workspace saved with AES-GCM; keys remain in Android Keystore.") }.onFailure { message("Save failed; previous file retained: ${it.message}") } } }
+    fun saveNow() { viewModelScope.launch { saveWorkspace() } }
+    // An awaitable commit result. UI acknowledgement is derived from the committed snapshot,
+    // never from a generic success message belonging to an earlier edit.
+    suspend fun saveWorkspace(): Boolean {
+        if (!state.value.ready) return false
+        val generation = workspaceGeneration
+        val snapshot = state.value.workspace
+        mutable.update { it.copy(pendingWrites = it.pendingWrites + 1, saveError = null) }
+        return try {
+            val persisted = withContext(storageDispatcher) { vault.save(snapshot) }
+            if (generation == workspaceGeneration) mutable.update { current ->
+                current.copy(workspace = WorkspacePersistence.reconcile(current.workspace, snapshot, persisted),
+                    persistedWorkspace = persisted, saveError = null)
+            }
+            true
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) {
+            if (generation == workspaceGeneration) mutable.update { it.copy(saveError = "Encrypted save could not be verified. Current edits remain in memory. Use Save now to retry.") }
+            false
+        } finally {
+            if (generation == workspaceGeneration) mutable.update { it.copy(pendingWrites = maxOf(0, it.pendingWrites - 1)) }
+        }
+    }
+    private fun persistDurable() = saveNow()
+    // Best effort onStop scheduling; arbitrary process death before acknowledgement can lose pending edits.
+    fun flush() { if (state.value.ready) saveNow() }
     fun eraseVault() {
+        workspaceGeneration += 1
+        loadJob?.cancel()
         cancelRequest(); persistenceJob?.cancel(); engine.sessions.clearAll()
         viewModelScope.launch {
             mutable.update { it.copy(ready = false) }
@@ -77,6 +110,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val project = Project(name = name.trim(), origin = scope.canonicalOrigin)
             mutable.update { it.copy(workspace = it.workspace.copy(projects = it.workspace.projects + project), projectId = project.id,
                 draft = RequestDraft(url = project.origin + "/"), selected = null, comparison = "", message = "Project created. Only this exact scheme, host and port are in scope.") }
+            persistDurable()
         }.onFailure { message(it.message ?: "Invalid project") }
     }
     fun selectProject(id: String) {
@@ -97,7 +131,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun replay(exchange: Exchange) = mutable.update { it.copy(draft = CredentialPolicy.strip(exchange.request, it.workspace.identityConfigs.filter { c -> c.projectId == it.projectId }), selected = exchange,
         message = if (exchange.source == "Browser metadata") "Browser bodies are unavailable. Supply missing bodies before sending. Observed auth headers were removed." else "Draft loaded with observed auth headers removed. Review body values; sending is explicit.") }
     fun record(exchange: Exchange) {
-        mutable.update { it.copy(workspace = it.workspace.copy(exchanges = (listOf(exchange) + it.workspace.exchanges).take(Limits.HISTORY))) }
+        mutable.update { if (!it.ready || it.workspace.projects.none { p -> p.id == exchange.projectId }) it else it.copy(workspace = it.workspace.copy(exchanges = (listOf(exchange) + it.workspace.exchanges).take(Limits.HISTORY))) }
     }
     fun observeBrowser(project: Project, identity: String, draft: RequestDraft) {
         record(Exchange(projectId = project.id, identity = identity, source = "Browser metadata", request = draft,
@@ -198,15 +232,32 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val p = currentProject() ?: return message("Create a project first")
         runCatching { ApiImports.curl(text, p.origin) }.onSuccess { draft(it); message("cURL imported as data; no command or network request was executed.") }.onFailure { message(it.message ?: "Import failed") }
     }
-    fun importOpenApi(text: String) {
-        val p = currentProject() ?: return message("Create a project first")
-        runCatching { val requests = ApiImports.openApi(text, p); mergeSaved(requests); requests.size }
-            .onSuccess { message("Imported $it operation drafts. Fill path parameters and bodies before sending.") }.onFailure { message(it.message ?: "Import failed") }
-    }
-    fun importHar(text: String) {
-        val p = currentProject() ?: return message("Create a project first")
-        runCatching { val requests = ApiImports.har(text, p); mergeSaved(requests); requests.size }
-            .onSuccess { message("Imported $it in-scope HAR drafts; no requests were executed.") }.onFailure { message(it.message ?: "HAR import failed") }
+    fun importOpenApi(text: String) = importCollection { project -> ApiImports.openApi(text, project) }
+    fun importHar(text: String) = importCollection { project -> ApiImports.har(text, project) }
+    private fun importCollection(parse: (Project) -> List<SavedRequest>) {
+        val project = currentProject() ?: return message("Create a project first")
+        val generation = workspaceGeneration
+        viewModelScope.launch {
+            try {
+                val requests = importer.parse { parse(project) }
+                repeat(3) {
+                    ensureActive()
+                    require(generation == workspaceGeneration && state.value.projectId == project.id && state.value.ready) { "Workspace or project changed; import discarded" }
+                    val prepared = importer.prepare(state.value.workspace, project, requests)
+                    ensureActive()
+                    require(generation == workspaceGeneration && state.value.projectId == project.id && state.value.ready) { "Workspace or project changed; import discarded" }
+                    val current = state.value
+                    val next = prepared.apply(current.workspace)
+                    if (next != null && mutable.compareAndSet(current, current.copy(workspace = next,
+                            message = "Imported ${requests.size} in-scope drafts; no requests were executed. Review before sending."))) {
+                        persistDurable()
+                        return@launch
+                    }
+                }
+                message("Workspace changed repeatedly; import not applied. Retry when edits settle.")
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { message(e.message ?: "Import failed") }
+        }
     }
     private fun mergeSaved(requests: List<SavedRequest>) {
         mutable.update {
@@ -214,6 +265,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val next = it.workspace.copy(savedRequests = requests + it.workspace.savedRequests)
             WorkspaceBudget.requireDurableCapacity(next); it.copy(workspace = next)
         }
+        persistDurable()
     }
     private fun withIdentity(draft: RequestDraft, project: String, identity: String): RequestDraft {
         val configured = state.value.workspace.identityConfigs.firstOrNull { it.projectId == project && it.identity == identity }?.headers.orEmpty()
@@ -227,13 +279,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 mutable.update {
                     val next = it.workspace.copy(identityConfigs = it.workspace.identityConfigs.filterNot { c -> c.projectId == p.id && c.identity == config.identity } + config)
                     WorkspaceBudget.requireDurableCapacity(next)
-                    it.copy(workspace = next, message = "Identity headers saved to the encrypted workspace. Cookie jar sessions remain memory-only.")
+                    it.copy(workspace = next, message = "Identity headers updated; check encrypted-save status. Cookie jar sessions remain memory-only.")
                 }
+                persistDurable()
             }.onFailure { message(it.message ?: "Identity storage budget exceeded") }
         }.onFailure { message(it.message ?: "Invalid identity headers") }
     }
     fun clearSessions() {
-        currentProject()?.let { p -> engine.sessions.clearProject(p.id); mutable.update { it.copy(workspace = it.workspace.copy(identityConfigs = it.workspace.identityConfigs.filterNot { c -> c.projectId == p.id })) } }
+        currentProject()?.let { p -> engine.sessions.clearProject(p.id); mutable.update { it.copy(workspace = it.workspace.copy(identityConfigs = it.workspace.identityConfigs.filterNot { c -> c.projectId == p.id })) }; persistDurable() }
         message("API sessions and saved identity headers cleared. Browser profiles have separate controls.")
     }
     fun transferBrowserCookies(url: String, cookies: List<String>): Boolean {
@@ -250,7 +303,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         runCatching {
             require(name.isNotBlank() && name.length <= 100) { "Saved request name must be 1–100 characters" }; DraftParser.validate(state.value.draft); ScopePolicy(p.origin).requireAllowed(state.value.draft.url)
             val saved = SavedRequest(projectId = p.id, name = name, draft = state.value.draft)
-            mergeSaved(listOf(saved)); message("Request added to the encrypted collection")
+            mergeSaved(listOf(saved)); message("Request added to the collection; check encrypted-save status")
         }.onFailure { message(it.message ?: "Cannot save request") }
     }
     fun exportSanitized(): String = currentProject()?.let { ReportExporter.sanitized(state.value.workspace, it.id) } ?: "{}"
@@ -262,6 +315,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             projects = it.workspace.projects.filterNot { item -> item.id == p.id }, exchanges = it.workspace.exchanges.filterNot { e -> e.projectId == p.id },
             findings = it.workspace.findings.filterNot { f -> f.projectId == p.id }, savedRequests = it.workspace.savedRequests.filterNot { r -> r.projectId == p.id },
             identityConfigs = it.workspace.identityConfigs.filterNot { c -> c.projectId == p.id }), message = "Project, API evidence and isolated browser profiles removed.") }
+        persistDurable()
     }
     fun addFinding(title: String, detail: String, evidence: Exchange? = state.value.selected): Boolean {
         val project = currentProject() ?: return false
@@ -274,10 +328,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 WorkspaceBudget.requireDurableCapacity(next)
                 it.copy(workspace = next, message = "Observation added; not automatically verified.")
             }
+            persistDurable()
         }.onFailure { message(it.message ?: "Observation budget exceeded") }.isSuccess
     }
-    fun deleteSavedRequest(id: String) { mutable.update { it.copy(workspace = it.workspace.copy(savedRequests = it.workspace.savedRequests.filterNot { r -> r.id == id })) } }
-    fun deleteFinding(id: String) { mutable.update { it.copy(workspace = it.workspace.copy(findings = it.workspace.findings.filterNot { f -> f.id == id })) } }
+    fun deleteSavedRequest(id: String) { mutable.update { it.copy(workspace = it.workspace.copy(savedRequests = it.workspace.savedRequests.filterNot { r -> r.id == id })) }; persistDurable() }
+    fun deleteFinding(id: String) { mutable.update { it.copy(workspace = it.workspace.copy(findings = it.workspace.findings.filterNot { f -> f.id == id })) }; persistDurable() }
     fun clearHistory() { mutable.update { it.copy(workspace = it.workspace.copy(exchanges = it.workspace.exchanges.filterNot { e -> e.projectId == it.projectId }), selected = null) } }
     override fun onCleared() { engine.close(); super.onCleared() }
 }

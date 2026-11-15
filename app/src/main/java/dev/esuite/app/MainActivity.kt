@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -26,6 +27,8 @@ import dev.esuite.app.core.*
 import dev.esuite.app.ui.*
 
 class MainActivity : ComponentActivity() {
+    // Activity-scoped ViewModel shared with Compose (same ViewModelStore), so onStop can flush it.
+    private val model: AppViewModel by viewModels()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
@@ -33,7 +36,14 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
         WebView.setWebContentsDebuggingEnabled(false)
-        setContent { ESuiteTheme { ESuiteApp() } }
+        setContent { ESuiteTheme { ESuiteApp(model) } }
+    }
+
+    // Best-effort background save. Only the committed-snapshot indicator acknowledges durability.
+    // flush() is a safe no-op when the workspace is not ready and never throws into this callback.
+    override fun onStop() {
+        model.flush()
+        super.onStop()
     }
 }
 
@@ -67,6 +77,18 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
             }
         }
     }) { inset ->
+        if (screen == Screen.Browser && project != null) {
+            Column(Modifier.fillMaxSize().padding(inset).imePadding().padding(horizontal = 8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(project.name, Modifier.weight(1f).align(androidx.compose.ui.Alignment.CenterVertically), maxLines = 1, color = Signal)
+                    listOf("A", "B").forEach { identity ->
+                        FilterChip(modifier = Modifier.testTag("identity_$identity"), selected = state.identity == identity,
+                            onClick = { model.identity(identity) }, label = { Text(identity) })
+                    }
+                }
+                BrowserScreen(project, state.identity, model, Modifier.weight(1f))
+            }
+        } else {
         Column(Modifier.fillMaxSize().padding(inset).imePadding().verticalScroll(pageScroll).padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -78,6 +100,8 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
                 listOf("A", "B").forEach { identity -> FilterChip(modifier = Modifier.testTag("identity_$identity"), selected = state.identity == identity, onClick = { model.identity(identity) }, label = { Text("Identity $identity") }) }
             }
             Text(state.message, Modifier.testTag("workspace_status"), style = MaterialTheme.typography.bodySmall, color = Muted)
+            Text(if (state.pendingWrites == 0 && state.persistedWorkspace == state.workspace) "Workspace saved with AES-GCM" else state.saveError ?: "Workspace edits pending encrypted save…",
+                Modifier.testTag("workspace_save_status"), style = MaterialTheme.typography.bodySmall, color = Muted)
             when (screen) {
                 Screen.Home -> HomeScreen(state, model) { selectedName = it.name }
                 Screen.Browser -> if (project != null) BrowserScreen(project, state.identity, model) else Text("Create a project first.")
@@ -87,6 +111,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
                 Screen.Tools -> ToolsScreen(state, model)
             }
             Spacer(Modifier.height(20.dp))
+        }
         }
     }
 }
@@ -185,7 +210,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     }
     OutlinedTextField(title, { title = it }, label = { Text("Observation title") }, modifier = Modifier.fillMaxWidth().testTag("finding_title"))
     OutlinedTextField(detail, { detail = it }, label = { Text("Evidence / reproduction / next test") }, minLines = 3, modifier = Modifier.fillMaxWidth().testTag("finding_detail"))
-    Button(modifier = Modifier.testTag("save_finding"), onClick = { if (model.addFinding(title, detail)) { title = ""; detail = ""; focus.clearFocus(); keyboard?.hide(); model.saveNow() } }, enabled = state.projectId != null) { Text("Save observation") }
+    Button(modifier = Modifier.testTag("save_finding"), onClick = { if (model.addFinding(title, detail)) { title = ""; detail = ""; focus.clearFocus(); keyboard?.hide() } }, enabled = state.projectId != null) { Text("Save observation") }
     state.workspace.findings.filter { it.projectId == state.projectId }.forEach { finding ->
         Panel("${finding.state}: ${finding.title}", finding.detail + "\nEvidence: " + finding.evidenceIds.joinToString())
         TextButton(onClick = { model.deleteFinding(finding.id) }) { Text("Remove observation") }

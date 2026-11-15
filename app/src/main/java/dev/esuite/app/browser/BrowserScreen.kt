@@ -26,7 +26,7 @@ import kotlinx.serialization.json.*
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun BrowserScreen(project: Project, identity: String, model: AppViewModel) {
+fun BrowserScreen(project: Project, identity: String, model: AppViewModel, modifier: Modifier = Modifier) {
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     fun dismissEditor() { focus.clearFocus(); keyboard?.hide() }
@@ -34,7 +34,7 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel) {
     var address by remember(project.id, identity) { mutableStateOf(project.origin + "/") }
     var webView by remember(project.id, identity) { mutableStateOf<WebView?>(null) }
     var rendererFailed by remember(project.id, identity) { mutableStateOf(false) }
-    var panel by remember(project.id, identity) { mutableStateOf("Elements") }
+    var panel by remember(project.id, identity) { mutableStateOf("Page") }
     var output by remember(project.id, identity) { mutableStateOf("Press Go to load the selected target. Inspection is local to this WebView.") }
     var console by remember(project.id, identity) { mutableStateOf(emptyList<String>()) }
     var script by remember(project.id, identity) { mutableStateOf("document.title") }
@@ -64,20 +64,21 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel) {
         }
     }
     DisposableEffect(project.id, identity) { onDispose { webView?.apply { stopLoading(); cookieManager()?.flush(); webChromeClient = null; destroy() } } }
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Live browser · identity $identity", style = MaterialTheme.typography.titleMedium)
-        Text(provider, style = MaterialTheme.typography.bodySmall)
-        Text("Exact-origin navigation. Third-party subresources may load but are not recorded. TLS errors are never ignored.", style = MaterialTheme.typography.bodySmall)
+    Column(modifier.fillMaxSize().padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(provider, maxLines = 1, style = MaterialTheme.typography.bodySmall)
+        if (panel == "Page") {
         OutlinedTextField(address, { address = it }, label = { Text("Target URL") }, modifier = Modifier.fillMaxWidth().testTag("browser_url"), singleLine = true, supportingText = { Text("HTTPS · system certificate validation") })
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(modifier = Modifier.testTag("browser_go"), onClick = { dismissEditor(); output = "Loading…"; runCatching { policy.requireAllowed(address.substringBefore('#')) }.onSuccess { webView?.loadUrl(it.newBuilder().encodedFragment(address.substringAfter('#', "").ifEmpty { null }).build().toString()) }.onFailure { output = it.message ?: "Invalid URL" } }) { Text("Go") }
             OutlinedButton(onClick = { webView?.stopLoading() }) { Text("Stop") }
             OutlinedButton(onClick = { if (webView?.canGoBack() == true) webView?.goBack() }) { Text("Back") }
         }
+        }
         if (rendererFailed) OutlinedButton(onClick = { rendererFailed = false; output = "Press Go to reload the target" }) { Text("Restart browser renderer") }
         else key(project.id, identity) {
-            AndroidView(modifier = Modifier.fillMaxWidth().height(340.dp), factory = { context ->
+            AndroidView(modifier = Modifier.fillMaxWidth().testTag("browser_page").then(if (panel == "Page") Modifier.weight(1f) else Modifier.height(0.dp)), factory = { context ->
                 WebView(context).apply {
+                    setBackgroundColor(android.graphics.Color.WHITE)
                     if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) WebViewCompat.setProfile(this, "esuite_${project.id}_$identity")
                     settings.javaScriptEnabled = true; settings.domStorageEnabled = true
                     settings.allowFileAccess = false; settings.allowContentAccess = false
@@ -120,12 +121,14 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel) {
             })
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            listOf("Elements", "Cookies", "Storage", "Console").forEach { tab -> TextButton(modifier = Modifier.weight(1f).testTag("browser_tab_${tab.lowercase()}"), contentPadding = PaddingValues(horizontal = 4.dp), onClick = { dismissEditor(); panel = tab; output = "" }) { Text(tab, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) } }
+            listOf("Page", "Elements", "Cookies", "Storage", "Console").forEach { tab -> TextButton(modifier = Modifier.weight(1f).testTag("browser_tab_${tab.lowercase()}"), contentPadding = PaddingValues(horizontal = 4.dp), onClick = { dismissEditor(); panel = tab; output = "" }) { Text(tab, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) } }
         }
+        Column(Modifier.fillMaxWidth().testTag("browser_inspector").then(if (panel == "Page") Modifier.heightIn(max = 64.dp) else Modifier.weight(1f))
+            .verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         when (panel) {
             "Elements" -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(modifier = Modifier.testTag("browser_select"), onClick = { evaluate(InspectorScripts.select) }) { Text("Select element") }
+                    OutlinedButton(modifier = Modifier.testTag("browser_select"), onClick = { evaluate(InspectorScripts.select); panel = "Page" }) { Text("Select element") }
                     OutlinedButton(modifier = Modifier.testTag("browser_read_selection"), onClick = { evaluate(InspectorScripts.selection) }) { Text("Read selection") }
                 }
                 OutlinedTextField(edit, { edit = it }, maxLines = 5, label = { Text("HTML or CSS edit (local page only)") }, modifier = Modifier.fillMaxWidth().testTag("browser_edit"))
@@ -163,6 +166,7 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel) {
         }
         Box(Modifier.fillMaxWidth().heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
             SelectionContainer { Text(output, Modifier.testTag("browser_output").fillMaxWidth(), style = MaterialTheme.typography.bodySmall) }
+        }
         }
     }
 }

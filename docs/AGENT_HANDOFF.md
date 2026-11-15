@@ -10,6 +10,16 @@ Read this file first, then `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md
 - No analytics, hosted AI, remote workers, automatic evidence uploads or external callback collectors. The design services received synthetic data only.
 - The React prototype is a synthetic design reference. Native features must be assessed from Kotlin source and tests.
 
+## Candidate 1.0.2/code 5 — takeover and release gates pending
+
+The owner stopped Kiro and authorized takeover plus a new fixed production APK. This candidate incorporates the four-list/ICU/truncation follow-up and fixes the browser viewport, encrypted commit acknowledgement, real v1-to-v2 migration, save-time pruning reconciliation, off-main version-safe imports and multi-byte capture tails. The page stays outside inspector scroll; the same isolated WebView remains composed across Page/Elements/Cookies/Storage/Console. The visual gate checks actual hosted magenta/cyan fixture pixels and rejects blank white/Midnight controls; no predetermined black-screen cause is claimed.
+
+Saved status requires zero pending writers and equality with the actual committed snapshot. The atomic writer syncs and verifies via platform openRead recovery; rollback is limited to pre-finish failures to preserve Android 9 backups. Background flush is explicitly best effort, with no canceled-scope flush in onCleared. New edits remain pending until their own commit; arbitrary termination before acknowledgement can still lose pending changes. Obsolete load completions are canceled/generation-guarded. Import parse/budget work is off main with bounded conflict retries and project/workspace guards; captures arriving during validation/save are preserved.
+
+Focused EGM audits and follow-up resolution are in `docs/reviews/release-1.0.2-persistence.md` and `release-1.0.2-browser.md`. Direct platform tests cover deployed v1 migration, unknown-newer nonmutation, actual encrypted pruning and silent atomic-finish failure. Independent UI tests cover committed-save/process restart and real browser painting. Deterministic ViewModel scheduler-interleaving coverage, physical/OEM/accessibility and broader data-lifecycle gates remain unfinished; they are not implied by helper/JVM tests.
+
+Release intent: 1.0.2/code 5, same durable signer. Exact-source CI, signed install/upgrade from pinned 1.0.1, and publication are pending. No local debug/unsigned APK is a deliverable. All original unfinished product scope remains below.
+
 ## Current production checkpoint — 1.0.1/code 4
 
 [Stable 1.0.1](https://github.com/modhack2003/Esuite/releases/tag/v1.0.1) is published from `2e9910360de64a0f21bc7f5830e3717e074b1215`. [Full CI](https://github.com/modhack2003/Esuite/actions/runs/43672555295) passed all ten OS jobs; independently downloaded XML confirms 23 JVM passes and 50 native cases (38 passes, 12 explicit profile-capability skips, zero failures/errors). Complete browser UI flows passed on compatible API 32/35/36/37.0 providers; API 28/29/30/31/33/34 each skipped two profile-dependent cases and passed API/persistence/Keystore checks.

@@ -87,3 +87,11 @@ Detailed capabilities and acceptance criteria: [Product plan](PRODUCT_PLAN.md).
 - [ ] Complete final component/notice review and exact packaged-source attribution before native integration (CAP-01).
 
 - [x] Fix Android ICU payload-marker initialization and verify actual four-list controls across API 28–37.0 (full CI 43682611496; 60 native cases, 12 profile-capability skips).
+
+## Candidate 1.0.2 acceptance
+
+- [x] Implement bounded Page/inspector hosting, committed-snapshot save status, v1 migration, pruning reconciliation, off-main guarded imports and tail-only text decoding.
+- [x] Add actual production-seam/platform/optimized-UI regressions, including visible page pattern and atomic-finish fault coverage.
+- [ ] Pass exact-source local/CI Android gates and all API 28–37.0 jobs for this candidate.
+- [ ] Pass exact signed-APK install/upgrade-from-1.0.1 gates and publish 1.0.2 with the existing signer.
+- [ ] Extend deterministic ViewModel concurrency, physical/OEM/accessibility and broader lifecycle/export coverage. These remain separate from the candidate's fixture gates.

@@ -43,7 +43,18 @@ public abstract class NativeUiDriver {
             return bounds.top>device.getDisplayHeight()/24 && bounds.bottom<bottom-3;
         } catch(androidx.test.uiautomator.StaleObjectException ignored) { return false; }
     }
-    protected int scrollX() { return device.getDisplayWidth()/100; }
+    protected android.graphics.Rect scrollBounds() {
+        if (device.hasObject(By.res("browser_tab_page")) && !device.hasObject(By.res("browser_url"))) {
+            UiObject2 panel = device.findObject(By.res("browser_inspector"));
+            if (panel != null && panel.getVisibleBounds().height() > 40) return panel.getVisibleBounds();
+        }
+        return new android.graphics.Rect(0, device.getDisplayHeight()/8, device.getDisplayWidth(), device.getDisplayHeight()*23/24);
+    }
+    protected boolean inspectorScroll() { return device.hasObject(By.res("browser_tab_page")) && !device.hasObject(By.res("browser_url")); }
+    protected int scrollX() {
+        android.graphics.Rect area = scrollBounds();
+        return area.left + Math.max(2, area.width()/100);
+    }
     protected UiObject2 find(BySelector selector) {
         UiObject2 visible = device.wait(Until.findObject(selector), 700);
         if (usable(visible)) return visible;
@@ -51,12 +62,20 @@ public abstract class NativeUiDriver {
         for (int attempt = 0; attempt < 10; attempt++) {
             UiObject2 found = device.wait(Until.findObject(selector), 700);
             if (usable(found)) return found;
-            device.swipe(scrollX(), device.getDisplayHeight()*3/4,
-                    scrollX(), device.getDisplayHeight()/3, 25);
+            android.graphics.Rect area = scrollBounds();
+            device.swipe(scrollX(), inspectorScroll() ? area.top + area.height()*3/4 : device.getDisplayHeight()*3/4, scrollX(), inspectorScroll() ? area.top + area.height()/4 : device.getDisplayHeight()/3, 25);
         }
         throw new AssertionError("Native control not found: " + selector);
     }
-    protected UiObject2 tag(String name) { return find(By.res(name)); }
+    protected UiObject2 tag(String name) {
+        if (device.hasObject(By.res("browser_tab_page")) && !device.hasObject(By.res(name))) {
+            String tab = null;
+            if (name.equals("browser_go") || name.equals("browser_url")) tab = "browser_tab_page";
+            if (name.equals("browser_read_selection") || name.equals("browser_edit") || name.startsWith("browser_apply_")) tab = "browser_tab_elements";
+            if (tab != null) { device.findObject(By.res(tab)).click(); device.waitForIdle(1000); }
+        }
+        return find(By.res(name));
+    }
     protected int actionSequence=0;
     protected void actionEvidence(String name) {
         if(!name.equals("api_send") && !name.equals("api_compare") && !name.equals("api_session_metadata")) return;
@@ -100,9 +119,10 @@ public abstract class NativeUiDriver {
         device.waitForIdle(1000);
     }
     protected void top() {
-        for (int n = 0; n < 8; n++) device.swipe(scrollX(),
-                device.getDisplayHeight()/3, scrollX(),
-                device.getDisplayHeight()*3/4, 25);
+        for (int n = 0; n < 8; n++) {
+            android.graphics.Rect area = scrollBounds();
+            device.swipe(scrollX(), inspectorScroll() ? area.top + area.height()/4 : device.getDisplayHeight()/3, scrollX(), inspectorScroll() ? area.top + area.height()*3/4 : device.getDisplayHeight()*3/4, 25);
+        }
     }
     protected void launch() throws Exception {
         device.executeShellCommand("am start -W -S -n dev.esuite.app/.MainActivity");
