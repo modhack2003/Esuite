@@ -1,43 +1,32 @@
 package dev.esuite.uitests;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
-import androidx.test.platform.app.InstrumentationRegistry;
-import androidx.test.uiautomator.*;
+import androidx.test.uiautomator.By;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import static org.junit.Assert.*;
 
-/** Seed v1.0.0, install the update without clearing data, then verify in a fresh process. */
+/** Seed the immutable v1.0.0 baseline, then verify the update without clearing app data. */
 @RunWith(AndroidJUnit4.class)
-public class UpgradeUiTest {
-    private final UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
-    private UiObject2 tag(String name) {
-        for (int i=0;i<10;i++) {
-            UiObject2 found=device.wait(Until.findObject(By.res(name)),700);
-            if(found!=null) return found;
-            device.swipe(device.getDisplayWidth()/2,device.getDisplayHeight()*3/4,device.getDisplayWidth()/2,device.getDisplayHeight()/3,25);
-        }
-        throw new AssertionError("Upgrade control missing: "+name);
-    }
-    private void launch() throws Exception {
-        assertEquals("1",device.executeShellCommand("getprop ro.kernel.qemu").trim());
-        device.executeShellCommand("am force-stop dev.esuite.app");
-        device.executeShellCommand("am start -W -n dev.esuite.app/.MainActivity");
-        UiObject2 home=device.wait(Until.findObject(By.res("nav_home")),20000);
-        assertNotNull(home); home.click();
-        assertTrue(device.wait(Until.hasObject(By.text("Your workspace.")),20000));
+public class UpgradeUiTest extends NativeUiDriver {
+    private static final String NOTE="Synthetic upgrade evidence retained";
+    private void readObservation() {
+        click("nav_findings");
+        assertNotNull(find(By.textContains(NOTE)));
     }
     @Test public void seedPreviousRelease() throws Exception {
-        launch(); tag("project_name").setText("Same signer upgrade fixture");
-        tag("project_origin").setText("https://example.test"); tag("create_project").click();
-        tag("nav_findings").click(); tag("finding_title").setText("Preserve on upgrade");
-        tag("finding_detail").setText("Synthetic upgrade evidence retained"); tag("save_finding").click();
-        for(int n=0;n<5;n++) device.swipe(device.getDisplayWidth()/2,device.getDisplayHeight()/3,device.getDisplayWidth()/2,device.getDisplayHeight()*3/4,25);
-        assertTrue(device.wait(Until.hasObject(By.textContains("Workspace saved with AES-GCM")),15000));
+        // v1.0.0 placed horizontal padding outside its scroll viewport; use its content center.
+        legacyScroll=true;
+        launch(); enter("project_name","Same signer upgrade fixture");
+        enter("project_origin","https://example.test"); click("create_project");
+        click("nav_findings"); enter("finding_title","Preserve on upgrade");
+        enter("finding_detail",NOTE); click("save_finding"); top();
+        assertNotNull(find(By.textContains("Workspace saved with AES-GCM")));
+        // Prove the baseline note was actually durable before installing an update.
+        launch(); readObservation(); checkpoint("baseline-note-after-process-restart");
     }
     @Test public void verifyUpgradeRetainsEncryptedWorkspace() throws Exception {
-        launch(); assertNotNull(device.wait(Until.findObject(By.textContains("Same signer upgrade fixture")),15000));
-        tag("nav_findings").click();
-        assertNotNull(device.wait(Until.findObject(By.textContains("Synthetic upgrade evidence retained")),15000));
+        launch(); assertNotNull(find(By.textContains("Same signer upgrade fixture")));
+        readObservation(); checkpoint("upgraded-note-retained");
     }
 }

@@ -13,108 +13,13 @@ import org.junit.Assume;
 import org.junit.runner.RunWith;
 import static org.junit.Assert.*;
 
-/** Drives the optimized release APK as a separate application; no app classes are linked. */
+/** Drives the optimized release APK; fixture reset is specific to this suite. */
 @RunWith(AndroidJUnit4.class)
-public class ProductionUiTest {
-    private final UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
-
-    @org.junit.Rule public org.junit.rules.TestWatcher evidence = new org.junit.rules.TestWatcher() {
-        @Override protected void failed(Throwable error, org.junit.runner.Description description) {
-            try {
-                java.io.File dir = InstrumentationRegistry.getInstrumentation().getContext().getExternalFilesDir(null);
-                if(dir != null) {
-                    device.takeScreenshot(new java.io.File(dir, description.getMethodName()+".png"));
-                    java.io.File tree = new java.io.File(dir, description.getMethodName()+".xml");
-                    device.dumpWindowHierarchy(tree);
-                    System.out.println("Failure UI hierarchy: " + new String(java.nio.file.Files.readAllBytes(tree.toPath()), java.nio.charset.StandardCharsets.UTF_8));
-                }
-            } catch(Exception diagnostic) { System.out.println("Failure evidence unavailable: "+diagnostic); }
-        }
-    };
+public class ProductionUiTest extends NativeUiDriver {
     @Before public void resetDisposableFixture() throws Exception {
         assertEquals("UI fixture runner supports disposable emulators only", "1", device.executeShellCommand("getprop ro.kernel.qemu").trim());
         assertTrue(device.executeShellCommand("pm clear dev.esuite.app").contains("Success"));
     }
-    private boolean usable(UiObject2 node) {
-        if(node==null) return false;
-        try {
-            android.graphics.Rect bounds=node.getVisibleBounds();
-            if(bounds.width()<8 || bounds.height()<8) return false;
-            String id=node.getResourceName();
-            if(id!=null && id.startsWith("nav_")) return true;
-            UiObject2 home=device.findObject(By.res("nav_home"));
-            int bottom=home==null?device.getDisplayHeight():home.getVisibleBounds().top;
-            // Accessibility can expose controls clipped by the scroll viewport or covered by navigation.
-            return bounds.top>device.getDisplayHeight()/24 && bounds.bottom<bottom-3;
-        } catch(androidx.test.uiautomator.StaleObjectException ignored) { return false; }
-    }
-    private UiObject2 find(BySelector selector) {
-        UiObject2 visible = device.wait(Until.findObject(selector), 700);
-        if (usable(visible)) return visible;
-        top();
-        for (int attempt = 0; attempt < 10; attempt++) {
-            UiObject2 found = device.wait(Until.findObject(selector), 700);
-            if (usable(found)) return found;
-            device.swipe(device.getDisplayWidth()/100, device.getDisplayHeight()*3/4,
-                    device.getDisplayWidth()/100, device.getDisplayHeight()/3, 25);
-        }
-        throw new AssertionError("Native control not found: " + selector);
-    }
-    private UiObject2 tag(String name) { return find(By.res(name)); }
-    private int actionSequence=0;
-    private void actionEvidence(String name) {
-        if(!name.equals("api_send") && !name.equals("api_compare") && !name.equals("api_session_metadata")) return;
-        try {
-            java.io.File dir=InstrumentationRegistry.getInstrumentation().getContext().getExternalFilesDir(null);
-            if(dir!=null) {
-                String label=String.format(java.util.Locale.ROOT,"%02d-%s",++actionSequence,name);
-                device.takeScreenshot(new java.io.File(dir,label+".png"));
-                device.dumpWindowHierarchy(new java.io.File(dir,label+".xml"));
-            }
-        } catch(Exception error) { throw new AssertionError("Could not retain critical UI action evidence",error); }
-    }
-    private void click(String name) {
-        for (int attempt=0;attempt<5;attempt++) {
-            try {
-                tag(name); // May scroll. Wait AFTER this lookup so a fling cannot swallow the click.
-                device.waitForIdle(2000);
-                UiObject2 current=device.findObject(By.res(name));
-                if(!usable(current)) continue;
-                android.graphics.Rect before=current.getVisibleBounds();
-                android.os.SystemClock.sleep(250);
-                current=device.findObject(By.res(name));
-                if(!usable(current) || !before.equals(current.getVisibleBounds())) continue;
-                actionEvidence(name);
-                current=device.findObject(By.res(name));
-                if(!usable(current) || !before.equals(current.getVisibleBounds())) continue;
-                current.click();
-                device.waitForIdle(1000);
-                actionEvidence(name);
-                return;
-            } catch (androidx.test.uiautomator.StaleObjectException stale) {
-                if(attempt==4) throw stale;
-            }
-        }
-        throw new AssertionError("Control never stopped moving: "+name);
-    }
-    private void enter(String name, String value) {
-        tag(name).setText(value);
-        // SET_TEXT can open the IME and reflow Compose; close it as a user would before pressing the action.
-        if (device.hasObject(By.pkg("com.google.android.inputmethod.latin")) || device.hasObject(By.pkg("com.android.inputmethod.latin"))) device.pressBack();
-        device.waitForIdle(1000);
-    }
-    private void top() {
-        for (int n = 0; n < 8; n++) device.swipe(device.getDisplayWidth()/100,
-                device.getDisplayHeight()/3, device.getDisplayWidth()/100,
-                device.getDisplayHeight()*3/4, 25);
-    }
-    private void launch() throws Exception {
-        device.executeShellCommand("am start -W -S -n dev.esuite.app/.MainActivity");
-        UiObject2 home = device.wait(Until.findObject(By.res("nav_home")), 20000);
-        assertNotNull("Release navigation did not open", home); home.click(); top();
-        assertTrue("Release home did not open", device.wait(Until.hasObject(By.text("Your workspace.")), 20000));
-    }
-
     @Test public void scopedProjectAndEncryptedObservationSurviveProcessRestart() throws Exception {
         launch();
         enter("project_name", "UI persistence fixture");
@@ -132,37 +37,6 @@ public class ProductionUiTest {
         click("nav_findings");
         assertNotNull(find(By.textContains("Synthetic local evidence")));
     }
-    private boolean containsText(UiObject2 node, String expected) {
-        String text=node.getText();
-        if(text!=null && text.contains(expected)) return true;
-        for(UiObject2 child:node.getChildren()) if(containsText(child,expected)) return true;
-        return false;
-    }
-    private boolean waitText(String name, String expected, long timeout) {
-        tag(name);
-        long until=android.os.SystemClock.uptimeMillis()+timeout;
-        do {
-            try {
-                UiObject2 node=device.findObject(By.res(name));
-                if(node!=null && containsText(node,expected)) return true;
-            } catch(androidx.test.uiautomator.StaleObjectException ignored) { /* Reacquire after Compose reflow. */ }
-            android.os.SystemClock.sleep(150);
-        } while(android.os.SystemClock.uptimeMillis()<until);
-        return false;
-    }
-    private void output(String expected) {
-        assertTrue("Browser output missing: " + expected, waitText("browser_output", expected,15000));
-    }
-    private void evaluate(String script, String expected) {
-        top(); click("browser_tab_console");
-        enter("browser_script", script);
-        click("browser_evaluate"); output(expected);
-    }
-    private void readCookies(String expected) {
-        top(); click("browser_tab_cookies");
-        click("browser_read_cookies"); output(expected);
-    }
-
     @Test public void browserHttpsCookiesStorageEditsAndPostScopeThroughRealControls() throws Exception {
         launch();
         enter("project_name", "Browser UI fixture");

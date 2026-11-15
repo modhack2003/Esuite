@@ -10,21 +10,26 @@ Read this file first, then `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md
 - No analytics, hosted AI, remote workers, automatic evidence uploads or external callback collectors. The design services received synthetic data only.
 - The React prototype is a synthetic design reference. Native features must be assessed from Kotlin source and tests.
 
-## Active browser audit (1.0.1/code 4; verification pending)
+## Browser audit — 1.0.1/code 4, upgrade harness correction pending
 
-User requested debugging of released browser behavior. Version 1.0.1/code 4 remains unpublished. Last tested source `64ab34cbd6d762aabe992cf24d9f272954dbe817`: [CI](https://github.com/modhack2003/Esuite/actions/runs/43629645803) passed build/lint/JVM/design but failed nine native jobs. API 28 passed all applicable cases; six browser capability skips are intentional. Never treat that failed run as release approval.
+Source `48f3844bf888938e8c854a2231ea3fde56a19dfd` passed [full CI](https://github.com/modhack2003/Esuite/actions/runs/43670808186). Independently downloaded XML confirms 23 JVM passes and 50 native cases: 38 passes, 12 explicit capability skips, zero failures/errors. All ten API 28–37.0 jobs passed. The full browser UI flow passed on compatible API 32/35/36/37.0 providers; API 28/29/30/31/33/34 each skipped two profile-dependent cases and passed API/persistence/Keystore checks.
 
-Implemented fixes awaiting the complete gate:
-- Main-frame POST navigation rejection, early outside-origin navigation stop and same-origin fragment handling. WebView callbacks are not a network firewall; full proxy interception remains unfinished.
-- HTML replacement retargets selection, CSS outline changes survive deselection, cookie writes/profile disposal flush storage, provider diagnostics and explicit dead-renderer cleanup/restart.
-- Independent tool scroll positions, bounded editors/readouts, narrow-screen browser tabs and accessible browser output text in a separate scroll container.
-- Failed API sends select the actual failed exchange and attempted A/B identity rather than leaving the previous successful result selected.
+[Signed release workflow](https://github.com/modhack2003/Esuite/actions/runs/43671761534) built and verified the production APK with the unchanged signer, but its three upgrade jobs failed at the observation lookup (UpgradeUiTest line 41). Install-over succeeded and the project was retained. Publication correctly skipped. The harness waited for a note below the viewport without scrolling. Do not infer data loss or publish that unverified artifact.
 
-Coverage now drives real HTTPS example.com, touch selection/HTML/CSS, storage, hidden/revealed HttpOnly cookies, API transfer, A/B isolation and a blocked outside-origin POST, plus API send/comparison/collection/error state and encrypted process-restart persistence. Only synthetic data is used. The independent harness runs against the optimized APK. Unsupported MULTI_PROFILE browser cases explicitly skip. Playwright inspector replacement/outline/text-only regressions pass. Emulator heap is explicitly 512 MiB after a Google-services update killed system_server at the old 16 MiB growth limit.
+UpgradeUiTest now uses the same stable independent NativeUiDriver as the passing production UI suite. Only ProductionUiTest has a @Before data reset; NEVER add it to the shared driver or upgrade suite. Upgrade seeding now proves the note survives a baseline process restart, then the post-install test scrolls to and verifies the same saved note. Both checkpoints retain synthetic screenshots/trees. The immutable v1.0.0 baseline requires center swipes because its horizontal padding was outside the scroll viewport; current APK tests retain the proven gutter swipes. No application code changed in this harness correction. Next source still requires full CI and all signed-device gates.
 
-Current diagnosis: per-failure UI trees/screenshots showed status still Project created after the alleged API send. Browser inspection/cookie checks progressed through transfer, then API session review also received no click. The harness had waited for idle BEFORE a lookup that itself scrolls; a moving target/fling can consume the ensuing touch. Critical clicks now wait after lookup, require stable bounds twice, reacquire the node, and retain before/after screenshots/trees. Full assertions stay mandatory. Inspect these artifacts if the next run fails; do not just rerun a deterministic failure. Additional previous harness fixes handled restored screen state, IME reflow, clipped controls and scroll-text accessibility.
+Fixed and regression-covered:
+- Main-frame POST navigation rejection and same-origin fragment handling. WebView callbacks are not a network firewall; full proxy interception remains unfinished.
+- HTML replacement retargets selection; CSS outline changes survive deselection. Native cookies remain HttpOnly to page JS, reveal only explicitly, transfer to the intended API jar, and stay isolated between A/B profiles.
+- Bounded editors/readouts, narrow-screen tabs, independent tool scroll positions and accessible browser output in a separate scroll container.
+- Failed API sends select the actual failed exchange/attempted identity instead of leaving a prior success visible. API UI tests exercise real HTTPS send, A/B comparison, saved collection and a rejected outside-origin request following success.
+- Keystore/AtomicFile tamper and recovery boundaries, plus actual UI evidence persistence through process force-stop/relaunch.
 
-Signed release workflow now includes actual production-signed UI checks on API 28/35/37.0 and install-over-v1.0.0 encrypted-evidence continuity with the unchanged production signer. These gates have not run successfully for 1.0.1 yet. Next: resolve native failures, pass full CI, pass exact signed APK/upgrade checks, verify public assets and update version-specific evidence/README. Keep v1.0.0 immutable and all unfinished scope below.
+Also implemented: cookie flushing, provider diagnostics and explicit dead-renderer cleanup/restart. Renderer termination recovery has source review but is not deliberately crash-injected by the UI suite; keep physical/OEM/accessibility and broader lifecycle tasks open below.
+
+Harness lessons: a lookup may scroll, so wait AFTER lookup, verify stable usable bounds and reacquire before touch. Otherwise a fling can consume a click without executing the action. Per-failure and critical before/after UI trees/screenshots use synthetic data and are CI artifacts. Direct scroll semantics on Text hid its accessible output; scroll a separate container. AVD heap is explicitly 512 MiB after a Google-services update killed system_server at a 16 MiB growth limit. Never replace deterministic regression assertions with retries of network sends.
+
+Next: pass the corrected shared-driver CI and signed-device/upgrade gates, verify public v1.0.1 assets, update README/version-specific verification/roadmap and push a documentation-only checkpoint. Keep v1.0.0 immutable and all unfinished scope below. Before the release after 1.0.1, update the pinned baseline URL/SHA in tools/verify_signed_ui.py to the latest published production APK, retaining the signer.
 
 ## Implemented increments
 
