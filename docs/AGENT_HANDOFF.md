@@ -31,6 +31,10 @@ The unreleased follow-up below updates the pinned upgrade baseline to 1.0.1 and 
 - Future signed upgrade checks now pin the published 1.0.1 URL/SHA and use its normal scroll viewport. The obsolete v1.0.0 driver flag is removed. This does not constitute a new signed upgrade run or a new release.
 - Verification: local Android checks started; CI result pending. Production remains 1.0.1. Next: obtain passing exact-source CI/device results, then continue CAP-01 license/build selection. Physical/OEM/accessibility and all unchecked scope below remain open.
 
+## CAP-01 candidate build gate (unreleased)
+
+The recursive forwarding candidate and transitive license/build review is recorded in `native/README.md`; exact revisions and license hashes are in `native/forwarder-lock.json`. `tools/verify_forwarder.py` check API 28 builds across four ABIs, 16 KiB ELF alignment and equality of two clean stripped builds. Direct Linux build pending; the connected GitHub credential cannot publish a new workflow because it lacks workflow scope. Nothing is packaged into the app. CAP-01 remains open until actual build evidence and a complete distributable notice inventory are recorded; CAP-02/CAP-03 runtime transport/forwarding are untouched.
+
 ## Implemented increments
 
 Earlier production baseline: `98425c9e4bcc7ace1a56604b0d466859db3a8e5b`, ESuite **1.0.0/code 3**. [Full CI](https://github.com/modhack2003/Esuite/actions/runs/43623409210) passed all jobs; downloaded XML confirms 23 JVM passes and 30 native cases (24 passed, six unsupported-WebView-profile skips, zero failures/errors). [Signed release workflow](https://github.com/modhack2003/Esuite/actions/runs/43623797877) passed certificate/integrity/metadata checks and installed/relaunched the exact production-signed APK on API 28, 35 and 37.0. [Stable release](https://github.com/modhack2003/Esuite/releases/tag/v1.0.0) is published. Public download checksums/certificate/source metadata were independently verified. Later documentation-only commits do not change the released application source.

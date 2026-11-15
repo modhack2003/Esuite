@@ -1,0 +1,18 @@
+{
+  "url": "https://github.com/heiher/hev-socks5-tunnel.git",
+  "revision": "1711a443d72d89679c0a2044f36085358a101bc4",
+  "ndk": "29.0.14206865",
+  "submodules": {
+    "src/core": "d12ec5962cbb777e087015db6aa73374014dd82e",
+    "third-part/hev-task-system": "83196e8286c07e9eb174505eea4d076a6503ab48",
+    "third-part/lwip": "e274b3bea0877611773b5869a63c737ef231e841",
+    "third-part/yaml": "7e2ecb0e67995d424b35e436f846078d37904b4e"
+  },
+  "licenses": {
+    "LICENSE": "3cca1a91ca82e9b9c41852945ef15858f932828ceeb765b86bc1fe3f39127514",
+    "src/core/LICENSE": "3cca1a91ca82e9b9c41852945ef15858f932828ceeb765b86bc1fe3f39127514",
+    "third-part/hev-task-system/LICENSE": "3cca1a91ca82e9b9c41852945ef15858f932828ceeb765b86bc1fe3f39127514",
+    "third-part/lwip/LICENSE": "ef4aac92e05e87cd1cdc140870ed52206ba03d4a7fe46c1e11d7ffa6c87d252b",
+    "third-part/yaml/LICENSE": "3cca1a91ca82e9b9c41852945ef15858f932828ceeb765b86bc1fe3f39127514"
+  }
+}

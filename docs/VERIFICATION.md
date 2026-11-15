@@ -82,3 +82,7 @@ JVM tests additionally cover scope/header/body admission, actual MockWebServer r
 - Crash-recovery/storage hardening: https://github.com/modhack2003/Esuite/actions/runs/43583783633
 
 Continue from [Agent handoff](AGENT_HANDOFF.md), not from an intermediate failed CI commit or the original UI-only prototype.
+
+## Forwarding candidate gate
+
+Pinned recursive source/license inventory and isolated four-ABI/API 28 native build checks added; first CI execution pending. No native library has been packaged or device forwarding verified. See native/README.md for audit boundaries.

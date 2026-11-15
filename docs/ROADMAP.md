@@ -80,3 +80,6 @@ Detailed capabilities and acceptance criteria: [Product plan](PRODUCT_PLAN.md).
 - [x] Pin the next upgrade baseline URL/SHA to 1.0.1 and remove the old-baseline scroll flag (signed execution pending next release).
 - [ ] Extend UI coverage for renderer termination, in-flight identity changes, rich auth/export/delete flows.
 - [x] Expose selected-HTML truncation metadata and a visible evaluation-output truncation notice (verification tracked in handoff).
+
+- [x] Pin the forwarding candidate and transitive license hashes; add isolated API 28/four-ABI reproducibility gate.
+- [ ] Pass candidate native builds and finish distributable per-file third-party notices before native integration (CAP-01).
