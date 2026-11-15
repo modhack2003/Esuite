@@ -37,7 +37,7 @@ public class ProductionUiTest extends NativeUiDriver {
         click("nav_findings");
         assertNotNull(find(By.textContains("Synthetic local evidence")));
         // Validate four real task inputs without sending a target request.
-        click("nav_api"); enter("api_body", "{{P1}}:{{P2}}:{{P3}}:{{P4}}");
+        click("nav_api"); enter("api_url", "https://example.test/?a={{P1}}&b={{P2}}&c={{P3}}&d={{P4}}");
         click("nav_home"); click("home_tools");
         enter("task_payload_1", "a"); enter("task_payload_2", "b");
         enter("task_payload_3", "c"); enter("task_payload_4", "d");

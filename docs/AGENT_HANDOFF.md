@@ -112,3 +112,5 @@ Earlier production baseline: `98425c9e4bcc7ace1a56604b0d466859db3a8e5b`, ESuite 
 Follow-up harness correction: return to Elements after testing Console truncation before applying CSS. The native build fetches the exact pinned commit explicitly (it is not necessarily in the default branch history) and validates the installed NDK revision. New verification pending.
 
 Device diagnostics on the first follow-up run found that Tools is entered from Home, not a bottom navigation item. The harness now uses the real Home → Tools control, which has a stable test tag. The isolated pinned candidate passed API 28 builds on all four ABIs, two equal clean stripped builds and 16 KiB ELF LOAD alignment on the connected Linux device; distribution notices and runtime forwarding remain pending.
+
+The four-list native preview fixture now puts markers in the GET query. A GET body correctly fails the existing transport validator; the previous fixture accidentally exercised that rejection instead of its intended valid-plan count. No validation was weakened.
