@@ -114,7 +114,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     Text("HTTPS-only runtime with system trust validation. No requests run on startup.", style = MaterialTheme.typography.bodySmall)
     Text("${state.workspace.exchanges.count { it.projectId == state.projectId }} history entries · ${state.workspace.findings.count { it.projectId == state.projectId }} observations")
     listOf(Screen.Browser, Screen.Traffic, Screen.Api, Screen.Tools, Screen.Findings).forEach { target ->
-        OutlinedButton(onClick = { navigate(target) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(target.label, Modifier.weight(1f)); Text("↗") }
+        OutlinedButton(onClick = { navigate(target) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("home_${target.name.lowercase()}")) { Text(target.label, Modifier.weight(1f)); Text("↗") }
     }
     Panel("Capture status", "Browser request metadata and API responses are available. Full browser interception and device-wide VPN forwarding are not implemented yet.")
     WorkspaceControls(state, model)
