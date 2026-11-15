@@ -1,0 +1,16 @@
+[
+  {
+    "path": "native/licenses/libyaml-0.2.5.txt",
+    "url": "https://raw.githubusercontent.com/yaml/libyaml/2c891fc7a770e8ba2fec34fc6b545c672beb37e6/License",
+    "sha256": "c40112449f254b9753045925248313e9270efa36d226b22d82d4cc6c43c57f29",
+    "applies_to": "third-part/yaml/",
+    "reason": "Original libyaml notice retained in addition to the fork notice; seven source files match upstream 0.2.5."
+  },
+  {
+    "path": "native/licenses/Apache-2.0.txt",
+    "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "applies_to": "Android makefiles",
+    "reason": "Full Apache-2.0 terms for the Apache-licensed Android build-file headers."
+  }
+]

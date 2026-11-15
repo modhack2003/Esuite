@@ -83,6 +83,7 @@ Detailed capabilities and acceptance criteria: [Product plan](PRODUCT_PLAN.md).
 
 - [x] Pin the forwarding candidate and transitive license hashes; add isolated API 28/four-ABI reproducibility gate.
 - [x] Pass isolated candidate API 28 native builds for four ABIs, equal clean rebuilds and 16 KiB ELF alignment (direct Linux evidence in native/README.md).
-- [ ] Finish distributable per-file third-party notices before native integration (CAP-01).
+- [x] Generate pinned conservative source/header/build notice inventory (450 files), retaining original libyaml attribution and full Apache-2.0 terms.
+- [ ] Complete final component/notice review and exact packaged-source attribution before native integration (CAP-01).
 
 - [x] Fix Android ICU payload-marker initialization and verify actual four-list controls across API 28–37.0 (full CI 43682611496; 60 native cases, 12 profile-capability skips).
