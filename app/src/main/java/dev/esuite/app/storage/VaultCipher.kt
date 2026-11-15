@@ -13,12 +13,9 @@ object VaultCipher {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key); cipher.updateAAD(magic)
         require(cipher.iv.size == 12) { "Unsupported GCM nonce length" }
-        val envelope = ByteArray(16 + cipher.getOutputSize(plaintext.size))
-        magic.copyInto(envelope)
-        cipher.iv.copyInto(envelope, 4)
-        val written = cipher.doFinal(plaintext, 0, plaintext.size, envelope, 16)
-        check(written == envelope.size - 16) { "Unexpected GCM envelope size" }
-        return envelope
+        // Retain the established provider API: output-capacity estimates differ on Android 9.
+        // Save admission reserves heap for these buffers before encryption begins.
+        return magic + cipher.iv + cipher.doFinal(plaintext)
     }
     fun open(envelope: ByteArray, key: SecretKey): ByteArray {
         require(envelope.size in 32..Limits.VAULT_BYTES + 32 && envelope.copyOfRange(0, 4).contentEquals(magic)) { "Invalid workspace envelope" }

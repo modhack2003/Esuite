@@ -78,8 +78,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             true
         } catch (e: CancellationException) { throw e }
-        catch (_: Exception) {
-            if (generation == workspaceGeneration) mutable.update { it.copy(saveError = "Encrypted save could not be verified. Current edits remain in memory. Use Save now to retry.") }
+        catch (e: Exception) {
+            val detail = if (e is WorkspacePersistence.CapacityExceeded) e.message!! else "Encrypted save could not be verified. Current edits remain in memory. Use Save now to retry."
+            if (generation == workspaceGeneration) mutable.update { it.copy(saveError = detail) }
             false
         } finally {
             if (generation == workspaceGeneration) mutable.update { it.copy(pendingWrites = maxOf(0, it.pendingWrites - 1)) }
