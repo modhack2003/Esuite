@@ -72,7 +72,9 @@ Detailed capabilities and acceptance criteria: [Product plan](PRODUCT_PLAN.md).
 - [x] Pass build/lint/JVM/native Android 9–17 gates; per-version outcomes and capability skips recorded in VERIFICATION.md.
 - [x] Configure durable private signer, verified local recovery copy and pinned public certificate; owner retains offline recovery responsibility.
 - [x] Publish verified APK/checksums/metadata as stable GitHub release v1.0.0; exact signed APK installation/relaunch checks passed.
-- [ ] Test the first cross-version production upgrade when the next release exists.
+- [x] Verify 1.0.0 → 1.0.1 same-signer upgrades retain encrypted evidence on API 28/35/37.0.
 - [ ] Complete physical/OEM/accessibility and remaining production-readiness checks above.
 
-- [ ] Browser audit patch: actual optimized-APK HTTPS/inspector/cookie/storage/transfer/POST-scope controls pass on compatible WebViews; publish only after CI and same-signer upgrade checks. Source fixes and regression cases are in progress.
+- [x] Publish 1.0.1 browser audit patch after actual optimized/signed-APK HTTPS, inspector, cookie/storage/transfer, API/error-state, POST-scope and same-signer upgrade gates pass. See VERIFICATION.md for exact provider skips.
+- [ ] Before the next release, pin the upgrade baseline URL/SHA to 1.0.1 and update/remove the old-baseline scroll flag.
+- [ ] Extend UI coverage for renderer termination, in-flight identity changes, rich auth/export/delete and explicit inspector truncation markers.

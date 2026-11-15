@@ -1,22 +1,24 @@
 # Use ESuite on Android 9–17
 
-Download the [production-signed ESuite 1.0.0 APK](https://github.com/modhack2003/Esuite/releases/download/v1.0.0/ESuite-1.0.0.apk) from [GitHub Releases](https://github.com/modhack2003/Esuite/releases/tag/v1.0.0), open it on your Android phone, and follow Android's installation prompt. Runtime needs no root or computer. The release includes SHA256SUMS and build-info.json; [verification evidence](VERIFICATION.md) records Android 9–17 results and capability skips. Internal CI fixtures are not production downloads.
+Download the [production-signed ESuite 1.0.1 APK](https://github.com/modhack2003/Esuite/releases/download/v1.0.1/ESuite-1.0.1.apk) from [GitHub Releases](https://github.com/modhack2003/Esuite/releases/tag/v1.0.1), open it on your Android phone, and follow Android's installation prompt. Install this update over production 1.0.0 to retain its encrypted workspace. Runtime needs no root or computer. The release includes SHA256SUMS and build-info.json; [verification evidence](VERIFICATION.md) records Android 9–17 results and capability skips. Internal CI fixtures are not production downloads.
 
 ## Start an assessment
 
 1. Open Home and create a project with a name and exact **HTTPS origin** such as `https://app.example.test`. Enter no URL path, query or credentials. No request is sent merely by creating a project.
-2. Choose identity A or B. Each project/identity has independent browser and API state. The browser requires the WebView multi-profile feature; update Android System WebView if the app reports it unavailable.
+2. Choose identity A or B. Each project/identity has independent browser and API state. The browser requires the WebView multi-profile feature; check the displayed provider/version and update Android System WebView if the app reports it unavailable. Unsupported providers disable Browser while API Lab remains available.
 3. Open Browser, enter an in-scope URL and tap Go. Cross-origin top-level login redirects are blocked in this version; use an in-scope test login flow. Explicit multi-origin scope is future work.
 
 ## Inspect a page and its session
 
-- Elements: Select element, tap the page, then Read selection. Apply HTML/CSS changes locally; they do not change server data or prove a vulnerability.
+- Elements: Select element, tap the page, then Read selection. Apply HTML/CSS changes to the live DOM; they do not edit server source or prove a vulnerability. Page scripts/resource loads retain normal network behavior.
 - Cookies: Read native cookies. Values are hidden until explicitly revealed. Attribute visibility depends on WebView feature support. Set accepts a normal Set-Cookie value including attributes.
 - To API jar: replaces the current identity's memory-only API cookie jar with browser cookies matching this URL. Supported metadata preserves domain/path/Secure/HttpOnly. The UI discloses narrower feature support/fallback behavior. No request runs during transfer.
 - Storage: explicitly read or clear this page's localStorage/sessionStorage.
 - Console: evaluate JavaScript in the current page and read page console messages. Page code gets no native bridge or vault access.
 
-Third-party subresources can load normally but are not recorded outside scope. TLS errors are cancelled. Existing Chrome cookies are not read.
+Inspection snapshots are bounded (16,000 characters of selected HTML; 24,000 characters of displayed evaluation output), so large pages/storage snapshots can be partial. Leaving Browser destroys the current page instance; return and press Go to reload. Isolated profile cookies are managed separately and follow their expiry/session rules; page edits and console state are ephemeral.
+
+Third-party subresources can load normally but are not recorded outside scope. Navigation checks are not a complete network firewall. TLS errors are cancelled. Existing Chrome cookies are not read.
 
 ## Replay and compare APIs
 
