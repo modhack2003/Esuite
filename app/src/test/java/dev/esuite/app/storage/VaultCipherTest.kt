@@ -7,6 +7,19 @@ import javax.crypto.spec.SecretKeySpec
 
 class VaultCipherTest {
     private val key = SecretKeySpec(ByteArray(32) { it.toByte() }, "AES")
+    @Test fun optimizedEnvelopeRetainsVersionOneCipherCompatibility() {
+        val plain = "old encrypted workspace fixture".toByteArray()
+        val magic = byteArrayOf(69, 83, 86, 49)
+        val legacy = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+        legacy.init(javax.crypto.Cipher.ENCRYPT_MODE, key); legacy.updateAAD(magic)
+        val oldEnvelope = magic + legacy.iv + legacy.doFinal(plain)
+        assertArrayEquals(plain, VaultCipher.open(oldEnvelope, key))
+        val current = VaultCipher.seal(plain, key)
+        val oldReader = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+        oldReader.init(javax.crypto.Cipher.DECRYPT_MODE, key, javax.crypto.spec.GCMParameterSpec(128, current.copyOfRange(4,16)))
+        oldReader.updateAAD(magic)
+        assertArrayEquals(plain, oldReader.doFinal(current.copyOfRange(16,current.size)))
+    }
     @Test fun roundTripHasFreshNoncesAndDoesNotExposePlaintext() {
         val plain = "secret-session-credentials".toByteArray()
         val a = VaultCipher.seal(plain, key); val b = VaultCipher.seal(plain, key)

@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalFocusManager
@@ -76,9 +77,11 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel, modif
         }
         if (rendererFailed) OutlinedButton(onClick = { rendererFailed = false; output = "Press Go to reload the target" }) { Text("Restart browser renderer") }
         else key(project.id, identity) {
-            AndroidView(modifier = Modifier.fillMaxWidth().testTag("browser_page").then(if (panel == "Page") Modifier.weight(1f) else Modifier.height(0.dp)), factory = { context ->
+            AndroidView(modifier = Modifier.fillMaxWidth().clipToBounds().testTag("browser_page").then(if (panel == "Page") Modifier.weight(1f) else Modifier.height(0.dp)), factory = { context ->
                 WebView(context).apply {
                     setBackgroundColor(android.graphics.Color.WHITE)
+                    clipToOutline = true
+                    outlineProvider = android.view.ViewOutlineProvider.BOUNDS
                     if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) WebViewCompat.setProfile(this, "esuite_${project.id}_$identity")
                     settings.javaScriptEnabled = true; settings.domStorageEnabled = true
                     settings.allowFileAccess = false; settings.allowContentAccess = false
@@ -118,7 +121,7 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel, modif
                     }
                     webView = this
                 }
-            })
+            }, update = { view -> view.visibility = if (panel == "Page") android.view.View.VISIBLE else android.view.View.INVISIBLE })
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf("Page", "Elements", "Cookies", "Storage", "Console").forEach { tab -> TextButton(modifier = Modifier.weight(1f).testTag("browser_tab_${tab.lowercase()}"), contentPadding = PaddingValues(horizontal = 4.dp), onClick = { dismissEditor(); panel = tab; output = "" }) { Text(tab, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) } }

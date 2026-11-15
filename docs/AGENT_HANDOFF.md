@@ -18,6 +18,8 @@ Saved status requires zero pending writers and equality with the actual committe
 
 Focused EGM audits and follow-up resolution are in `docs/reviews/release-1.0.2-persistence.md` and `release-1.0.2-browser.md`. Direct platform tests cover deployed v1 migration, unknown-newer nonmutation, actual encrypted pruning and silent atomic-finish failure. Independent UI tests cover committed-save/process restart and real browser painting. Deterministic ViewModel scheduler-interleaving coverage, physical/OEM/accessibility and broader data-lifecycle gates remain unfinished; they are not implied by helper/JVM tests.
 
+The first candidate CI (43709902918) exposed a real oversized-history serialization OOM on 192 MiB Android heaps, despite passing local JVM/build gates. The follow-up uses bounded streaming byte counting and one exact UTF-8 allocation before encryption, avoids envelope/ciphertext concatenation copies, and verifies commits in 8 KiB chunks. Its native screenshot also showed a zero-height WebView overpainting inspector controls; Page now uses explicit clipping and the retained view is INVISIBLE outside Page. An added screenshot check rejects a white inspector. The identity test now uses the actual fixed header row bounds (the generic screen-ratio guard incorrectly rejected fully visible chips). Final revalidation is pending; the failed run is retained as evidence.
+
 Release intent: 1.0.2/code 5, same durable signer. Exact-source CI, signed install/upgrade from pinned 1.0.1, and publication are pending. No local debug/unsigned APK is a deliverable. All original unfinished product scope remains below.
 
 ## Current production checkpoint — 1.0.1/code 4

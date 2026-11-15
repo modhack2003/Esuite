@@ -89,6 +89,7 @@ public class ProductionUiTest extends NativeUiDriver {
         assertNotNull(find(By.textContains("esuite_ui")));
         // Profile A persists after leaving Browser; B remains independent.
         top(); click("identity_B"); click("nav_browser"); readCookies("No cookies for this URL");
+        assertDarkInspector();
         top(); click("identity_A"); readCookies("esuite_ui=[HIDDEN]");
         top(); click("browser_go"); output("Page loaded");
         evaluate("const f=document.createElement('form'); f.method='POST'; f.action='https://outside.invalid/blocked'; document.body.appendChild(f); f.submit(); 'Submitting fixture'", "Blocked navigation outside project scope");
@@ -123,6 +124,25 @@ public class ProductionUiTest extends NativeUiDriver {
             total++;
         }
         return matches >= total * 9 / 10;
+    }
+    private void assertDarkInspector() throws Exception {
+        long until = android.os.SystemClock.uptimeMillis() + 10000;
+        do {
+            UiObject2 panel = device.findObject(By.res("browser_inspector"));
+            android.graphics.Bitmap shot = InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();
+            if (panel != null && shot != null) {
+                android.graphics.Rect bounds = panel.getVisibleBounds();
+                int matches = 0;
+                for (int x = 1; x <= 5; x++) {
+                    int color = shot.getPixel(bounds.left + bounds.width()*x/6, bounds.bottom - 8);
+                    if (Math.abs(android.graphics.Color.red(color)-7) < 16 && Math.abs(android.graphics.Color.green(color)-16) < 16 && Math.abs(android.graphics.Color.blue(color)-25) < 16) matches++;
+                }
+                shot.recycle();
+                if (matches == 5) { checkpoint("dark-inspector-profile-B"); return; }
+            } else if (shot != null) shot.recycle();
+            android.os.SystemClock.sleep(250);
+        } while (android.os.SystemClock.uptimeMillis() < until);
+        fail("Hidden page overpainted the inspector background");
     }
     private void assertVisiblePagePattern() throws Exception {
         android.graphics.Bitmap blank = android.graphics.Bitmap.createBitmap(100, 100, android.graphics.Bitmap.Config.ARGB_8888);

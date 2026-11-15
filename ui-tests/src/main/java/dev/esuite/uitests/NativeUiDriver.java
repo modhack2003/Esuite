@@ -39,6 +39,10 @@ public abstract class NativeUiDriver {
             if(id!=null && id.startsWith("nav_")) return true;
             UiObject2 home=device.findObject(By.res("nav_home"));
             int bottom=home==null?device.getDisplayHeight():home.getVisibleBounds().top;
+            if (id != null && id.startsWith("identity_")) {
+                UiObject2 row = device.findObject(By.res("browser_identity_row"));
+                if (row != null) return row.getVisibleBounds().contains(bounds) && bounds.height() >= 24 && bounds.bottom < bottom - 3;
+            }
             // Accessibility can expose controls clipped by the scroll viewport or covered by navigation.
             return bounds.top>device.getDisplayHeight()/24 && bounds.bottom<bottom-3;
         } catch(androidx.test.uiautomator.StaleObjectException ignored) { return false; }

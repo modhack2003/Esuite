@@ -79,7 +79,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     }) { inset ->
         if (screen == Screen.Browser && project != null) {
             Column(Modifier.fillMaxSize().padding(inset).imePadding().padding(horizontal = 8.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth().testTag("browser_identity_row"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(project.name, Modifier.weight(1f).align(androidx.compose.ui.Alignment.CenterVertically), maxLines = 1, color = Signal)
                     listOf("A", "B").forEach { identity ->
                         FilterChip(modifier = Modifier.testTag("identity_$identity"), selected = state.identity == identity,

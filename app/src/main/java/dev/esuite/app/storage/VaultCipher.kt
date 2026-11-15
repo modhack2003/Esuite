@@ -13,13 +13,18 @@ object VaultCipher {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key); cipher.updateAAD(magic)
         require(cipher.iv.size == 12) { "Unsupported GCM nonce length" }
-        return magic + cipher.iv + cipher.doFinal(plaintext)
+        val envelope = ByteArray(16 + cipher.getOutputSize(plaintext.size))
+        magic.copyInto(envelope)
+        cipher.iv.copyInto(envelope, 4)
+        val written = cipher.doFinal(plaintext, 0, plaintext.size, envelope, 16)
+        check(written == envelope.size - 16) { "Unexpected GCM envelope size" }
+        return envelope
     }
     fun open(envelope: ByteArray, key: SecretKey): ByteArray {
         require(envelope.size in 32..Limits.VAULT_BYTES + 32 && envelope.copyOfRange(0, 4).contentEquals(magic)) { "Invalid workspace envelope" }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, envelope.copyOfRange(4, 16)))
         cipher.updateAAD(magic)
-        return cipher.doFinal(envelope.copyOfRange(16, envelope.size))
+        return cipher.doFinal(envelope, 16, envelope.size - 16)
     }
 }
