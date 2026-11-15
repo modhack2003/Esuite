@@ -61,13 +61,41 @@ public class ProductionUiTest {
         throw new AssertionError("Native control not found: " + selector);
     }
     private UiObject2 tag(String name) { return find(By.res(name)); }
+    private int actionSequence=0;
+    private void actionEvidence(String name) {
+        if(!name.equals("api_send") && !name.equals("api_compare") && !name.equals("api_session_metadata")) return;
+        try {
+            java.io.File dir=InstrumentationRegistry.getInstrumentation().getContext().getExternalFilesDir(null);
+            if(dir!=null) {
+                String label=String.format(java.util.Locale.ROOT,"%02d-%s",++actionSequence,name);
+                device.takeScreenshot(new java.io.File(dir,label+".png"));
+                device.dumpWindowHierarchy(new java.io.File(dir,label+".xml"));
+            }
+        } catch(Exception error) { throw new AssertionError("Could not retain critical UI action evidence",error); }
+    }
     private void click(String name) {
-        for (int attempt=0;attempt<3;attempt++) {
-            try { device.waitForIdle(1000); tag(name).click(); return; }
-            catch (androidx.test.uiautomator.StaleObjectException stale) {
-                if(attempt==2) throw stale;
+        for (int attempt=0;attempt<5;attempt++) {
+            try {
+                tag(name); // May scroll. Wait AFTER this lookup so a fling cannot swallow the click.
+                device.waitForIdle(2000);
+                UiObject2 current=device.findObject(By.res(name));
+                if(!usable(current)) continue;
+                android.graphics.Rect before=current.getVisibleBounds();
+                android.os.SystemClock.sleep(250);
+                current=device.findObject(By.res(name));
+                if(!usable(current) || !before.equals(current.getVisibleBounds())) continue;
+                actionEvidence(name);
+                current=device.findObject(By.res(name));
+                if(!usable(current) || !before.equals(current.getVisibleBounds())) continue;
+                current.click();
+                device.waitForIdle(1000);
+                actionEvidence(name);
+                return;
+            } catch (androidx.test.uiautomator.StaleObjectException stale) {
+                if(attempt==4) throw stale;
             }
         }
+        throw new AssertionError("Control never stopped moving: "+name);
     }
     private void enter(String name, String value) {
         tag(name).setText(value);
