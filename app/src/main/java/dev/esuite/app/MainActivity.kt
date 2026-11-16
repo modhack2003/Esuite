@@ -107,7 +107,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
                 Screen.Browser -> if (project != null) BrowserScreen(project, state.identity, model) else Text("Create a project first.")
                 Screen.Traffic -> TrafficScreen(state, model) { selectedName = Screen.Api.name }
                 Screen.Api -> ApiScreen(state, model)
-                Screen.Findings -> FindingsScreen(state, model)
+                Screen.Findings -> FindingsScreen(state, model) { selectedName = Screen.Api.name }
                 Screen.Tools -> ToolsScreen(state, model)
             }
             Spacer(Modifier.height(20.dp))
@@ -197,7 +197,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     }
 }
 
-@Composable private fun FindingsScreen(state: AppState, model: AppViewModel) {
+@Composable private fun FindingsScreen(state: AppState, model: AppViewModel, openApi: () -> Unit) {
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     var title by remember { mutableStateOf("") }; var detail by remember { mutableStateOf("") }
@@ -212,8 +212,56 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     OutlinedTextField(detail, { detail = it }, label = { Text("Evidence / reproduction / next test") }, minLines = 3, modifier = Modifier.fillMaxWidth().testTag("finding_detail"))
     Button(modifier = Modifier.testTag("save_finding"), onClick = { if (model.addFinding(title, detail)) { title = ""; detail = ""; focus.clearFocus(); keyboard?.hide() } }, enabled = state.projectId != null) { Text("Save observation") }
     state.workspace.findings.filter { it.projectId == state.projectId }.forEach { finding ->
-        Panel("${finding.state}: ${finding.title}", finding.detail + "\nEvidence: " + finding.evidenceIds.joinToString())
-        TextButton(onClick = { model.deleteFinding(finding.id) }) { Text("Remove observation") }
+        key(finding.id) {
+            var confirmRemoval by remember { mutableStateOf(false) }
+            Panel("${finding.state}: ${finding.title}", finding.detail)
+            FindingEvidence(finding, model, openApi)
+            TextButton(onClick = { confirmRemoval = true }) { Text("Remove observation") }
+            if (confirmRemoval) AlertDialog(onDismissRequest = { confirmRemoval = false },
+                title = { Text("Remove this observation?") },
+                text = { Text("The note and its ${finding.evidence.size} retained request/response copies are deleted from the encrypted workspace. This cannot be undone.") },
+                confirmButton = { TextButton(onClick = { confirmRemoval = false; model.deleteFinding(finding.id) }) { Text("Remove observation and evidence") } },
+                dismissButton = { TextButton(onClick = { confirmRemoval = false }) { Text("Keep observation") } })
+        }
+    }
+}
+
+/** One row per referenced evidence id: a viewer for a retained snapshot, an explicit state for a reference with none. */
+@Composable private fun FindingEvidence(finding: Finding, model: AppViewModel, openApi: () -> Unit) {
+    if (finding.evidenceIds.isEmpty()) {
+        Text("No exchange was attached to this observation.", style = MaterialTheme.typography.bodySmall, color = Muted)
+        return
+    }
+    val missing = EvidenceRetention.missing(finding).toSet()
+    finding.evidenceIds.forEachIndexed { index, evidenceId ->
+        key(evidenceId) {
+            val snapshot = finding.evidence.firstOrNull { it.id == evidenceId }
+            if (snapshot == null || evidenceId in missing) {
+                Text("Evidence not retained — history was cleared or this observation predates evidence retention.",
+                    style = MaterialTheme.typography.bodySmall, color = Muted)
+            } else {
+                var shown by remember { mutableStateOf(false) }
+                var confirmEvidence by remember { mutableStateOf(false) }
+                OutlinedButton(modifier = Modifier.fillMaxWidth().testTag("finding_evidence_$index"), onClick = { shown = !shown }) {
+                    Text("${if (shown) "Hide" else "Show"} retained evidence · ${snapshot.request.method} ${snapshot.request.url}")
+                }
+                if (shown) {
+                    Panel("Retained evidence · ${snapshot.status ?: if (snapshot.error != null) "error" else "metadata only"} · ${snapshot.durationMs} ms",
+                        "identity ${snapshot.identity} · ${snapshot.source}\n${snapshot.completeness}\n" +
+                            "Immutable copy saved with the observation; bodies are capped at ${Limits.EVIDENCE_BYTES} bytes.\n${snapshot.error.orEmpty()}\n\n" +
+                            snapshot.request.headers.joinToString("\n") { "${it.name}: ${it.value}" } + "\n\n${snapshot.request.body}\n\n" +
+                            snapshot.responseHeaders.joinToString("\n") { "${it.name}: ${it.value}" } +
+                            "\n\n${snapshot.response.encoding}${if (snapshot.response.truncated) " · TRUNCATED" else ""}\n${snapshot.response.value}")
+                    Button(onClick = { model.replay(snapshot); openApi() }) { Text("To API Lab (review before sending)") }
+                    TextButton(onClick = { confirmEvidence = true }) { Text("Remove retained evidence") }
+                }
+                if (confirmEvidence) AlertDialog(onDismissRequest = { confirmEvidence = false },
+                    title = { Text("Remove this retained evidence?") },
+                    text = { Text("The saved request/response copy is deleted. The observation keeps its reference and will report evidence as not retained.") },
+                    confirmButton = { TextButton(onClick = { confirmEvidence = false; model.removeEvidence(finding.id, snapshot.id) }) { Text("Remove evidence") } },
+                    dismissButton = { TextButton(onClick = { confirmEvidence = false }) { Text("Keep evidence") } })
+            }
+        }
     }
 }
 

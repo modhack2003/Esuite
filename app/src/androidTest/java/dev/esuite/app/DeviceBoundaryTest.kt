@@ -88,6 +88,72 @@ class DeviceBoundaryTest {
         } finally { vault.erase() }
     }
 
+    @Test fun retainedFindingEvidenceSurvivesHistoryClearingOnRealKeystoreSaves() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val vault = WorkspaceVault(context)
+        vault.erase()
+        try {
+            val project = Project(name = "Retention fixture", origin = "https://example.test")
+            val captured = Exchange(projectId = project.id, identity = "A",
+                request = RequestDraft("POST", project.origin + "/api", listOf(Header("X-Test", "synthetic")), "retained-request"),
+                status = 200, responseHeaders = listOf(Header("Content-Type", "application/json")), response = StoredBody("retained-response"))
+            val snapshot = EvidenceRetention.snapshot(captured)
+            val finding = Finding(projectId = project.id, title = "Retention", detail = "evidence must outlive history",
+                evidenceIds = listOf(captured.id), evidence = listOf(snapshot))
+            val history = List(Limits.HISTORY - 1) { Exchange(projectId = project.id, identity = "A", request = RequestDraft(url = project.origin + "/$it")) }
+            vault.save(Workspace(projects = listOf(project), exchanges = listOf(captured) + history, findings = listOf(finding)))
+            // clearHistory() then a save: the disposable region goes, the durable snapshot stays.
+            vault.save(Workspace(projects = listOf(project), exchanges = emptyList(), findings = listOf(finding)))
+            val reloaded = WorkspaceVault(context).load()
+            assertEquals(1, reloaded.findings.size)
+            assertTrue(reloaded.exchanges.isEmpty())
+            val retained = reloaded.findings.single().evidence.single()
+            assertEquals(Json.encodeToString(Exchange.serializer(), snapshot), Json.encodeToString(Exchange.serializer(), retained))
+            assertTrue(EvidenceRetention.missing(reloaded.findings.single()).isEmpty())
+        } finally { vault.erase() }
+    }
+
+    @Test fun deployedVersionTwoBackfillsRetainedEvidenceOnDevice() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val vault = WorkspaceVault(context)
+        vault.erase()
+        try {
+            val project = Project(name = "Backfill fixture", origin = "https://example.test")
+            val live = Exchange(projectId = project.id, identity = "A",
+                request = RequestDraft(url = project.origin + "/api", body = "backfill-request"),
+                status = 200, response = StoredBody("backfill-response"))
+            val finding = Finding(projectId = project.id, title = "Old note", detail = "Repair my evidence",
+                evidenceIds = listOf(live.id, "gone-on-device"))
+            vault.save(Workspace(version = 2, projects = listOf(project), exchanges = listOf(live), findings = listOf(finding)))
+            val migrated = WorkspaceVault(context).load()
+            assertEquals(WorkspaceSchema.CURRENT_VERSION, migrated.version)
+            val repaired = migrated.findings.single()
+            assertEquals(listOf(EvidenceRetention.snapshot(live)), repaired.evidence)
+            assertEquals(listOf("gone-on-device"), EvidenceRetention.missing(repaired))
+            assertEquals(finding.evidenceIds, repaired.evidenceIds)
+        } finally { vault.erase() }
+    }
+
+    @Test fun retainedEvidenceSurvivesTheEncryptedSavePrune() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val vault = WorkspaceVault(context)
+        vault.erase()
+        try {
+            val project = Project(name = "Prune retention fixture", origin = "https://example.test")
+            val body = "x".repeat(Limits.RESPONSE_BYTES)
+            val captured = Exchange(projectId = project.id, identity = "A",
+                request = RequestDraft(url = project.origin + "/api", body = "pruned-request"), status = 200, response = StoredBody("pruned-response"))
+            val finding = Finding(projectId = project.id, title = "Prune", detail = "evidence must outlive pruning",
+                evidenceIds = listOf(captured.id), evidence = listOf(EvidenceRetention.snapshot(captured)))
+            val snapshot = Workspace(projects = listOf(project), findings = listOf(finding), exchanges = List(80) {
+                Exchange(projectId = project.id, identity = "A", request = RequestDraft(url = project.origin, body = body), response = StoredBody(body)) })
+            val persisted = vault.save(snapshot)
+            assertTrue(persisted.exchanges.size < snapshot.exchanges.size)
+            assertEquals(snapshot.findings, persisted.findings)
+            assertEquals(persisted, WorkspaceVault(context).load())
+        } finally { vault.erase() }
+    }
+
     @Test fun payloadMarkersInitializeAndSubstituteOnAndroidIcu() {
         val draft = RequestDraft(url = "https://example.test/?a={{P1}}&b={{P2}}&c={{P3}}&d={{P4}}")
         val plan = dev.esuite.app.automation.RequestPlans.payloadsFromText(draft,

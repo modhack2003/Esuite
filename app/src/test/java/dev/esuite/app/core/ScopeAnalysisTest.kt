@@ -27,6 +27,19 @@ class ScopeAnalysisTest {
         assertEquals("[BODY OMITTED]", redacted.response.value)
         assertEquals("[REDACTED]", redacted.responseHeaders.last().value)
         assertTrue(ResponseComparer.compare(e, e.copy(identity = "B")).contains("Body: equal"))
+        // A sanitized export must omit free text, paths, bodies and header values from capture
+        // history AND from evidence retained on a finding.
+        val project = Project(id = "p", name = "Export fixture", origin = "https://example.test")
+        val evidence = e.copy(id = "ex-export", projectId = project.id,
+            request = e.request.copy(url = "https://example.test/sensitive-path?unusual_secret=yes", headers = listOf(Header("X-Custom", "leaky-header-value"))),
+            response = StoredBody("private-response"))
+        val workspace = Workspace(projects = listOf(project), exchanges = listOf(evidence),
+            findings = listOf(Finding(id = "f-export", projectId = project.id, title = "Secret observation title", detail = "secret free text",
+                evidenceIds = listOf(evidence.id), evidence = listOf(EvidenceRetention.snapshot(evidence)))))
+        val report = ReportExporter.sanitized(workspace, project.id)
+        listOf("sensitive-path", "unusual_secret", "leaky-header-value", "private-response", "secret free text", "Secret observation title")
+            .forEach { assertFalse("sanitized export leaked $it", report.contains(it)) }
+        assertTrue(report.contains("[PATH OMITTED]") && report.contains("[BODY OMITTED]"))
     }
     @Test fun tokenStatisticsAndClaimsRemainUnverified() {
         assertTrue(TokenTools.sample(listOf("aaa", "aaa")).contains("Duplicate samples: 1"))

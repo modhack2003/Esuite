@@ -322,11 +322,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val project = currentProject() ?: return false
         return runCatching {
             require(title.isNotBlank() && title.length <= 200 && detail.isNotBlank() && detail.length <= 16000) { "Use a 1–200 character title and 1–16000 character detail" }
-            val finding = Finding(projectId = project.id, title = title, detail = detail, evidenceIds = listOfNotNull(evidence?.id))
+            // The bounded snapshot is part of the admitted record: the durable budget decides on the
+            // finding WITH its retained evidence, so an accepted observation can never lose it later.
+            val finding = Finding(projectId = project.id, title = title, detail = detail, evidenceIds = listOfNotNull(evidence?.id),
+                evidence = listOfNotNull(evidence?.let(EvidenceRetention::snapshot)))
             mutable.update {
                 require(it.workspace.findings.size < Limits.FINDINGS) { "Observation limit reached. Remove saved items before adding more." }
                 val next = it.workspace.copy(findings = listOf(finding) + it.workspace.findings)
-                WorkspaceBudget.requireDurableCapacity(next)
+                try { WorkspaceBudget.requireDurableCapacity(next) } catch (e: IllegalArgumentException) {
+                    throw if (finding.evidence.isEmpty()) e
+                    else IllegalArgumentException("Retained evidence does not fit the durable budget. Remove saved observations or their evidence before adding more.")
+                }
                 it.copy(workspace = next, message = "Observation added; not automatically verified.")
             }
             persistDurable()
@@ -334,6 +340,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun deleteSavedRequest(id: String) { mutable.update { it.copy(workspace = it.workspace.copy(savedRequests = it.workspace.savedRequests.filterNot { r -> r.id == id })) }; persistDurable() }
     fun deleteFinding(id: String) { mutable.update { it.copy(workspace = it.workspace.copy(findings = it.workspace.findings.filterNot { f -> f.id == id })) }; persistDurable() }
+    /** Drop one retained snapshot but keep its id, so the reference reports the explicit missing state. */
+    fun removeEvidence(findingId: String, exchangeId: String) {
+        mutable.update {
+            it.copy(workspace = it.workspace.copy(findings = it.workspace.findings.map { f ->
+                if (f.id == findingId) f.copy(evidence = f.evidence.filterNot { e -> e.id == exchangeId }) else f
+            }), message = "Retained evidence removed. The observation keeps its reference and now reports evidence as not retained.")
+        }
+        persistDurable()
+    }
     fun clearHistory() { mutable.update { it.copy(workspace = it.workspace.copy(exchanges = it.workspace.exchanges.filterNot { e -> e.projectId == it.projectId }), selected = null) } }
     override fun onCleared() { engine.close(); super.onCleared() }
 }

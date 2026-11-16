@@ -100,7 +100,7 @@ Detailed capabilities and acceptance criteria: [Product plan](PRODUCT_PLAN.md).
 
 Evidence and exact acceptance: [Vivo 1.0.2 review](reviews/vivo-1.0.2-production-readiness.md). This targeted physical audit does not close the broader OEM/accessibility backlog.
 
-- [ ] QA-01: retain bounded finding evidence independently of disposable history; add attachment viewing/missing-evidence states.
+- [x] QA-01: retain bounded finding evidence independently of disposable history; add attachment viewing/missing-evidence states.
 - [ ] QA-02/03: preserve pending editor/finding state across navigation; prevent keyboard autocorrection of technical input.
 - [ ] QA-05/08: guard in-flight result identity/context; support loaded-profile deletion and unreadable-vault profile cleanup.
 - [ ] QA-04/06/07/10/12/13: adapt font/rotation/IME layouts, selected tabs and native tokens; expose context/status/task cancellation; open Traffic details; define last-used project behavior.
