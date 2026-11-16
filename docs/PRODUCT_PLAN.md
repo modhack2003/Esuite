@@ -10,6 +10,10 @@ Planning baseline: 14 November 2026. Revision 2 adds a broad Burp-inspired featu
 - Testing necessarily sends requests and selected authentication material to the intended target. Local-only means no intermediary collection or processing service; it does not mean targets can be tested without networking.
 - Cloud assessment remains in the roadmap; direct provider API calls can be made from the phone later, with findings retained locally.
 
+## Commercial scope clarification — 16 November 2026
+
+The owner confirmed a commercial Android app with evidence kept local. Mandatory cloud accounts, hosted evidence, synchronization and telemetry are outside this request. The first paid scope should be defined around the implemented manual browser/API workbench; unavailable interception/scanning capabilities must remain visibly planned. [The physical Vivo review](reviews/vivo-1.0.2-production-readiness.md) lists current correctness defects, UI improvements, local reporting/recovery needs and commercial release gates. Distribution, pricing/entitlements, offline guarantees and support remain explicit decisions; no payment/backend integration is implied by this clarification. Original capability scope and unfinished milestones below remain intact.
+
 ## Product workflow
 
 Create project and target scope → browse or select an app to capture → inspect request → send a copy to the API editor → choose a test identity → compare results → save evidence.

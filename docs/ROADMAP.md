@@ -14,7 +14,7 @@ Current implementation and next-agent entry point: [Agent handoff](AGENT_HANDOFF
 - [x] Local Base64, form URL and SHA-256 utilities with unit tests.
 - [x] Gradle wrapper, CI definition and contributor guidance.
 - [x] Canva concept board and MagicPath interaction design.
-- [ ] Superdesign output (deferred at user request; existing brief retained).
+- [ ] Superdesign output (16 November: CLI authenticated; API returned 502 on initial attempt and retry; no draft produced; local source context prepared).
 
 ## M0 — prove the capture design
 
@@ -95,3 +95,15 @@ Detailed capabilities and acceptance criteria: [Product plan](PRODUCT_PLAN.md).
 - [x] Pass exact-source local/CI Android gates and all API 28–37.0 jobs (source 2fc166d; CI 43831951202; 52 JVM passes; 100 native cases, 88 passes/12 profile-capability skips).
 - [x] Pass exact signed-APK install/upgrade-from-1.0.1 gates and publish 1.0.2 with the existing signer (release 43833769184; 14 passes/one profile-capability skip; public download independently verified).
 - [ ] Extend deterministic ViewModel concurrency, physical/OEM/accessibility and broader lifecycle/export coverage. These remain separate from the candidate's fixture gates.
+
+## Vivo audit and commercial local-app release gates
+
+Evidence and exact acceptance: [Vivo 1.0.2 review](reviews/vivo-1.0.2-production-readiness.md). This targeted physical audit does not close the broader OEM/accessibility backlog.
+
+- [ ] QA-01: retain bounded finding evidence independently of disposable history; add attachment viewing/missing-evidence states.
+- [ ] QA-02/03: preserve pending editor/finding state across navigation; prevent keyboard autocorrection of technical input.
+- [ ] QA-05/08: guard in-flight result identity/context; support loaded-profile deletion and unreadable-vault profile cleanup.
+- [ ] QA-04/06/07/10/12/13: adapt font/rotation/IME layouts, selected tabs and native tokens; expose context/status/task cancellation; open Traffic details; define last-used project behavior.
+- [ ] QA-09/11: disclose Storage field truncation; add selected redacted evidence reports and define optional encrypted local backup/restore.
+- [ ] Define paid local-app distribution, offline entitlement/update/support and privacy/license disclosures without hosted evidence or automatic diagnostics uploads.
+- [ ] Pass fixes on the physical Vivo and supported providers, plus exact-source/signed upgrade gates, before claiming paid production readiness.
