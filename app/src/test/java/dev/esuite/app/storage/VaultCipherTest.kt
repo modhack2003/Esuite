@@ -20,6 +20,19 @@ class VaultCipherTest {
         oldReader.updateAAD(magic)
         assertArrayEquals(plain, oldReader.doFinal(current.copyOfRange(16,current.size)))
     }
+    @Test fun multiChunkEnvelopeRetainsEveryByteAndRejectsCorruption() {
+        val plain = ByteArray(9 * 64 * 1024 + 17) { (it * 31).toByte() }
+        val encrypted = VaultCipher.seal(plain, key)
+        assertEquals(plain.size + 32, encrypted.size)
+        assertArrayEquals(plain, VaultCipher.open(encrypted, key))
+        val legacy = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+        legacy.init(javax.crypto.Cipher.DECRYPT_MODE, key,
+            javax.crypto.spec.GCMParameterSpec(128, encrypted.copyOfRange(4, 16)))
+        legacy.updateAAD(byteArrayOf(69, 83, 86, 49))
+        assertArrayEquals(plain, legacy.doFinal(encrypted.copyOfRange(16, encrypted.size)))
+        encrypted[100000] = (encrypted[100000].toInt() xor 1).toByte()
+        assertThrows(Exception::class.java) { VaultCipher.open(encrypted, key) }
+    }
     @Test fun roundTripHasFreshNoncesAndDoesNotExposePlaintext() {
         val plain = "secret-session-credentials".toByteArray()
         val a = VaultCipher.seal(plain, key); val b = VaultCipher.seal(plain, key)
