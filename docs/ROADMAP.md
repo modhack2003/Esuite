@@ -77,7 +77,7 @@ Detailed capabilities and acceptance criteria: [Product plan](PRODUCT_PLAN.md).
 - [ ] Complete physical/OEM/accessibility and remaining production-readiness checks above.
 
 - [x] Publish 1.0.1 browser audit patch after actual optimized/signed-APK HTTPS, inspector, cookie/storage/transfer, API/error-state, POST-scope and same-signer upgrade gates pass. See VERIFICATION.md for exact provider skips.
-- [x] Pin the next upgrade baseline URL/SHA to 1.0.1 and remove the old-baseline scroll flag (signed execution pending next release).
+- [x] Pin the next upgrade baseline URL/SHA to 1.0.1 and remove the old-baseline scroll flag (signed execution passed in the 1.0.2 release).
 - [ ] Extend UI coverage for renderer termination, in-flight identity changes, rich auth/export/delete flows.
 - [x] Expose selected-HTML truncation metadata and a visible evaluation-output truncation notice (passed in full CI 43682611496).
 
@@ -88,10 +88,10 @@ Detailed capabilities and acceptance criteria: [Product plan](PRODUCT_PLAN.md).
 
 - [x] Fix Android ICU payload-marker initialization and verify actual four-list controls across API 28–37.0 (full CI 43682611496; 60 native cases, 12 profile-capability skips).
 
-## Candidate 1.0.2 acceptance
+## 1.0.2 release acceptance
 
 - [x] Implement bounded Page/inspector hosting, committed-snapshot save status, v1 migration, pruning reconciliation, off-main guarded imports and tail-only text decoding.
 - [x] Add actual production-seam/platform/optimized-UI regressions, including visible page pattern and atomic-finish fault coverage.
-- [ ] Pass exact-source local/CI Android gates and all API 28–37.0 jobs for this candidate.
-- [ ] Pass exact signed-APK install/upgrade-from-1.0.1 gates and publish 1.0.2 with the existing signer.
+- [x] Pass exact-source local/CI Android gates and all API 28–37.0 jobs (source 2fc166d; CI 43831951202; 52 JVM passes; 100 native cases, 88 passes/12 profile-capability skips).
+- [x] Pass exact signed-APK install/upgrade-from-1.0.1 gates and publish 1.0.2 with the existing signer (release 43833769184; 14 passes/one profile-capability skip; public download independently verified).
 - [ ] Extend deterministic ViewModel concurrency, physical/OEM/accessibility and broader lifecycle/export coverage. These remain separate from the candidate's fixture gates.

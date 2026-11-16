@@ -9,7 +9,7 @@
 
 ![ESuite — Your pocket. Full visibility. Android security workbench. Native web/API workbench; proxy/VPN planned.](docs/assets/esuite-banner.svg)
 
-<p align="center"><strong><a href="https://github.com/modhack2003/Esuite/releases/download/v1.0.1/ESuite-1.0.1.apk">Download ESuite 1.0.1 APK</a></strong> · Android 9–17 · Signed and optimized</p>
+<p align="center"><strong><a href="https://github.com/modhack2003/Esuite/releases/download/v1.0.2/ESuite-1.0.2.apk">Download ESuite 1.0.2 APK</a></strong> · Android 9–17 · Signed and optimized</p>
 
 <p align="center"><strong>Native Android</strong> &nbsp; / &nbsp; <strong>No root required</strong> &nbsp; / &nbsp; <strong>No computer during use</strong> &nbsp; / &nbsp; <strong>Local processing</strong></p>
 
@@ -45,7 +45,7 @@ Explore the [self-contained UI concept](docs/ui/index.html), [editable Canva con
 | Native utilities | UTF-8 Base64 encode/decode, form URL encode/decode and SHA-256 hashing |
 | Native request editor | Real scoped HTTP, cancellation, response limits, raw HTTP import and account A/B comparison |
 | Browser | Compatible per-project/identity WebView profiles, element selection, HTML/CSS edits, native cookies, console, storage and request metadata |
-| Task tools | Four bounded payload modes (two-list UI), cancellable sequences and first-response JSON token extraction |
+| Task tools | Four bounded payload modes (four-list UI), cancellable sequences and first-response JSON token extraction |
 | Imports & cloud review | cURL/raw HTTP, OpenAPI 3 JSON, textual HAR request drafts and offline AWS configuration observations |
 | Local evidence | AES-GCM project persistence, request collections, observations, sanitized report preview/export and project deletion |
 | Passive observations | Inspect selected API responses for cookie/header hardening observations; no extra scan requests |
@@ -100,7 +100,7 @@ Workspace protections include Keystore-backed authenticated encryption, bounded 
 
 ## Try ESuite
 
-**1.0.1 repairs the browser-to-API workflow.** HTML replacement keeps the inspector selection usable, CSS edits survive deselection, same-origin anchors work, cookie profiles remain separate, accessible output stays readable, and failed API sends replace the previous result. [Read the verification record](docs/VERIFICATION.md), including capability skips and remaining limits. Install over production 1.0.0 to retain the encrypted workspace.
+**1.0.2 fixes browser visibility and encrypted-evidence reliability.** Page and inspector controls have bounded, reachable viewports; saves acknowledge the committed snapshot; deployed workspaces migrate without dropping durable evidence; guarded imports run off main; large vaults work around Android 9 Keystore chunk loss. [Read the verification record](docs/VERIFICATION.md), including capability skips and remaining limits. Install over production 1.0.1 to retain the encrypted workspace.
 
 ### Android builds and production delivery
 
@@ -114,7 +114,7 @@ cd Esuite
 
 Open the project in Android Studio, or use the command line with an installed SDK. On Windows use `gradlew.bat`. The debug APK is generated at `app/build/outputs/apk/debug/app-debug.apk`. The [build workflow](.github/workflows/ci.yml) uploads internal fixture artifacts and an unsigned optimized APK for verification. Installable production downloads are published only by the signed release workflow. Full interception and physical-device validation are still pending.
 
-The [production release workflow](.github/workflows/release.yml) builds an optimized, privately signed APK after successful exact-commit CI and publishes it to [GitHub Releases](https://github.com/modhack2003/Esuite/releases) only after signer/metadata/integrity checks and signed-APK device smoke tests. **[Download ESuite 1.0.1 APK](https://github.com/modhack2003/Esuite/releases/download/v1.0.1/ESuite-1.0.1.apk)** · [Release notes and checksums](https://github.com/modhack2003/Esuite/releases/tag/v1.0.1). The optimized APK is privately signed, non-debuggable, 2,473,537 bytes, and configured for Android 9–17. Never distribute the internal test bundle or disposable CI-signed APK as production. Read the [usage guide](docs/GETTING_STARTED.md) for the browser → API → evidence workflow.
+The [production release workflow](.github/workflows/release.yml) builds an optimized, privately signed APK after successful exact-commit CI and publishes it to [GitHub Releases](https://github.com/modhack2003/Esuite/releases) only after signer/metadata/integrity checks and signed-APK device smoke tests. **[Download ESuite 1.0.2 APK](https://github.com/modhack2003/Esuite/releases/download/v1.0.2/ESuite-1.0.2.apk)** · [Release notes and checksums](https://github.com/modhack2003/Esuite/releases/tag/v1.0.2). The optimized APK is privately signed, non-debuggable, 2,506,305 bytes, and configured for Android 9–17. Never distribute the internal test bundle or disposable CI-signed APK as production. Read the [usage guide](docs/GETTING_STARTED.md) for the browser → API → evidence workflow.
 
 ### Native application evidence
 
