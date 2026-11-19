@@ -45,6 +45,38 @@ public class ProductionUiTest extends NativeUiDriver {
         enter("task_payload_4", ""); click("task_preview");
         assertTrue(waitText("task_preview_result", "Provide values for P4", 10000));
     }
+    /**
+     * QA-02 on a real device: pending editors must survive leaving and re-entering a module. This
+     * injects text through UiAutomator's SET_TEXT, so it proves draft RETENTION only. It does NOT
+     * exercise the IME, so it is a weaker check than the Vivo/Gboard entry path QA-03 requires;
+     * autocorrection of technical input stays open until the physical-device pass.
+     */
+    @Test public void pendingApiAndFindingDraftsSurviveModuleSwitches() throws Exception {
+        launch();
+        enter("project_name", "Draft retention fixture");
+        enter("project_origin", "https://example.test");
+        click("create_project");
+        click("nav_api");
+        enter("api_headers", "X-ESuite-QA: retained-header");
+        click("nav_findings");
+        enter("finding_title", "Retained draft title");
+        enter("finding_detail", "Retained draft detail");
+        click("nav_traffic");
+        click("nav_api");
+        assertTrue("Pending API header draft was lost on a module switch",
+                waitText("api_headers", "X-ESuite-QA: retained-header", 10000));
+        click("nav_traffic");
+        click("nav_findings");
+        assertTrue("Pending observation title was lost on a module switch",
+                waitText("finding_title", "Retained draft title", 10000));
+        assertTrue("Pending observation detail was lost on a module switch",
+                waitText("finding_detail", "Retained draft detail", 10000));
+        // Saving an observation still clears its own drafts.
+        click("save_finding");
+        assertFalse("Saving an observation left its title draft behind",
+                waitText("finding_title", "Retained draft title", 3000));
+    }
+
     @Test public void browserHttpsCookiesStorageEditsAndPostScopeThroughRealControls() throws Exception {
         launch();
         enter("project_name", "Browser UI fixture");

@@ -23,6 +23,9 @@ import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import dev.esuite.app.AppViewModel
 import dev.esuite.app.core.*
+import dev.esuite.app.ui.TechnicalKeyboard
+import dev.esuite.app.ui.UrlKeyboard
+import dev.esuite.app.ui.technicalTextStyle
 import kotlinx.serialization.json.*
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -32,14 +35,18 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel, modif
     val keyboard = LocalSoftwareKeyboardController.current
     fun dismissEditor() { focus.clearFocus(); keyboard?.hide() }
     val policy = remember(project.id) { ScopePolicy(project.origin) }
-    var address by remember(project.id, identity) { mutableStateOf(project.origin + "/") }
+    // Pending editors live in the ViewModel: BrowserScreen is destroyed on every module switch.
+    val pending by model.drafts.values.collectAsState()
+    fun draftText(editor: Editor, fallback: String = "") = pending[DraftKey(project.id, editor)] ?: fallback
+    fun write(editor: Editor, value: String) = model.drafts.set(DraftKey(project.id, editor), value)
+    val address = draftText(Editor.BrowserAddress, project.origin + "/")
     var webView by remember(project.id, identity) { mutableStateOf<WebView?>(null) }
     var rendererFailed by remember(project.id, identity) { mutableStateOf(false) }
     var panel by remember(project.id, identity) { mutableStateOf("Page") }
     var output by remember(project.id, identity) { mutableStateOf("Press Go to load the selected target. Inspection is local to this WebView.") }
     var console by remember(project.id, identity) { mutableStateOf(emptyList<String>()) }
-    var script by remember(project.id, identity) { mutableStateOf("document.title") }
-    var edit by remember(project.id, identity) { mutableStateOf("") }
+    val script = draftText(Editor.BrowserScript, "document.title")
+    val edit = draftText(Editor.BrowserEdit)
     var reveal by remember(project.id, identity) { mutableStateOf(false) }
     val supported = remember { WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE) }
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -68,7 +75,7 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel, modif
     Column(modifier.fillMaxSize().padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(provider, maxLines = 1, style = MaterialTheme.typography.bodySmall)
         if (panel == "Page") {
-        OutlinedTextField(address, { address = it }, label = { Text("Target URL") }, modifier = Modifier.fillMaxWidth().testTag("browser_url"), singleLine = true, supportingText = { Text("HTTPS · system certificate validation") })
+        OutlinedTextField(address, { write(Editor.BrowserAddress, it) }, label = { Text("Target URL") }, keyboardOptions = UrlKeyboard, modifier = Modifier.fillMaxWidth().testTag("browser_url"), singleLine = true, supportingText = { Text("HTTPS · system certificate validation") })
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(modifier = Modifier.testTag("browser_go"), onClick = { dismissEditor(); output = "Loading…"; runCatching { policy.requireAllowed(address.substringBefore('#')) }.onSuccess { webView?.loadUrl(it.newBuilder().encodedFragment(address.substringAfter('#', "").ifEmpty { null }).build().toString()) }.onFailure { output = it.message ?: "Invalid URL" } }) { Text("Go") }
             OutlinedButton(onClick = { webView?.stopLoading() }) { Text("Stop") }
@@ -109,7 +116,7 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel, modif
                         override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                             if (!policy.allows(url.substringBefore('#'))) { view.stopLoading(); output = "Blocked navigation outside project scope" }
                         }
-                        override fun onPageFinished(view: WebView, url: String) { if (policy.allows(url.substringBefore('#'))) { address = url; if (output == "Loading…") output = "Page loaded" } }
+                        override fun onPageFinished(view: WebView, url: String) { if (policy.allows(url.substringBefore('#'))) { write(Editor.BrowserAddress, url); if (output == "Loading…") output = "Page loaded" } }
                         override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
                             (view.parent as? android.view.ViewGroup)?.removeView(view)
                             view.destroy(); webView = null; rendererFailed = true
@@ -134,7 +141,7 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel, modif
                     OutlinedButton(modifier = Modifier.testTag("browser_select"), onClick = { evaluate(InspectorScripts.select); panel = "Page" }) { Text("Select element") }
                     OutlinedButton(modifier = Modifier.testTag("browser_read_selection"), onClick = { evaluate(InspectorScripts.selection) }) { Text("Read selection") }
                 }
-                OutlinedTextField(edit, { edit = it }, maxLines = 5, label = { Text("HTML or CSS edit (local page only)") }, modifier = Modifier.fillMaxWidth().testTag("browser_edit"))
+                OutlinedTextField(edit, { write(Editor.BrowserEdit, it) }, maxLines = 5, label = { Text("HTML or CSS edit (local page only)") }, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("browser_edit"))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(modifier = Modifier.testTag("browser_apply_html"), onClick = { evaluate(InspectorScripts.html.replace("__ESUITE_VALUE__", JsonPrimitive(edit).toString())) }) { Text("Apply HTML") }
                     TextButton(modifier = Modifier.testTag("browser_apply_css"), onClick = { evaluate(InspectorScripts.css.replace("__ESUITE_VALUE__", JsonPrimitive(edit).toString())) }) { Text("Apply CSS") }
@@ -143,7 +150,7 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel, modif
             "Cookies" -> {
                 Row { Text("Reveal cookie values", Modifier.weight(1f)); Switch(reveal, modifier = Modifier.testTag("browser_reveal"), onCheckedChange = { reveal = it; output = "Refresh to apply visibility choice" }) }
                 OutlinedButton(modifier = Modifier.testTag("browser_read_cookies"), onClick = { dismissEditor(); readCookies() }) { Text("Read native cookies") }
-                OutlinedTextField(edit, { edit = it }, maxLines = 5, label = { Text("Set-Cookie value including attributes") }, modifier = Modifier.fillMaxWidth().testTag("browser_cookie_input"))
+                OutlinedTextField(edit, { write(Editor.BrowserEdit, it) }, maxLines = 5, label = { Text("Set-Cookie value including attributes") }, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("browser_cookie_input"))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     TextButton(modifier = Modifier.testTag("browser_set_cookie"), onClick = { dismissEditor(); runCatching { policy.requireAllowed(address.substringBefore('#')) }.onSuccess { cookieManager()?.setCookie(it.toString(), edit) { ok -> cookieManager()?.flush(); output = if (ok) "Cookie stored" else "Cookie rejected" } }.onFailure { output = "Invalid cookie origin" } }) { Text("Set") }
                     TextButton(onClick = { cookieManager()?.removeAllCookies { cookieManager()?.flush(); output = "Cookies cleared for this isolated profile" } }) { Text("Clear profile") }
@@ -162,7 +169,7 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel, modif
                 OutlinedButton(onClick = { evaluate("(() => {localStorage.clear();sessionStorage.clear();return 'Page storage cleared';})()") }) { Text("Clear page storage") }
             }
             "Console" -> {
-                OutlinedTextField(script, { script = it }, maxLines = 5, label = { Text("JavaScript in current page") }, modifier = Modifier.fillMaxWidth().testTag("browser_script"))
+                OutlinedTextField(script, { write(Editor.BrowserScript, it) }, maxLines = 5, label = { Text("JavaScript in current page") }, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("browser_script"))
                 OutlinedButton(modifier = Modifier.testTag("browser_evaluate"), onClick = { evaluate(script) }) { Text("Evaluate") }
                 Text(console.joinToString("\n"), style = MaterialTheme.typography.bodySmall)
             }

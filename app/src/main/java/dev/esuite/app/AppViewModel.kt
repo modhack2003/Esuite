@@ -31,6 +31,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val mutable = MutableStateFlow(AppState())
     val state = mutable.asStateFlow()
     val engine = ApiEngine()
+    /**
+     * Pending editor text, in memory only and never part of [AppState.workspace], so typing cannot
+     * trigger an encrypted save and nothing in this path reaches disk.
+     */
+    val drafts = EditorDrafts()
     private var requestJob: Job? = null
     private val vault = WorkspaceVault(application)
     private val storageDispatcher = Dispatchers.IO.limitedParallelism(1)
@@ -116,6 +121,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun selectProject(id: String) {
         cancelRequest()
+        drafts.clearProject(state.value.projectId)
         mutable.update { current ->
             val project = current.workspace.projects.first { it.id == id }
             current.copy(projectId = id, draft = RequestDraft(url = project.origin + "/"), selected = null, comparison = "", message = "Selected ${project.name}")
@@ -123,14 +129,37 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun identity(value: String) {
         require(value in listOf("A", "B"))
+        val previous = state.value
         mutable.update { if (it.identity == value) it else it.copy(identity = value, selected = null,
             draft = CredentialPolicy.strip(it.draft, it.workspace.identityConfigs.filter { c -> c.projectId == it.projectId }),
             message = "Identity changed; observed auth headers removed. Body values remain unchanged and must be reviewed.") }
+        // A retained header draft is stripped exactly as the ViewModel draft above is.
+        if (previous.identity != value) {
+            val configuredNames = previous.workspace.identityConfigs.filter { it.projectId == previous.projectId }
+                .flatMap { it.headers }.map { it.name }.toSet()
+            drafts.transform(previous.projectId, listOf(Editor.ApiHeaders, Editor.ApiIdentityHeaders)) {
+                CredentialPolicy.stripHeaderLines(it, configuredNames)
+            }
+        }
     }
-    fun draft(value: RequestDraft) = mutable.update { it.copy(draft = value) }
+    /**
+     * Wholesale draft replacement (replay, cURL/raw import, loading a saved request) also refreshes
+     * the header EDITOR, so the change is visible. Plain keystrokes in the method/URL/body editors
+     * leave the headers unchanged and therefore never overwrite half-typed header text.
+     */
+    fun draft(value: RequestDraft) {
+        val refreshHeaders = value.headers != state.value.draft.headers
+        mutable.update { it.copy(draft = value) }
+        if (refreshHeaders) writeHeaderEditor(value.headers)
+    }
     fun select(exchange: Exchange) = mutable.update { it.copy(selected = exchange) }
-    fun replay(exchange: Exchange) = mutable.update { it.copy(draft = CredentialPolicy.strip(exchange.request, it.workspace.identityConfigs.filter { c -> c.projectId == it.projectId }), selected = exchange,
-        message = if (exchange.source == "Browser metadata") "Browser bodies are unavailable. Supply missing bodies before sending. Observed auth headers were removed." else "Draft loaded with observed auth headers removed. Review body values; sending is explicit.") }
+    fun replay(exchange: Exchange) {
+        mutable.update { it.copy(draft = CredentialPolicy.strip(exchange.request, it.workspace.identityConfigs.filter { c -> c.projectId == it.projectId }), selected = exchange,
+            message = if (exchange.source == "Browser metadata") "Browser bodies are unavailable. Supply missing bodies before sending. Observed auth headers were removed." else "Draft loaded with observed auth headers removed. Review body values; sending is explicit.") }
+        writeHeaderEditor(state.value.draft.headers)
+    }
+    private fun writeHeaderEditor(headers: List<Header>) =
+        drafts.set(DraftKey(state.value.projectId, Editor.ApiHeaders), headers.joinToString("\n") { "${it.name}: ${it.value}" })
     fun record(exchange: Exchange) {
         mutable.update { if (!it.ready || it.workspace.projects.none { p -> p.id == exchange.projectId }) it else it.copy(workspace = it.workspace.copy(exchanges = (listOf(exchange) + it.workspace.exchanges).take(Limits.HISTORY))) }
     }
@@ -311,7 +340,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteProject() {
         val p = currentProject() ?: return
         runCatching { BrowserProfiles.clearProject(p.id) }.onFailure { message(it.message ?: "Browser profiles could not be cleared"); return }
-        cancelRequest(); engine.sessions.clearProject(p.id)
+        cancelRequest(); engine.sessions.clearProject(p.id); drafts.clearProject(p.id)
         mutable.update { it.copy(projectId = null, draft = RequestDraft(), selected = null, comparison = "", workspace = it.workspace.copy(
             projects = it.workspace.projects.filterNot { item -> item.id == p.id }, exchanges = it.workspace.exchanges.filterNot { e -> e.projectId == p.id },
             findings = it.workspace.findings.filterNot { f -> f.projectId == p.id }, savedRequests = it.workspace.savedRequests.filterNot { r -> r.projectId == p.id },
