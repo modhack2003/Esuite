@@ -103,7 +103,7 @@ Evidence and exact acceptance: [Vivo 1.0.2 review](reviews/vivo-1.0.2-production
 - [x] QA-01: retain bounded finding evidence independently of disposable history; add attachment viewing/missing-evidence states.
 - [x] QA-02/03: preserve pending editor/finding state across navigation; prevent keyboard autocorrection of technical input.
 - [x] QA-05: guard in-flight result identity/context so a result landing after a project/identity/generation change is still recorded in Traffic but is not applied under the wrong identity, and the displayed response states its own project/identity/source.
-- [ ] QA-08: support loaded-profile deletion and unreadable-vault profile cleanup.
+- [x] QA-08: complete project deletion when a browser profile is still loaded, record it as pending with a retry path, sweep derived orphans after every successful load, and remove ESuite-owned profiles by name prefix without the vault. Source only — cross-process cold-restart completion on the physical Vivo and the supported provider matrix remains open below.
 - [ ] QA-04/06/07/10/12/13: adapt font/rotation/IME layouts, selected tabs and native tokens; expose context/status/task cancellation; open Traffic details; define last-used project behavior.
 - [ ] QA-09/11: disclose Storage field truncation; add selected redacted evidence reports and define optional encrypted local backup/restore.
 - [ ] Define paid local-app distribution, offline entitlement/update/support and privacy/license disclosures without hosted evidence or automatic diagnostics uploads.
