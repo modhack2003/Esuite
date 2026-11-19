@@ -118,13 +118,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         contextGeneration += 1
         loadJob?.cancel()
         cancelRequest(); persistenceJob?.cancel(); engine.sessions.clearAll()
-        // Erasing the vault loses the project index, so ESuite's own browser profiles are removed
-        // here by prefix instead — the vault is not needed to decide what ESuite created.
-        profileCleanupNote = BrowserProfiles.clearAllEsuiteOwned().describe()
         viewModelScope.launch {
             mutable.update { it.copy(ready = false) }
             runCatching { withContext(storageDispatcher) { vault.erase() } }
-                .onSuccess { mutable.value = AppState(); loadWorkspace() }
+                .onSuccess {
+                    // Erasing the vault loses the project index, so ESuite's own browser profiles are
+                    // removed by prefix instead — the vault is not needed to decide what ESuite
+                    // created. Ordered AFTER the erase succeeds (back on Main, which is the profile
+                    // store's contract) so a failed erase leaves the profiles in place.
+                    profileCleanupNote = BrowserProfiles.clearAllEsuiteOwned().describe()
+                    mutable.value = AppState(); loadWorkspace()
+                }
                 .onFailure { message("Could not erase encrypted workspace: ${it.message}") }
         }
     }
@@ -163,12 +167,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         mutable.update { if (it.identity == value) it else it.copy(identity = value, selected = null,
             draft = CredentialPolicy.strip(it.draft, it.workspace.identityConfigs.filter { c -> c.projectId == it.projectId }),
             message = "Identity changed; observed auth headers removed. Body values remain unchanged and must be reviewed.") }
-        // A retained header draft is stripped exactly as the ViewModel draft above is.
+        // A retained header draft is stripped exactly as the ViewModel draft above is. The
+        // identity-headers editor is NOT in this list: its key carries the identity, so each
+        // identity keeps its own pending text and a switch can never carry one identity's
+        // credential text into the other's editor or into the config a save writes.
         if (previous.identity != value) {
             contextGeneration += 1
             val configuredNames = previous.workspace.identityConfigs.filter { it.projectId == previous.projectId }
                 .flatMap { it.headers }.map { it.name }.toSet()
-            drafts.transform(previous.projectId, listOf(Editor.ApiHeaders, Editor.ApiIdentityHeaders)) {
+            drafts.transform(previous.projectId, listOf(Editor.ApiHeaders)) {
                 CredentialPolicy.stripHeaderLines(it, configuredNames)
             }
         }
@@ -292,7 +299,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 var token: String? = null
                 for ((index, template) in steps.withIndex()) {
                     ensureActive()
-                    if ((template.url + template.body + template.headers.joinToString { it.value }).contains("{{token}}")) require(token != null) { "{{token}} is unavailable before the first extraction" }
+                    if (token == null && (template.url + template.body + template.headers.joinToString { it.value }).contains("{{token}}")) {
+                        // A superseded sequence skipped the extraction on purpose, so report THAT
+                        // rather than an extraction-order problem the user did not cause.
+                        val current = currentContext()
+                        if (!ResultAttribution.accepts(started, current)) { message(supersededMessage(started, current)); return@launch }
+                        throw IllegalArgumentException("{{token}} is unavailable before the first extraction")
+                    }
                     val draft = token?.let { RequestPlans.applyToken(template, it) } ?: template
                     val result = engine.execute(project, identity, withIdentity(draft, project.id, identity), "Request sequence")
                     // Recording is unconditional; selected/taskProgress and the extracted token are context-guarded.
@@ -364,6 +377,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     it.copy(workspace = next, message = "Identity headers updated; check encrypted-save status. Cookie jar sessions remain memory-only.")
                 }
                 persistDurable()
+                // Cleared on success exactly as a saved finding clears its title/detail drafts, so
+                // the editor falls back to the configuration that was just stored.
+                drafts.clear(DraftKey(p.id, Editor.ApiIdentityHeaders, config.identity))
             }.onFailure { message(it.message ?: "Identity storage budget exceeded") }
         }.onFailure { message(it.message ?: "Invalid identity headers") }
     }

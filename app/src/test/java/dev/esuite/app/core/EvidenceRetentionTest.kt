@@ -97,7 +97,9 @@ class EvidenceRetentionTest {
             // Only the still-live half of the missing set can be backfilled.
             val resolvable = EvidenceRetention.missing(finding).filter { random.nextBoolean() }
             val live = resolvable.map { exchange("p", it) }
-            val backfilled = EvidenceRetention.backfill(listOf(finding), live).single()
+            // Unbounded budget here: this case pins the resolvable/missing rule, and the budget rule
+            // is pinned by backfillStopsAtTheBudgetAndLeavesTheRestMissing plus WorkspaceMigrationTest.
+            val backfilled = EvidenceRetention.backfill(listOf(finding), live, Int.MAX_VALUE) { 0 }.single()
             assertEquals("backfill must snapshot exactly the resolvable ids · $counterexample",
                 retained + resolvable, backfilled.evidence.map { it.id })
             assertEquals("backfill must leave unresolvable ids missing · $counterexample",
@@ -105,6 +107,33 @@ class EvidenceRetentionTest {
             assertEquals("backfill must never touch the reference list · $counterexample", ids, backfilled.evidenceIds)
             assertEquals("backfill must store bounded snapshots · $counterexample",
                 live.map(EvidenceRetention::snapshot), backfilled.evidence.drop(retained.size))
+        }
+    }
+
+    /**
+     * The repair is opportunistic, not load-bearing: snapshots are admitted in reference order while
+     * the durable budget allows, and what does not fit keeps reporting the explicit missing state.
+     */
+    @Test fun backfillStopsAtTheBudgetAndLeavesTheRestMissing() {
+        repeat(16) { iteration ->
+            val ids = List(2 + random.nextInt(5)) { "b-$iteration-$it" }
+            val live = ids.map { exchange("p", it) }
+            val finding = Finding(id = "f-$iteration", projectId = "p", title = "t", detail = "d",
+                evidenceIds = ids, timestamp = 1_000L)
+            val afford = random.nextInt(ids.size) // how many snapshots the budget pays for
+            val cost = 64
+            val counterexample = "seed 0x51E iteration $iteration · ids ${ids.size} · afford $afford"
+            val bounded = EvidenceRetention.backfill(listOf(finding), live, afford * cost) { cost }.single()
+            assertEquals("the budget must admit exactly what it pays for · $counterexample",
+                ids.take(afford), bounded.evidence.map { it.id })
+            assertEquals("what the budget cannot afford must stay missing · $counterexample",
+                ids.drop(afford), EvidenceRetention.missing(bounded))
+            assertEquals("the reference list must be untouched · $counterexample", ids, bounded.evidenceIds)
+            // No headroom at all means no repair, and never a partial or dropped reference.
+            val starved = EvidenceRetention.backfill(listOf(finding), live, 0) { cost }.single()
+            assertEquals("a full durable region must repair nothing · $counterexample", finding, starved)
+            assertEquals("a full durable region must keep every reference missing · $counterexample",
+                ids, EvidenceRetention.missing(starved))
         }
     }
 

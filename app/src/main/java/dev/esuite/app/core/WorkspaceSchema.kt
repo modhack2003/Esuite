@@ -49,6 +49,12 @@ object WorkspaceSchema {
      * that still resolves to a live exchange is snapshotted rather than merely defaulted to empty.
      * Ids whose exchange is already gone keep reporting the explicit missing state.
      *
+     * The repair is BOUNDED by the same durable budget `addFinding` admits a finding under, because
+     * nothing checks capacity on a load: an unbounded backfill could upgrade a deployed vault into a
+     * state where every encrypted save throws `CapacityExceeded` and the durable region is the one
+     * region `WorkspacePersistence.prepare` cannot prune. References the remaining headroom cannot
+     * afford keep reporting the explicit missing state, so the repair stays opportunistic.
+     *
      * Reusing the CURRENT [Exchange]/[Finding] serializers inside this step is only valid while
      * those shapes are unchanged relative to v2: `Finding.evidence` has a default, so a v2 finding
      * decodes cleanly and everything else is identical. A later shape change to either type MUST
@@ -57,13 +63,18 @@ object WorkspaceSchema {
     private fun backfillEvidence(document: JsonObject): JsonObject {
         val exchanges = document["exchanges"]?.let { json.decodeFromJsonElement(ListSerializer(Exchange.serializer()), it) }.orEmpty()
         val findings = document["findings"]?.let { json.decodeFromJsonElement(ListSerializer(Finding.serializer()), it) }.orEmpty()
-        val backfilled = EvidenceRetention.backfill(findings, exchanges)
+        val headroom = WorkspaceBudget.durableHeadroom(json.decodeFromJsonElement(Workspace.serializer(), document))
+        val backfilled = EvidenceRetention.backfill(findings, exchanges, headroom, ::durableCost)
         return JsonObject(document.toMutableMap().apply {
             put("exchanges", json.encodeToJsonElement(ListSerializer(Exchange.serializer()), exchanges))
             put("findings", json.encodeToJsonElement(ListSerializer(Finding.serializer()), backfilled))
             put("version", JsonPrimitive(3))
         })
     }
+
+    /** Durable bytes one retained snapshot adds: its own encoding plus the array separator. */
+    private fun durableCost(snapshot: Exchange): Int =
+        json.encodeToString(Exchange.serializer(), snapshot).toByteArray(Charsets.UTF_8).size + 1
 
     private fun stampVersion(document: JsonObject, version: Int): JsonObject =
         JsonObject(document.toMutableMap().apply { put("version", JsonPrimitive(version)) })

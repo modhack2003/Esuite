@@ -55,7 +55,7 @@ class EditorDraftsTest {
 
     @Test fun eachValueAndTheWholeMapStayBounded() {
         val drafts = EditorDrafts()
-        val key = DraftKey(projectA, Editor.ApiRaw)
+        val key = DraftKey(projectA, Editor.ApiHeaders)
         drafts.set(key, "z".repeat(EditorDrafts.VALUE_CHARS * 2))
         assertEquals(EditorDrafts.VALUE_CHARS, drafts.text(key).length)
         // Beyond the map cap the least recently written entry is dropped, newest ones are kept.
@@ -69,6 +69,49 @@ class EditorDraftsTest {
         assertEquals("value-$newest", drafts.text(DraftKey("project-$newest", Editor.ToolsInput)))
     }
 
+    /**
+     * The two editors whose text is parser INPUT keep the parser's own bound, so a pasted
+     * import-sized document is never cut on entry and then rejected as a syntax error.
+     */
+    @Test fun importEditorsRetainValuesUpToTheImportLimit() {
+        val drafts = EditorDrafts()
+        val document = "{".repeat(Limits.REQUEST_BYTES)
+        listOf(Editor.ToolsInput, Editor.ApiRaw).forEach { editor ->
+            val key = DraftKey(projectA, editor)
+            drafts.set(key, document + "overflow")
+            assertEquals("$editor must survive the holder at the import limit", document, drafts.text(key))
+            assertEquals(Limits.REQUEST_BYTES, editor.valueChars)
+        }
+        // Every other editor keeps the smaller default cap.
+        val field = DraftKey(projectA, Editor.ApiHeaders)
+        drafts.set(field, "z".repeat(Limits.REQUEST_BYTES))
+        assertEquals(EditorDrafts.VALUE_CHARS, drafts.text(field).length)
+        assertEquals(EditorDrafts.VALUE_CHARS, Editor.ApiHeaders.valueChars)
+    }
+
+    /**
+     * An identity switch must not carry one identity's pending credential text into the other's
+     * editor, because that text is what `api_save_identity` writes into the identity's config.
+     */
+    @Test fun identityHeaderDraftsCannotCrossBetweenIdentities() {
+        val drafts = EditorDrafts()
+        val a = DraftKey(projectA, Editor.ApiIdentityHeaders, "A")
+        val b = DraftKey(projectA, Editor.ApiIdentityHeaders, "B")
+        drafts.set(a, "X-Tenant: pending-a")
+        // While B is selected the key is unset, so the screen's fallback — B's SAVED config — is what
+        // the field shows and therefore what a save would store.
+        assertEquals("X-Tenant: saved-b", drafts.text(b, "X-Tenant: saved-b"))
+        drafts.set(b, "X-Tenant: pending-b")
+        assertEquals("X-Tenant: pending-a", drafts.text(a))
+        // Clearing after a successful save restores B's fallback and leaves A's pending text alone.
+        drafts.clear(b)
+        assertEquals("X-Tenant: saved-b", drafts.text(b, "X-Tenant: saved-b"))
+        assertEquals("X-Tenant: pending-a", drafts.text(a))
+        // Both identities stay scoped to the project, so a project clear still removes both.
+        drafts.clearProject(projectA)
+        assertTrue(drafts.values.value.isEmpty())
+    }
+
     @Test fun transformAppliesTheCredentialStripToRetainedHeaderEditorsOnly() {
         val drafts = EditorDrafts()
         val headers = "Authorization: Bearer abc\nAccept: application/json"
@@ -76,11 +119,15 @@ class EditorDraftsTest {
         drafts.set(DraftKey(projectA, Editor.ApiIdentityHeaders), "X-Tenant: acme\nCookie: session=1")
         drafts.set(DraftKey(projectA, Editor.FindingDetail), headers)
         drafts.set(DraftKey(projectB, Editor.ApiHeaders), headers)
+        drafts.set(DraftKey(projectA, Editor.ApiIdentityHeaders, "A"), "X-Tenant: acme")
         drafts.transform(projectA, listOf(Editor.ApiHeaders, Editor.ApiIdentityHeaders)) {
             CredentialPolicy.stripHeaderLines(it, setOf("X-Tenant"))
         }
         assertEquals("Accept: application/json", drafts.text(DraftKey(projectA, Editor.ApiHeaders)))
         assertEquals("", drafts.text(DraftKey(projectA, Editor.ApiIdentityHeaders)))
+        // transform addresses identity-free keys, so an identity-scoped draft is left alone; that is
+        // why the ViewModel's identity switch now strips ApiHeaders only.
+        assertEquals("X-Tenant: acme", drafts.text(DraftKey(projectA, Editor.ApiIdentityHeaders, "A")))
         // Only the named editors of the named project change.
         assertEquals(headers, drafts.text(DraftKey(projectA, Editor.FindingDetail)))
         assertEquals(headers, drafts.text(DraftKey(projectB, Editor.ApiHeaders)))

@@ -187,8 +187,11 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     val headers = draftText(Editor.ApiHeaders, draft.headers.joinToString("\n") { "${it.name}: ${it.value}" })
     val raw = draftText(Editor.ApiRaw)
     val savedName = draftText(Editor.ApiSavedName)
-    val identityHeaders = draftText(Editor.ApiIdentityHeaders,
-        state.workspace.identityConfigs.firstOrNull { it.projectId == state.projectId && it.identity == state.identity }?.headers.orEmpty().joinToString("\n") { "${it.name}: ${it.value}" })
+    // Keyed by identity as well as project, so this field always shows the SELECTED identity's
+    // pending text or its saved configuration — never the other identity's.
+    val identityKey = DraftKey(state.projectId, Editor.ApiIdentityHeaders, state.identity)
+    val identityHeaders = pending[identityKey]
+        ?: state.workspace.identityConfigs.firstOrNull { it.projectId == state.projectId && it.identity == state.identity }?.headers.orEmpty().joinToString("\n") { "${it.name}: ${it.value}" }
     fun prepare(action: () -> Unit) { focus.clearFocus(); keyboard?.hide(); runCatching { DraftParser.headers(headers) }.onSuccess { model.draft(draft.copy(headers = it)); action() }.onFailure { model.message(it.message ?: "Invalid headers") } }
     Text("Request lab.", style = MaterialTheme.typography.headlineLarge)
     DraftNotice()
@@ -208,7 +211,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     OutlinedButton(onClick = { model.currentProject()?.let { p -> runCatching { DraftParser.raw(raw, p.origin) }.onSuccess(model::draft).onFailure { model.message(it.message ?: "Invalid request") } } }) { Text("Import into editor") }
     OutlinedButton(modifier = Modifier.testTag("api_session_metadata"), onClick = { model.message(model.currentProject()?.let { model.engine.sessions.jar(it.id, state.identity).describe() }.orEmpty().ifBlank { "No session cookies for this identity" }) }) { Text("Show API session metadata") }
     OutlinedButton(onClick = { model.clearSessions() }) { Text("Clear API sessions") }
-    OutlinedTextField(identityHeaders, { write(Editor.ApiIdentityHeaders, it) }, label = { Text("Identity ${state.identity} headers (encrypted)") }, minLines = 2, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("api_identity_headers"))
+    OutlinedTextField(identityHeaders, { model.drafts.set(identityKey, it) }, label = { Text("Identity ${state.identity} headers (encrypted)") }, minLines = 2, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("api_identity_headers"))
     OutlinedButton(modifier = Modifier.testTag("api_save_identity"), onClick = { focus.clearFocus(); keyboard?.hide(); model.configureIdentity(identityHeaders) }) { Text("Save this identity's auth headers") }
     OutlinedTextField(savedName, { write(Editor.ApiSavedName, it) }, label = { Text("Saved request name") }, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("api_saved_name"))
     OutlinedButton(modifier = Modifier.testTag("api_save_draft"), onClick = { prepare { model.saveDraft(savedName) } }) { Text("Save request to collection") }

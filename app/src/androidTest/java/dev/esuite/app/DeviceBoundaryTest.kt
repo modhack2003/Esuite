@@ -232,8 +232,13 @@ class DeviceBoundaryTest {
 
     // QA-05: a result that lands after an A→B identity switch must stay recorded in Traffic but must
     // NOT be applied under identity B. The vault is pre-seeded with an HTTP MockWebServer origin so
-    // the real AppViewModel.send() runs end to end without TLS (createProject's HTTPS-only gate does
-    // not apply to a loaded project, exactly as the JVM ApiEngineTest drives the engine over HTTP).
+    // the real AppViewModel.send() runs end to end without TLS. TWO separate policies have to allow
+    // that: ScopePolicy, which permits http at the engine because the HTTPS-only gate lives in
+    // createProject and not on a loaded project (as the JVM ApiEngineTest already relies on); and the
+    // platform network security policy, which governs the socket itself and rejects cleartext before
+    // one is opened. The shipped config forbids cleartext everywhere, so these cases depend on the
+    // DEBUG-only 127.0.0.1 exception in app/src/debug/res/xml/network_security_config.xml
+    // (testBuildType = "debug"). They cannot run against a release build, by design.
     private fun awaitState(model: AppViewModel, timeoutMs: Long = 20_000, condition: (AppState) -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {

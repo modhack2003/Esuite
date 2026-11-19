@@ -36,14 +36,28 @@ object EvidenceRetention {
     }
 
     /**
-     * Snapshot every missing reference that still resolves to a live exchange. Unresolvable ids are
-     * left alone so they keep reporting the explicit missing state.
+     * Snapshot every missing reference that still resolves to a live exchange, bounded by [budget]
+     * durable bytes: [cost] reports what one snapshot adds, and snapshots are admitted in reference
+     * order while the running total still fits. Unresolvable ids — and any snapshot the budget
+     * cannot afford — are left alone so they keep reporting the explicit missing state.
+     *
+     * The budget is required rather than optional because this repair runs where no admission check
+     * does ([WorkspaceSchema]'s `v2 -> v3` step), unlike `addFinding`, which admits a finding
+     * together with its snapshot through [WorkspaceBudget.requireDurableCapacity].
      */
-    fun backfill(findings: List<Finding>, exchanges: List<Exchange>): List<Finding> {
+    fun backfill(findings: List<Finding>, exchanges: List<Exchange>, budget: Int, cost: (Exchange) -> Int): List<Finding> {
         if (findings.none { missing(it).isNotEmpty() }) return findings
         val available = exchanges.associateBy { it.id }
+        var remaining = budget
         return findings.map { finding ->
-            val restored = missing(finding).mapNotNull { available[it] }.map(::snapshot)
+            val restored = mutableListOf<Exchange>()
+            for (id in missing(finding)) {
+                val snapshot = available[id]?.let(::snapshot) ?: continue
+                val size = cost(snapshot)
+                if (size > remaining) continue
+                remaining -= size
+                restored += snapshot
+            }
             if (restored.isEmpty()) finding else finding.copy(evidence = finding.evidence + restored)
         }
     }

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    DEBUG VARIANT ONLY. The shipped release policy in app/src/main/res/xml/network_security_config.xml
+    is unchanged and stays HTTPS-only with no exception of any kind.
+
+    This override exists because testBuildType = "debug", so app/src/androidTest runs against THIS
+    config: the QA-05 attribution cases drive the real AppViewModel.send() against a loopback
+    MockWebServer, and the HTTPS-only base config rejects that request before a socket is opened
+    (OkHttp asks NetworkSecurityPolicy, which answers from this file; the manifest's
+    android:usesCleartextTraffic attribute is ignored on API 24+ whenever a network security config
+    is present, and minSdk here is 28).
+
+    The exception is scoped to loopback with no subdomains: the 127.0.0.1 literal and the name
+    "localhost", because MockWebServer.url() reports whichever of the two the platform resolver gives
+    it. Every other host and every other destination remain HTTPS-only, in this variant too.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors><certificates src="system" /></trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

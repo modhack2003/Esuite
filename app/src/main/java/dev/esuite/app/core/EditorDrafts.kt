@@ -4,15 +4,31 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** Every editor that holds pending user input across a module switch. */
-enum class Editor {
-    ApiHeaders, ApiRaw, ApiSavedName, ApiIdentityHeaders, FindingTitle, FindingDetail, ToolsInput,
+/**
+ * Every editor that holds pending user input across a module switch.
+ *
+ * [valueChars] is that editor's retained-text cap. It defaults to [EditorDrafts.VALUE_CHARS], and is
+ * raised to [Limits.REQUEST_BYTES] for the two editors whose text is parser INPUT rather than a
+ * field value: [ToolsInput] feeds `importOpenApi`/`importHar`/`importCurl` and [ApiRaw] feeds
+ * `DraftParser.raw`, both of which accept up to that limit. Capping those at the smaller default cut
+ * a legitimate paste mid-document and surfaced as a parser syntax error instead of a truncation.
+ */
+enum class Editor(val valueChars: Int = EditorDrafts.VALUE_CHARS) {
+    ApiHeaders, ApiRaw(Limits.REQUEST_BYTES), ApiSavedName, ApiIdentityHeaders, FindingTitle, FindingDetail,
+    ToolsInput(Limits.REQUEST_BYTES),
     TaskPayload1, TaskPayload2, TaskPayload3, TaskPayload4, SequenceNames, TokenPath,
     BrowserAddress, BrowserEdit, BrowserScript,
 }
 
-/** Drafts are scoped to a project, so switching projects never shows another project's pending text. */
-data class DraftKey(val projectId: String?, val editor: Editor)
+/**
+ * Drafts are scoped to a project, so switching projects never shows another project's pending text.
+ *
+ * [identity] is set ONLY for an editor whose content belongs to one identity — currently just
+ * [Editor.ApiIdentityHeaders], whose text is that identity's own credential configuration. Without
+ * that dimension an A->B switch left identity A's pending text in the field, hid identity B's saved
+ * headers and let a save write A's text into B's `IdentityConfig`. Every other editor leaves it null.
+ */
+data class DraftKey(val projectId: String?, val editor: Editor, val identity: String? = null)
 
 /**
  * In-memory pending editor text, owned by the ViewModel so it survives module switches, rotation and
@@ -35,7 +51,7 @@ class EditorDrafts {
 
     fun set(key: DraftKey, value: String) = publish {
         it.remove(key) // Re-insert so iteration order stays least-recently-written first.
-        it[key] = value.take(VALUE_CHARS)
+        it[key] = value.take(key.editor.valueChars)
         while (it.size > MAX_ENTRIES) it.remove(it.keys.first())
     }
 
@@ -43,11 +59,11 @@ class EditorDrafts {
 
     fun clearProject(projectId: String?) = publish { map -> map.keys.filter { it.projectId == projectId }.forEach(map::remove) }
 
-    /** Apply [block] to the named editors of one project, leaving unset editors unset. */
+    /** Apply [block] to the named identity-free editors of one project, leaving unset editors unset. */
     fun transform(projectId: String?, editors: Collection<Editor>, block: (String) -> String) = publish { map ->
         editors.forEach { editor ->
             val key = DraftKey(projectId, editor)
-            map[key]?.let { map[key] = block(it).take(VALUE_CHARS) }
+            map[key]?.let { map[key] = block(it).take(editor.valueChars) }
         }
     }
 
@@ -59,7 +75,12 @@ class EditorDrafts {
     }
 
     companion object {
-        /** Bounded memory: one editor's pending text, and how many editor drafts are kept at once. */
+        /**
+         * Bounded memory: the default cap on one editor's pending text (see [Editor.valueChars] for
+         * the two import editors that carry the larger parser bound), and how many editor drafts are
+         * kept at once. `selectProject` clears the outgoing project's drafts, so in practice only one
+         * project's editors are retained.
+         */
         const val VALUE_CHARS = 64 * 1024
         val MAX_ENTRIES = Editor.entries.size * 20
     }
