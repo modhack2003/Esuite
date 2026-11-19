@@ -155,7 +155,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
         OutlinedButton(onClick = { model.select(e) }, modifier = Modifier.fillMaxWidth()) { Text("${e.request.method} ${e.request.url}\n${e.source} · identity ${e.identity} · ${e.status ?: if (e.error != null) "error" else "metadata only"}") }
     }
     state.selected?.takeIf { it.projectId == state.projectId }?.let { e ->
-        Panel("Exchange detail", "${e.completeness}\n${e.error.orEmpty()}\n\n" + e.request.headers.joinToString("\n") { "${it.name}: ${it.value}" } + "\n\n" + e.responseHeaders.joinToString("\n") { "${it.name}: ${it.value}" } + "\n\n${e.response.encoding}${if (e.response.truncated) " · TRUNCATED" else ""}\n${e.response.value}")
+        Panel("Exchange detail", ResultAttribution.label(e, state.workspace.projects.firstOrNull { it.id == e.projectId }?.name) + "\n${e.completeness}\n${e.error.orEmpty()}\n\n" + e.request.headers.joinToString("\n") { "${it.name}: ${it.value}" } + "\n\n" + e.responseHeaders.joinToString("\n") { "${it.name}: ${it.value}" } + "\n\n${e.response.encoding}${if (e.response.truncated) " · TRUNCATED" else ""}\n${e.response.value}")
         Button(onClick = { model.replay(e); openApi() }) { Text("To API Lab (review before sending)") }
     }
     OutlinedButton(onClick = { model.clearHistory() }) { Text("Clear this project's history") }
@@ -187,7 +187,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     OutlinedButton(modifier = Modifier.testTag("api_compare"), onClick = { prepare { model.send(compare = true) } }, enabled = !state.busy && state.projectId != null) { Text("Send as A then B (two requests)") }
     Text("Redirects/retries are disabled. Comparison strips known auth headers and uses each identity's configuration/jar. Body credentials remain unchanged; review them before comparing.", style = MaterialTheme.typography.bodySmall)
     if (state.comparison.isNotBlank()) Panel("Comparison", state.comparison)
-    state.selected?.let { e -> Panel("${e.status ?: "Error"} · ${e.durationMs} ms · ${e.response.encoding}${if (e.response.truncated) " · TRUNCATED" else ""}", e.error ?: e.responseHeaders.joinToString("\n") { "${it.name}: ${it.value}" } + "\n\n" + e.response.value) }
+    state.selected?.let { e -> Panel(ResultAttribution.label(e, state.workspace.projects.firstOrNull { it.id == e.projectId }?.name) + "\n${e.status ?: "Error"} · ${e.durationMs} ms · ${e.response.encoding}${if (e.response.truncated) " · TRUNCATED" else ""}", e.error ?: e.responseHeaders.joinToString("\n") { "${it.name}: ${it.value}" } + "\n\n" + e.response.value) }
     OutlinedTextField(raw, { write(Editor.ApiRaw, it) }, label = { Text("Import raw HTTP/1.x message") }, minLines = 3, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth())
     OutlinedButton(onClick = { model.currentProject()?.let { p -> runCatching { DraftParser.raw(raw, p.origin) }.onSuccess(model::draft).onFailure { model.message(it.message ?: "Invalid request") } } }) { Text("Import into editor") }
     OutlinedButton(modifier = Modifier.testTag("api_session_metadata"), onClick = { model.message(model.currentProject()?.let { model.engine.sessions.jar(it.id, state.identity).describe() }.orEmpty().ifBlank { "No session cookies for this identity" }) }) { Text("Show API session metadata") }

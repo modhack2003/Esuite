@@ -42,10 +42,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private var persistenceJob: Job? = null
     private var loadJob: Job? = null
     private var workspaceGeneration = 0
+    // Bumped whenever the project/identity a result could be attributed to changes, so a result that
+    // lands after a switch is recorded in Traffic but not applied under the wrong header.
+    private var contextGeneration = 0
     private val importer = CollectionImporter()
     init { loadWorkspace() }
     fun loadWorkspace() {
         workspaceGeneration += 1
+        contextGeneration += 1
         val generation = workspaceGeneration
         loadJob?.cancel()
         persistenceJob?.cancel()
@@ -96,6 +100,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun flush() { if (state.value.ready) saveNow() }
     fun eraseVault() {
         workspaceGeneration += 1
+        contextGeneration += 1
         loadJob?.cancel()
         cancelRequest(); persistenceJob?.cancel(); engine.sessions.clearAll()
         viewModelScope.launch {
@@ -106,6 +111,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     fun message(text: String) = mutable.update { it.copy(message = text.take(4000)) }
+    private fun currentContext() = RequestContext(contextGeneration, state.value.projectId, state.value.identity)
+    private fun supersededMessage(started: RequestContext, current: RequestContext): String =
+        if (started.identity != current.identity)
+            "A result for identity ${started.identity} arrived after you switched to ${current.identity}. It is recorded in Traffic and was not applied here."
+        else
+            "A result arrived after the project or workspace changed. It is recorded in Traffic and was not applied here."
     fun currentProject(): Project? = state.value.workspace.projects.firstOrNull { it.id == state.value.projectId }
     fun createProject(name: String, origin: String) {
         runCatching {
@@ -121,6 +132,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun selectProject(id: String) {
         cancelRequest()
+        contextGeneration += 1
         drafts.clearProject(state.value.projectId)
         mutable.update { current ->
             val project = current.workspace.projects.first { it.id == id }
@@ -135,6 +147,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             message = "Identity changed; observed auth headers removed. Body values remain unchanged and must be reviewed.") }
         // A retained header draft is stripped exactly as the ViewModel draft above is.
         if (previous.identity != value) {
+            contextGeneration += 1
             val configuredNames = previous.workspace.identityConfigs.filter { it.projectId == previous.projectId }
                 .flatMap { it.headers }.map { it.name }.toSet()
             drafts.transform(previous.projectId, listOf(Editor.ApiHeaders, Editor.ApiIdentityHeaders)) {
@@ -170,6 +183,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun send(compare: Boolean = false) {
         val snapshot = state.value; val project = currentProject() ?: return message("Create a project first")
         if (snapshot.busy) return
+        val started = currentContext()
         requestJob = viewModelScope.launch {
             mutable.update { it.copy(busy = true, comparison = "", message = "Sending to ${project.origin}…") }
             var attemptedIdentity = snapshot.identity
@@ -181,11 +195,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     val a = engine.execute(project, "A", attemptedDraft, "Identity comparison"); record(a)
                     attemptedIdentity = "B"; attemptedDraft = withIdentity(draft, project.id, "B")
                     val b = engine.execute(project, "B", attemptedDraft, "Identity comparison"); record(b)
-                    mutable.update { it.copy(selected = b, comparison = ResponseComparer.compare(a, b), message = "Separate session jars used; explicit Cookie/Authorization headers omitted.") }
+                    // Both legs are already in Traffic; only the comparison view is context-guarded.
+                    val current = currentContext()
+                    if (ResultAttribution.accepts(started, current))
+                        mutable.update { it.copy(selected = b, comparison = ResponseComparer.compare(a, b), message = "Separate session jars used; explicit Cookie/Authorization headers omitted.") }
+                    else message(supersededMessage(started, current))
                 } else {
                     attemptedDraft = withIdentity(snapshot.draft, project.id, snapshot.identity)
                     val response = engine.execute(project, snapshot.identity, attemptedDraft); record(response)
-                    mutable.update { it.copy(selected = response, message = "HTTP ${response.status} · ${response.durationMs} ms${if (response.response.truncated) " · body truncated" else ""}") }
+                    val current = currentContext()
+                    if (ResultAttribution.accepts(started, current))
+                        mutable.update { it.copy(selected = response, message = "HTTP ${response.status} · ${response.durationMs} ms${if (response.response.truncated) " · body truncated" else ""}") }
+                    else message(supersededMessage(started, current))
                 }
             } catch (e: CancellationException) { message("Request cancelled"); throw e }
             catch (e: Exception) {
@@ -193,7 +214,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val failed = Exchange(projectId = project.id, identity = attemptedIdentity, request = attemptedDraft,
                     source = if (compare) "Identity comparison" else "API Lab", error = detail)
                 record(failed)
-                mutable.update { it.copy(selected = failed, comparison = "", message = detail) }
+                val current = currentContext()
+                if (ResultAttribution.accepts(started, current))
+                    mutable.update { it.copy(selected = failed, comparison = "", message = detail) }
+                else message(supersededMessage(started, current))
             } finally { mutable.update { it.copy(busy = false) } }
         }
     }
@@ -209,17 +233,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val project = currentProject() ?: return
         val identity = state.value.identity
         val drafts = runCatching { previewPayloads(inputs, mode) }.getOrElse { message(it.message ?: "Invalid plan"); return }
+        val started = currentContext()
         requestJob = viewModelScope.launch {
             mutable.update { it.copy(busy = true, taskProgress = "Parameter task: 0/${drafts.size}") }
             try {
                 for ((index, draft) in drafts.withIndex()) {
                     ensureActive()
                     val result = engine.execute(project, identity, withIdentity(draft, project.id, identity), "Parameter runner")
-                    record(result); mutable.update { it.copy(selected = result, taskProgress = "Parameter task: ${index + 1}/${drafts.size}") }
+                    // Recording is unconditional; only the selected/taskProgress view is context-guarded.
+                    record(result)
+                    if (ResultAttribution.accepts(started, currentContext()))
+                        mutable.update { it.copy(selected = result, taskProgress = "Parameter task: ${index + 1}/${drafts.size}") }
                     if (result.status in listOf(429, 503)) { message("Task stopped on HTTP ${result.status}; no automatic retry."); return@launch }
                     if (index != drafts.lastIndex) delay(1000)
                 }
-                message("Parameter task complete; inspect results in Traffic")
+                val current = currentContext()
+                message(if (ResultAttribution.accepts(started, current)) "Parameter task complete; inspect results in Traffic" else supersededMessage(started, current))
             } catch (e: CancellationException) { message("Parameter task cancelled"); throw e }
             catch (e: Exception) { message("Task stopped: ${e.message}") }
             finally { mutable.update { it.copy(busy = false, taskProgress = "Task stopped / completed; captured results retained") } }
@@ -238,6 +267,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 matches.single().draft.also { DraftParser.validate(it); ScopePolicy(project.origin).requireAllowed(it.url) }
             }
         }.getOrElse { message(it.message ?: "Invalid sequence"); return }
+        val started = currentContext()
         requestJob = viewModelScope.launch {
             mutable.update { it.copy(busy = true, taskProgress = "Sequence: 0/${steps.size}") }
             try {
@@ -247,12 +277,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     if ((template.url + template.body + template.headers.joinToString { it.value }).contains("{{token}}")) require(token != null) { "{{token}} is unavailable before the first extraction" }
                     val draft = token?.let { RequestPlans.applyToken(template, it) } ?: template
                     val result = engine.execute(project, identity, withIdentity(draft, project.id, identity), "Request sequence")
-                    record(result); mutable.update { it.copy(selected = result, taskProgress = "Sequence: ${index + 1}/${steps.size}") }
+                    // Recording is unconditional; selected/taskProgress and the extracted token are context-guarded.
+                    record(result)
+                    val applied = ResultAttribution.accepts(started, currentContext())
+                    if (applied) mutable.update { it.copy(selected = result, taskProgress = "Sequence: ${index + 1}/${steps.size}") }
                     require(result.status != null && result.status in 200..299) { "Sequence stopped at non-success HTTP ${result.status}" }
-                    if (index == 0 && steps.size > 1 && tokenPath.isNotBlank()) token = RequestPlans.extractToken(result.response.value, tokenPath.trim())
+                    if (applied && index == 0 && steps.size > 1 && tokenPath.isNotBlank()) token = RequestPlans.extractToken(result.response.value, tokenPath.trim())
                     if (index != steps.lastIndex) delay(1000)
                 }
-                message("Sequence complete. No automatic retries or unattended MFA handling.")
+                val current = currentContext()
+                message(if (ResultAttribution.accepts(started, current)) "Sequence complete. No automatic retries or unattended MFA handling." else supersededMessage(started, current))
             } catch (e: CancellationException) { message("Sequence cancelled"); throw e }
             catch (e: Exception) { message("Sequence stopped: ${e.message}") }
             finally { mutable.update { it.copy(busy = false, taskProgress = "Task stopped / completed; captured results retained") } }
@@ -340,7 +374,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteProject() {
         val p = currentProject() ?: return
         runCatching { BrowserProfiles.clearProject(p.id) }.onFailure { message(it.message ?: "Browser profiles could not be cleared"); return }
-        cancelRequest(); engine.sessions.clearProject(p.id); drafts.clearProject(p.id)
+        cancelRequest(); contextGeneration += 1; engine.sessions.clearProject(p.id); drafts.clearProject(p.id)
         mutable.update { it.copy(projectId = null, draft = RequestDraft(), selected = null, comparison = "", workspace = it.workspace.copy(
             projects = it.workspace.projects.filterNot { item -> item.id == p.id }, exchanges = it.workspace.exchanges.filterNot { e -> e.projectId == p.id },
             findings = it.workspace.findings.filterNot { f -> f.projectId == p.id }, savedRequests = it.workspace.savedRequests.filterNot { r -> r.projectId == p.id },

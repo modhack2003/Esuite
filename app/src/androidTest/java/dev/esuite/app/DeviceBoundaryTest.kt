@@ -11,6 +11,9 @@ import androidx.webkit.WebViewFeature
 import dev.esuite.app.browser.InspectorScripts
 import dev.esuite.app.core.*
 import dev.esuite.app.storage.WorkspaceVault
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.*
@@ -222,5 +225,101 @@ class DeviceBoundaryTest {
             assertTrue(evaluate(InspectorScripts.selection).contains("BUTTON"))
             assertEquals("", evaluate("document.cookie")) // HttpOnly is native-readable, not page-script readable
         } finally { instrumentation.runOnMainSync { a.get()?.destroy(); b.get()?.destroy() } }
+    }
+
+    // QA-05: a result that lands after an A→B identity switch must stay recorded in Traffic but must
+    // NOT be applied under identity B. The vault is pre-seeded with an HTTP MockWebServer origin so
+    // the real AppViewModel.send() runs end to end without TLS (createProject's HTTPS-only gate does
+    // not apply to a loaded project, exactly as the JVM ApiEngineTest drives the engine over HTTP).
+    private fun awaitState(model: AppViewModel, timeoutMs: Long = 20_000, condition: (AppState) -> Boolean) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (condition(model.state.value)) return
+            Thread.sleep(25)
+        }
+        assertTrue("Timed out waiting for ViewModel state", condition(model.state.value))
+    }
+
+    private fun loadedViewModel(server: MockWebServer): Pair<AppViewModel, Project> {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val application = context.applicationContext as android.app.Application
+        val vault = WorkspaceVault(context); vault.erase()
+        val project = Project(name = "Attribution fixture", origin = server.url("/").toString())
+        vault.save(Workspace(projects = listOf(project)))
+        val holder = AtomicReference<AppViewModel>()
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { holder.set(AppViewModel(application)) }
+        val model = holder.get()
+        awaitState(model) { it.ready && it.projectId == project.id }
+        return model to project
+    }
+
+    @Test fun delayedResponseArrivingAfterIdentitySwitchIsRecordedButNotApplied() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val server = MockWebServer(); server.start()
+        val (model, _) = loadedViewModel(server)
+        try {
+            instrumentation.runOnMainSync { model.draft(RequestDraft(url = server.url("/api").toString())) }
+            server.enqueue(MockResponse().setResponseCode(200).setBody("late-A-response").setBodyDelay(1500, TimeUnit.MILLISECONDS))
+            val before = model.state.value.workspace.exchanges.size
+            instrumentation.runOnMainSync { model.send() }
+            awaitState(model) { it.busy }
+            instrumentation.runOnMainSync { model.identity("B") } // switch while the A request is still in flight
+            awaitState(model) { !it.busy }
+            val state = model.state.value
+            assertEquals("B", state.identity)
+            // The A response is still recorded in Traffic under identity A ...
+            assertTrue(state.workspace.exchanges.size > before)
+            assertTrue(state.workspace.exchanges.any { it.identity == "A" && it.status == 200 && it.response.value == "late-A-response" })
+            // ... but it was never applied under identity B, and the message says so without claiming leakage.
+            assertNull(state.selected)
+            assertTrue(state.message.contains("recorded in Traffic and was not applied"))
+            assertFalse(state.message.contains("cookie", true))
+        } finally { model.engine.close(); server.shutdown(); WorkspaceVault(context).erase() }
+    }
+
+    @Test fun delayedErrorArrivingAfterIdentitySwitchIsRecordedButNotApplied() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val server = MockWebServer(); server.start()
+        val (model, _) = loadedViewModel(server)
+        try {
+            instrumentation.runOnMainSync { model.draft(RequestDraft(url = server.url("/api").toString())) }
+            server.enqueue(MockResponse().setBody("partial").setBodyDelay(1200, TimeUnit.MILLISECONDS).setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY))
+            val before = model.state.value.workspace.exchanges.size
+            instrumentation.runOnMainSync { model.send() }
+            awaitState(model) { it.busy }
+            instrumentation.runOnMainSync { model.identity("B") }
+            awaitState(model) { !it.busy }
+            val state = model.state.value
+            assertEquals("B", state.identity)
+            // The failed attempt is recorded under identity A as an error exchange ...
+            assertTrue(state.workspace.exchanges.size > before)
+            assertTrue(state.workspace.exchanges.any { it.identity == "A" && it.error != null })
+            // ... and not applied under identity B.
+            assertNull(state.selected)
+            assertTrue(state.message.contains("recorded in Traffic and was not applied"))
+        } finally { model.engine.close(); server.shutdown(); WorkspaceVault(context).erase() }
+    }
+
+    @Test fun cancellingAnInFlightRequestRecordsNothingAndKeepsCancellationSemantics() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val server = MockWebServer(); server.start()
+        val (model, _) = loadedViewModel(server)
+        try {
+            instrumentation.runOnMainSync { model.draft(RequestDraft(url = server.url("/api").toString())) }
+            server.enqueue(MockResponse().setResponseCode(200).setBody("never-applied").setBodyDelay(3000, TimeUnit.MILLISECONDS))
+            val before = model.state.value.workspace.exchanges.size
+            instrumentation.runOnMainSync { model.send() }
+            awaitState(model) { it.busy }
+            instrumentation.runOnMainSync { model.cancelRequest() }
+            awaitState(model) { !it.busy }
+            val state = model.state.value
+            // Cancellation happens before completion, so no exchange is recorded and selected is untouched.
+            assertEquals(before, state.workspace.exchanges.size)
+            assertNull(state.selected)
+            assertEquals("Request cancelled", state.message)
+        } finally { model.engine.close(); server.shutdown(); WorkspaceVault(context).erase() }
     }
 }
