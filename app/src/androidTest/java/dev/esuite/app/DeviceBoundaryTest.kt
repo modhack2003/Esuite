@@ -6,8 +6,11 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.webkit.CookieManagerCompat
+import androidx.webkit.Profile
+import androidx.webkit.ProfileStore
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import dev.esuite.app.browser.BrowserProfiles
 import dev.esuite.app.browser.InspectorScripts
 import dev.esuite.app.core.*
 import dev.esuite.app.storage.WorkspaceVault
@@ -321,5 +324,103 @@ class DeviceBoundaryTest {
             assertNull(state.selected)
             assertEquals("Request cancelled", state.message)
         } finally { model.engine.close(); server.shutdown(); WorkspaceVault(context).erase() }
+    }
+
+    // QA-08: the real ProfileStore contract against the installed provider. deleteProfile rejects a
+    // profile the provider still holds loaded — destroying every WebView is not sufficient and there
+    // is no API to unload one — so cleanup must REPORT the refusal rather than throw, and must never
+    // reach the default profile or a profile ESuite did not create. Gated on MULTI_PROFILE exactly as
+    // isolatedWebViewCookiesAndInspectorRunOnAndroid is; the capability is never claimed.
+    private fun assumeMultiProfile() {
+        val available = AtomicReference(false)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { available.set(WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) }
+        assumeTrue("System WebView lacks MULTI_PROFILE; this capability must not be claimed", available.get())
+    }
+
+    @Test fun profileLoadedIntoALiveWebViewIsReportedPendingInsteadOfThrowing() {
+        assumeMultiProfile()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val projectId = UUID.randomUUID().toString()
+        val name = ProfileNames.name(projectId, "A")
+        val view = AtomicReference<WebView>()
+        val cleanup = AtomicReference<BrowserProfiles.CleanupResult>()
+        try {
+            instrumentation.runOnMainSync {
+                view.set(WebView(context))
+                WebViewCompat.setProfile(view.get(), name) // loads the profile into memory
+                cleanup.set(BrowserProfiles.clearProject(projectId))
+            }
+            val result = cleanup.get()
+            assertFalse("MULTI_PROFILE was asserted above", result.unsupported)
+            // Reported, not thrown; identity B was never created so it is not a candidate.
+            assertEquals(listOf(name), result.pending)
+            assertTrue(result.deleted.isEmpty())
+            assertTrue("a pending profile must still be reported by the provider",
+                result.describe().contains("loaded in memory") && result.describe().contains("restarts"))
+            instrumentation.runOnMainSync { assertTrue(ProfileStore.getInstance().allProfileNames.contains(name)) }
+        } finally {
+            instrumentation.runOnMainSync { view.get()?.destroy(); runCatching { ProfileStore.getInstance().deleteProfile(name) } }
+        }
+    }
+
+    @Test fun orphanSweepAccountsForADestroyedViewsProfileWithoutTouchingTheDefault() {
+        assumeMultiProfile()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val name = ProfileNames.name(UUID.randomUUID().toString(), "A")
+        val view = AtomicReference<WebView>()
+        val cleanup = AtomicReference<BrowserProfiles.CleanupResult>()
+        try {
+            instrumentation.runOnMainSync { view.set(WebView(context)); WebViewCompat.setProfile(view.get(), name) }
+            instrumentation.runOnMainSync { view.get().destroy() }
+            // The restart sweep: no live project ids at all, so this profile is an orphan.
+            instrumentation.runOnMainSync { cleanup.set(BrowserProfiles.sweepOrphans(emptySet())) }
+            val result = cleanup.get()
+            // Accounted for in exactly one bucket, never silently ignored. Whether a provider
+            // releases the profile on destroy or only on process restart is a PROVIDER property, so
+            // both outcomes are legal here and the store must agree with whichever was reported.
+            assertTrue("the orphan must be reported as deleted or pending, not dropped",
+                result.deleted.contains(name) != result.pending.contains(name))
+            instrumentation.runOnMainSync {
+                val remaining = ProfileStore.getInstance().allProfileNames
+                if (result.deleted.contains(name)) assertFalse(remaining.contains(name)) else assertTrue(remaining.contains(name))
+                assertTrue("the default profile must survive any sweep", remaining.contains(Profile.DEFAULT_PROFILE_NAME))
+            }
+            assertFalse(result.deleted.contains(Profile.DEFAULT_PROFILE_NAME) || result.pending.contains(Profile.DEFAULT_PROFILE_NAME))
+        } finally {
+            instrumentation.runOnMainSync { runCatching { ProfileStore.getInstance().deleteProfile(name) } }
+        }
+    }
+
+    @Test fun clearAllEsuiteOwnedSkipsForeignAndDefaultProfiles() {
+        assumeMultiProfile()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val foreign = "qa_not_esuite_profile"
+        val owned = ProfileNames.name(UUID.randomUUID().toString(), "B")
+        val cleanup = AtomicReference<BrowserProfiles.CleanupResult>()
+        try {
+            instrumentation.runOnMainSync {
+                ProfileStore.getInstance().getOrCreateProfile(foreign)
+                ProfileStore.getInstance().getOrCreateProfile(owned)
+                cleanup.set(BrowserProfiles.clearAllEsuiteOwned())
+            }
+            val result = cleanup.get()
+            val touched = result.deleted + result.pending
+            assertTrue("only esuite_-prefixed profiles may be touched", touched.all { it.startsWith(ProfileNames.PREFIX) })
+            assertTrue(touched.contains(owned))
+            assertFalse(touched.contains(foreign))
+            assertFalse(touched.contains(Profile.DEFAULT_PROFILE_NAME))
+            instrumentation.runOnMainSync {
+                val remaining = ProfileStore.getInstance().allProfileNames
+                assertTrue("a foreign profile must survive", remaining.contains(foreign))
+                assertTrue("the default profile must survive", remaining.contains(Profile.DEFAULT_PROFILE_NAME))
+            }
+        } finally {
+            instrumentation.runOnMainSync {
+                runCatching { ProfileStore.getInstance().deleteProfile(foreign) }
+                runCatching { ProfileStore.getInstance().deleteProfile(owned) }
+            }
+        }
     }
 }

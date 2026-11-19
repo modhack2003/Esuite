@@ -24,6 +24,11 @@ data class AppState(
     val message: String = "Opening encrypted workspace…", val comparison: String = "", val ready: Boolean = false,
     val taskProgress: String = "No automation task running",
     val persistedWorkspace: Workspace? = null, val saveError: String? = null, val pendingWrites: Int = 0,
+    /**
+     * ESuite browser profiles the WebView provider refused to delete because it still has them
+     * loaded. Derived from the provider's own profile list on every load, never persisted.
+     */
+    val pendingProfileCleanup: List<String> = emptyList(),
 )
 
 @OptIn(FlowPreview::class)
@@ -46,6 +51,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // lands after a switch is recorded in Traffic but not applied under the wrong header.
     private var contextGeneration = 0
     private val importer = CollectionImporter()
+    // One-shot report carried from eraseVault()'s profile cleanup into the next successful load
+    // message, because erasing resets AppState and reloads immediately afterwards.
+    private var profileCleanupNote: String? = null
     init { loadWorkspace() }
     fun loadWorkspace() {
         workspaceGeneration += 1
@@ -59,8 +67,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val workspace = withContext(storageDispatcher) { vault.load() }
                 if (generation != workspaceGeneration) return@launch
                 val project = workspace.projects.firstOrNull()
+                // Back on Main once the load returns, which is the documented contract for the
+                // profile store: retry every ESuite profile whose project is gone, which is how a
+                // profile left loaded by the previous process is finally removed.
+                val sweep = BrowserProfiles.sweepOrphans(workspace.projects.map { it.id }.toSet())
+                val note = profileCleanupNote?.let { " $it" }.orEmpty()
+                profileCleanupNote = null
                 mutable.update { it.copy(workspace = workspace, projectId = project?.id, draft = RequestDraft(url = project?.origin?.plus("/").orEmpty()), ready = true,
-                    selected = null, persistedWorkspace = workspace, saveError = null, pendingWrites = 0, message = "Encrypted workspace open. Requests only run when you explicitly start them.") }
+                    selected = null, persistedWorkspace = workspace, saveError = null, pendingWrites = 0, pendingProfileCleanup = sweep.pending,
+                    message = "Encrypted workspace open. Requests only run when you explicitly start them.$note") }
                 persistenceJob?.cancel()
                 persistenceJob = viewModelScope.launch {
                     state.map { it.workspace }.distinctUntilChanged().drop(1).debounce(500).collect { _ ->
@@ -103,6 +118,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         contextGeneration += 1
         loadJob?.cancel()
         cancelRequest(); persistenceJob?.cancel(); engine.sessions.clearAll()
+        // Erasing the vault loses the project index, so ESuite's own browser profiles are removed
+        // here by prefix instead — the vault is not needed to decide what ESuite created.
+        profileCleanupNote = BrowserProfiles.clearAllEsuiteOwned().describe()
         viewModelScope.launch {
             mutable.update { it.copy(ready = false) }
             runCatching { withContext(storageDispatcher) { vault.erase() } }
@@ -373,13 +391,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun exportSanitized(): String = currentProject()?.let { ReportExporter.sanitized(state.value.workspace, it.id) } ?: "{}"
     fun deleteProject() {
         val p = currentProject() ?: return
-        runCatching { BrowserProfiles.clearProject(p.id) }.onFailure { message(it.message ?: "Browser profiles could not be cleared"); return }
+        // A profile the provider still holds loaded no longer aborts the deletion: the workspace
+        // deletion completes and the profile is recorded as pending cleanup with a retry path.
+        val cleanup = BrowserProfiles.clearProject(p.id)
         cancelRequest(); contextGeneration += 1; engine.sessions.clearProject(p.id); drafts.clearProject(p.id)
         mutable.update { it.copy(projectId = null, draft = RequestDraft(), selected = null, comparison = "", workspace = it.workspace.copy(
             projects = it.workspace.projects.filterNot { item -> item.id == p.id }, exchanges = it.workspace.exchanges.filterNot { e -> e.projectId == p.id },
             findings = it.workspace.findings.filterNot { f -> f.projectId == p.id }, savedRequests = it.workspace.savedRequests.filterNot { r -> r.projectId == p.id },
-            identityConfigs = it.workspace.identityConfigs.filterNot { c -> c.projectId == p.id }), message = "Project, API evidence and isolated browser profiles removed.") }
+            identityConfigs = it.workspace.identityConfigs.filterNot { c -> c.projectId == p.id }),
+            pendingProfileCleanup = (it.pendingProfileCleanup + cleanup.pending).distinct(),
+            message = "Project and its API evidence removed. ${cleanup.describe()}") }
         persistDurable()
+    }
+    /** Re-attempt every ESuite profile whose project is gone. Called from the UI thread. */
+    fun retryProfileCleanup() {
+        val result = BrowserProfiles.sweepOrphans(state.value.workspace.projects.map { it.id }.toSet())
+        if (result.unsupported) return message(result.describe())
+        mutable.update { it.copy(pendingProfileCleanup = result.pending, message = result.describe()) }
     }
     fun addFinding(title: String, detail: String, evidence: Exchange? = state.value.selected): Boolean {
         val project = currentProject() ?: return false

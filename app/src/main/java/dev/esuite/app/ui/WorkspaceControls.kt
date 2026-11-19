@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import dev.esuite.app.AppState
 import dev.esuite.app.AppViewModel
@@ -45,10 +46,17 @@ fun WorkspaceControls(state: AppState, model: AppViewModel) {
         }
     }
     Text("Local data controls", style = MaterialTheme.typography.titleMedium)
-    Text("Encrypted project history is autosaved after a short debounce; Save now flushes it explicitly. Browser profile data is managed separately by Android WebView.", style = MaterialTheme.typography.bodySmall)
+    Text("Encrypted project history is autosaved after a short debounce; Save now flushes it explicitly. Browser profile data is held by Android WebView and is removed by the delete and erase controls below.", style = MaterialTheme.typography.bodySmall)
     OutlinedButton(onClick = model::saveNow, modifier = Modifier.fillMaxWidth()) { Text("Save encrypted workspace now") }
     OutlinedButton(onClick = { export = model.exportSanitized(); preview = true }, enabled = state.projectId != null, modifier = Modifier.fillMaxWidth()) { Text("Preview sanitized local export") }
     OutlinedButton(onClick = { delete = true }, enabled = state.projectId != null, modifier = Modifier.fillMaxWidth()) { Text("Delete selected project and browser profiles") }
+    // Beside the delete control, not only in the top status line: the audit found the deletion
+    // outcome was otherwise discoverable only by scrolling back to the top.
+    if (state.pendingProfileCleanup.isNotEmpty()) {
+        Text("Browser profile cleanup pending: ${state.pendingProfileCleanup.joinToString(", ")}. Android WebView still has ${if (state.pendingProfileCleanup.size == 1) "it" else "them"} loaded in memory, so the profile data is still on the device. Cleanup is retried automatically when ESuite restarts.",
+            Modifier.testTag("workspace_profile_cleanup"), style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(onClick = model::retryProfileCleanup, modifier = Modifier.fillMaxWidth().testTag("retry_profile_cleanup")) { Text("Retry browser profile cleanup") }
+    }
     OutlinedButton(onClick = { erase = true }, modifier = Modifier.fillMaxWidth()) { Text("Erase encrypted workspace") }
     if (preview) AlertDialog(onDismissRequest = { preview = false; export = "" }, title = { Text("Review export") }, text = {
         Column {
@@ -56,13 +64,13 @@ fun WorkspaceControls(state: AppState, model: AppViewModel) {
             SelectionContainer { Text(export, Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()), style = MaterialTheme.typography.bodySmall) }
         }
     }, confirmButton = { TextButton(onClick = { preview = false; launcher.launch("esuite-sanitized-report.json") }) { Text("Choose local file") } }, dismissButton = { TextButton(onClick = { preview = false; export = "" }) { Text("Cancel") } })
-    if (delete) AlertDialog(onDismissRequest = { delete = false }, title = { Text("Delete selected project?") }, text = { Text("This removes its saved requests, history, observations, identity configuration and isolated browser profiles. Other projects remain.") },
+    if (delete) AlertDialog(onDismissRequest = { delete = false }, title = { Text("Delete selected project?") }, text = { Text("This removes its saved requests, history, observations and identity configuration, and asks Android WebView to delete its isolated browser profiles. A profile the browser still has loaded is removed when ESuite restarts. Other projects remain.") },
         confirmButton = { TextButton(onClick = { delete = false; model.deleteProject() }) { Text("Delete project") } }, dismissButton = { TextButton(onClick = { delete = false }) { Text("Cancel") } })
     if (erase) EraseVaultDialog({ erase = false }, model)
 }
 
 @Composable
 fun EraseVaultDialog(close: () -> Unit, model: AppViewModel) {
-    AlertDialog(onDismissRequest = close, title = { Text("Erase encrypted workspace?") }, text = { Text("All encrypted API projects and evidence will be removed and the vault key deleted. WebView browser data is separate; delete individual projects first to clear their browser profiles.") },
+    AlertDialog(onDismissRequest = close, title = { Text("Erase encrypted workspace?") }, text = { Text("All encrypted API projects and evidence will be removed and the vault key deleted. ESuite's own browser profiles are removed in the same step by name prefix, so projects do not have to be deleted individually first; other apps' WebView data and the default profile are untouched. A profile the browser still has loaded is removed when ESuite restarts.") },
         confirmButton = { TextButton(onClick = { close(); model.eraseVault() }) { Text("Erase vault") } }, dismissButton = { TextButton(onClick = close) { Text("Cancel") } })
 }

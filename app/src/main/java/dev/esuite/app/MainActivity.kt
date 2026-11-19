@@ -22,6 +22,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.esuite.app.browser.BrowserProfiles
 import dev.esuite.app.browser.BrowserScreen
 import dev.esuite.app.core.*
 import dev.esuite.app.ui.*
@@ -60,11 +61,26 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     val project = state.workspace.projects.firstOrNull { it.id == state.projectId }
     if (!state.ready) {
         var erase by remember { mutableStateOf(false) }
+        var removeProfiles by remember { mutableStateOf(false) }
+        // Recovery is reachable without the vault, so its report is screen-local: an unreadable
+        // workspace cannot tell us which projects owned which profile.
+        var profileReport by remember { mutableStateOf("") }
         Column(Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("ESuite · encrypted workspace", style = MaterialTheme.typography.titleLarge)
             Text(state.message)
             OutlinedButton(onClick = model::loadWorkspace) { Text("Retry open") }
+            TextButton(onClick = { removeProfiles = true }) { Text("Remove all ESuite browser profiles") }
+            if (profileReport.isNotBlank()) Text(profileReport, style = MaterialTheme.typography.bodySmall, color = Muted)
             TextButton(onClick = { erase = true }) { Text("Erase unreadable vault") }
+            if (removeProfiles) AlertDialog(onDismissRequest = { removeProfiles = false },
+                title = { Text("Remove all ESuite browser profiles?") },
+                text = { Text("Every browser profile ESuite created is deleted by name prefix, including profiles belonging to projects in a workspace that cannot be opened. Other apps' WebView data and the default profile are untouched. This does not need the vault and cannot be undone.") },
+                confirmButton = { TextButton(onClick = {
+                    removeProfiles = false
+                    val result = BrowserProfiles.clearAllEsuiteOwned()
+                    profileReport = "Deleted ${result.deleted.size} · pending ${result.pending.size}. ${result.describe()}"
+                }) { Text("Remove profiles") } },
+                dismissButton = { TextButton(onClick = { removeProfiles = false }) { Text("Cancel") } })
             if (erase) EraseVaultDialog({ erase = false }, model)
         }
         return
