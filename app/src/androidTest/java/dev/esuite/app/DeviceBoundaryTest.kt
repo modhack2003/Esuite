@@ -14,6 +14,9 @@ import dev.esuite.app.browser.BrowserProfiles
 import dev.esuite.app.browser.InspectorScripts
 import dev.esuite.app.core.*
 import dev.esuite.app.storage.WorkspaceVault
+import dev.esuite.app.storage.WorkspaceStore
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.cancel
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
@@ -230,15 +233,9 @@ class DeviceBoundaryTest {
         } finally { instrumentation.runOnMainSync { a.get()?.destroy(); b.get()?.destroy() } }
     }
 
-    // QA-05: a result that lands after an A→B identity switch must stay recorded in Traffic but must
-    // NOT be applied under identity B. The vault is pre-seeded with an HTTP MockWebServer origin so
-    // the real AppViewModel.send() runs end to end without TLS. TWO separate policies have to allow
-    // that: ScopePolicy, which permits http at the engine because the HTTPS-only gate lives in
-    // createProject and not on a loaded project (as the JVM ApiEngineTest already relies on); and the
-    // platform network security policy, which governs the socket itself and rejects cleartext before
-    // one is opened. The shipped config forbids cleartext everywhere, so these cases depend on the
-    // DEBUG-only 127.0.0.1 exception in app/src/debug/res/xml/network_security_config.xml
-    // (testBuildType = "debug"). They cannot run against a release build, by design.
+    // Attribution tests exercise the real ViewModel/HTTP client with an in-memory storage fixture.
+    // The production vault deliberately rejects HTTP projects. Do not weaken that boundary to seed
+    // a loopback fixture; its debug-only socket exception is separate from persisted-project policy.
     private fun awaitState(model: AppViewModel, timeoutMs: Long = 20_000, condition: (AppState) -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
@@ -251,14 +248,29 @@ class DeviceBoundaryTest {
     private fun loadedViewModel(server: MockWebServer): Pair<AppViewModel, Project> {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val application = context.applicationContext as android.app.Application
-        val vault = WorkspaceVault(context); vault.erase()
         val project = Project(name = "Attribution fixture", origin = server.url("/").toString())
-        vault.save(Workspace(projects = listOf(project)))
+        val store = object : WorkspaceStore {
+            private var current = Workspace(projects = listOf(project))
+            override fun load() = current
+            override fun save(workspace: Workspace): Workspace { current = workspace; return workspace }
+            override fun erase() { current = Workspace() }
+        }
         val holder = AtomicReference<AppViewModel>()
-        InstrumentationRegistry.getInstrumentation().runOnMainSync { holder.set(AppViewModel(application)) }
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { holder.set(AppViewModel(application, store)) }
         val model = holder.get()
         awaitState(model) { it.ready && it.projectId == project.id }
         return model to project
+    }
+
+    @Test fun productionVaultStillRejectsHttpProjectsWithoutChangingBytes() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val vault = WorkspaceVault(context); vault.erase()
+        try {
+            vault.save(Workspace(projects = listOf(Project(name = "Rejected fixture", origin = "http://127.0.0.1"))))
+            val file = File(context.noBackupFilesDir, "workspace.esv"); val before = file.readBytes()
+            assertThrows(IllegalArgumentException::class.java) { vault.load() }
+            assertArrayEquals(before, file.readBytes())
+        } finally { vault.erase() }
     }
 
     @Test fun delayedResponseArrivingAfterIdentitySwitchIsRecordedButNotApplied() {
@@ -283,7 +295,7 @@ class DeviceBoundaryTest {
             assertNull(state.selected)
             assertTrue(state.message.contains("recorded in Traffic and was not applied"))
             assertFalse(state.message.contains("cookie", true))
-        } finally { model.engine.close(); server.shutdown(); WorkspaceVault(context).erase() }
+        } finally { instrumentation.runOnMainSync { model.viewModelScope.cancel(); model.engine.close() }; server.shutdown() }
     }
 
     @Test fun delayedErrorArrivingAfterIdentitySwitchIsRecordedButNotApplied() {
@@ -307,7 +319,7 @@ class DeviceBoundaryTest {
             // ... and not applied under identity B.
             assertNull(state.selected)
             assertTrue(state.message.contains("recorded in Traffic and was not applied"))
-        } finally { model.engine.close(); server.shutdown(); WorkspaceVault(context).erase() }
+        } finally { instrumentation.runOnMainSync { model.viewModelScope.cancel(); model.engine.close() }; server.shutdown() }
     }
 
     @Test fun cancellingAnInFlightRequestRecordsNothingAndKeepsCancellationSemantics() {
@@ -328,7 +340,7 @@ class DeviceBoundaryTest {
             assertEquals(before, state.workspace.exchanges.size)
             assertNull(state.selected)
             assertEquals("Request cancelled", state.message)
-        } finally { model.engine.close(); server.shutdown(); WorkspaceVault(context).erase() }
+        } finally { instrumentation.runOnMainSync { model.viewModelScope.cancel(); model.engine.close() }; server.shutdown() }
     }
 
     // QA-05's acceptance says "including tasks", so the runner gates need their own deterministic
@@ -363,7 +375,35 @@ class DeviceBoundaryTest {
             assertTrue(state.message.contains("recorded in Traffic and was not applied"))
             assertFalse(state.message.contains("Parameter task complete"))
             assertEquals("Task stopped / completed; captured results retained", state.taskProgress)
-        } finally { model.engine.close(); server.shutdown(); WorkspaceVault(context).erase() }
+        } finally { instrumentation.runOnMainSync { model.viewModelScope.cancel(); model.engine.close() }; server.shutdown() }
+    }
+
+    @Test fun supersededSequenceRecordsBothLegsWithoutApplyingResultsToNewIdentity() = checkSupersededSequence(false)
+    @Test fun supersededSequenceDoesNotExtractOrSendAnOldIdentityToken() = checkSupersededSequence(true)
+
+    private fun checkSupersededSequence(usesToken: Boolean) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val server = MockWebServer(); server.start()
+        val (model, _) = loadedViewModel(server)
+        try {
+            server.enqueue(MockResponse().setBody("{\"token\":\"qa-token\"}").setBodyDelay(1200, TimeUnit.MILLISECONDS))
+            server.enqueue(MockResponse().setBody("second-leg"))
+            instrumentation.runOnMainSync {
+                model.draft(RequestDraft(url = server.url("/first").toString())); model.saveDraft("first")
+                model.draft(RequestDraft(url = server.url("/second").toString() + if (usesToken) "?token={{token}}" else "")); model.saveDraft("second")
+                model.runMacro("first\nsecond", if (usesToken) "/token" else "")
+            }
+            assertNotNull(server.takeRequest(10, TimeUnit.SECONDS))
+            instrumentation.runOnMainSync { model.identity("B") }
+            awaitState(model) { !it.busy }
+            val state = model.state.value
+            assertEquals("B", state.identity); assertNull(state.selected)
+            assertEquals(if (usesToken) 1 else 2, state.workspace.exchanges.count { it.identity == "A" && it.source == "Request sequence" })
+            assertEquals(if (usesToken) 1 else 2, server.requestCount)
+            assertFalse(state.draft.url.contains("qa-token"))
+            assertTrue(state.message.contains("recorded in Traffic and was not applied"))
+            assertFalse(state.message.contains("Sequence complete"))
+        } finally { instrumentation.runOnMainSync { model.viewModelScope.cancel(); model.engine.close() }; server.shutdown() }
     }
 
     // QA-08: the real ProfileStore contract against the installed provider. deleteProfile rejects a

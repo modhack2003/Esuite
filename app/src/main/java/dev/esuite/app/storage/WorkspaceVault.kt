@@ -11,7 +11,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 
 /** Call on Dispatchers.IO. No plaintext project files or plaintext fallback are created. */
-class WorkspaceVault(context: Context) {
+class WorkspaceVault(context: Context) : WorkspaceStore {
     private val file = AtomicFile(File(context.noBackupFilesDir, "workspace.esv"))
     private val alias = "esuite_workspace_aes_v1"
     private fun key(create: Boolean = true): SecretKey {
@@ -24,7 +24,7 @@ class WorkspaceVault(context: Context) {
                 .setKeySize(256).setRandomizedEncryptionRequired(true).build())
         }.generateKey()
     }
-    @Synchronized fun load(): Workspace {
+    @Synchronized override fun load(): Workspace {
         if (!file.baseFile.exists() && !File(file.baseFile.path + ".bak").exists()) return Workspace()
         val envelope = file.openRead().use {
             require(it.channel.size() <= Limits.VAULT_BYTES + 32) { "Workspace file exceeds limit" }
@@ -40,7 +40,7 @@ class WorkspaceVault(context: Context) {
             it.projects.forEach { p -> require(ScopePolicy(p.origin).target.isHttps) { "Workspace contains an unsupported HTTP project" } }
         }
     }
-    @Synchronized fun save(workspace: Workspace): Workspace {
+    @Synchronized override fun save(workspace: Workspace): Workspace {
         val budget = WorkspacePersistence.byteBudgetForHeap(Runtime.getRuntime().maxMemory())
         val (bounded, bytes) = WorkspacePersistence.prepare(workspace, budget)
         val hasExistingVault = file.baseFile.exists() || File(file.baseFile.path + ".bak").exists()
@@ -48,7 +48,7 @@ class WorkspaceVault(context: Context) {
         VerifiedAtomicWrite.write(file, envelope)
         return bounded
     }
-    @Synchronized fun erase() {
+    @Synchronized override fun erase() {
         file.delete()
         KeyStore.getInstance("AndroidKeyStore").apply { load(null); deleteEntry(alias) }
     }

@@ -138,7 +138,7 @@ public class ProductionUiTest extends NativeUiDriver {
         enter("api_saved_name", "Synthetic GET"); click("api_save_draft");
         assertNotNull(find(By.text("Load: Synthetic GET")));
         enter("api_url", "https://outside.invalid/"); click("api_send");
-        assertNotNull(find(By.text(java.util.regex.Pattern.compile("Error · .*"))));
+        assertNotNull(find(By.text(java.util.regex.Pattern.compile("(?s).*Error · .*"))));
         // The failed send must replace the old 200 result, with no request to outside.invalid.
         top(); assertTrue(waitText("workspace_status", "outside the selected project origin", 15000));
         click("nav_traffic"); assertNotNull(find(By.textContains("Identity comparison · identity B · 200")));

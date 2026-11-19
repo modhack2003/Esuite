@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import dev.esuite.app.core.*
 import dev.esuite.app.transport.ApiEngine
 import dev.esuite.app.storage.WorkspaceVault
+import dev.esuite.app.storage.WorkspaceStore
 import dev.esuite.app.browser.BrowserProfiles
 import dev.esuite.app.automation.PayloadMode
 import dev.esuite.app.automation.RequestPlans
@@ -32,7 +33,7 @@ data class AppState(
 )
 
 @OptIn(FlowPreview::class)
-class AppViewModel(application: Application) : AndroidViewModel(application) {
+class AppViewModel @JvmOverloads constructor(application: Application, private val vault: WorkspaceStore = WorkspaceVault(application)) : AndroidViewModel(application) {
     private val mutable = MutableStateFlow(AppState())
     val state = mutable.asStateFlow()
     val engine = ApiEngine()
@@ -42,7 +43,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
      */
     val drafts = EditorDrafts()
     private var requestJob: Job? = null
-    private val vault = WorkspaceVault(application)
     private val storageDispatcher = Dispatchers.IO.limitedParallelism(1)
     private var persistenceJob: Job? = null
     private var loadJob: Job? = null
