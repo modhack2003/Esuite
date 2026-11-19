@@ -167,10 +167,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         mutable.update { if (it.identity == value) it else it.copy(identity = value, selected = null,
             draft = CredentialPolicy.strip(it.draft, it.workspace.identityConfigs.filter { c -> c.projectId == it.projectId }),
             message = "Identity changed; observed auth headers removed. Body values remain unchanged and must be reviewed.") }
-        // A retained header draft is stripped exactly as the ViewModel draft above is. The
-        // identity-headers editor is NOT in this list: its key carries the identity, so each
-        // identity keeps its own pending text and a switch can never carry one identity's
-        // credential text into the other's editor or into the config a save writes.
+        // A retained header draft is stripped exactly as the ViewModel draft above is. Every
+        // Editor.identityScoped editor is deliberately absent from this list: its key carries the
+        // identity, so each identity keeps its own pending text and a switch can never carry one
+        // identity's credential text into the other's editor, into the config a save writes, or into
+        // the other identity's isolated cookie jar.
         if (previous.identity != value) {
             contextGeneration += 1
             val configuredNames = previous.workspace.identityConfigs.filter { it.projectId == previous.projectId }
@@ -197,7 +198,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         writeHeaderEditor(state.value.draft.headers)
     }
     private fun writeHeaderEditor(headers: List<Header>) =
-        drafts.set(DraftKey(state.value.projectId, Editor.ApiHeaders), headers.joinToString("\n") { "${it.name}: ${it.value}" })
+        drafts.set(DraftKey.of(state.value.projectId, Editor.ApiHeaders, state.value.identity), headers.joinToString("\n") { "${it.name}: ${it.value}" })
     fun record(exchange: Exchange) {
         mutable.update { if (!it.ready || it.workspace.projects.none { p -> p.id == exchange.projectId }) it else it.copy(workspace = it.workspace.copy(exchanges = (listOf(exchange) + it.workspace.exchanges).take(Limits.HISTORY))) }
     }
@@ -379,7 +380,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 persistDurable()
                 // Cleared on success exactly as a saved finding clears its title/detail drafts, so
                 // the editor falls back to the configuration that was just stored.
-                drafts.clear(DraftKey(p.id, Editor.ApiIdentityHeaders, config.identity))
+                drafts.clear(DraftKey.of(p.id, Editor.ApiIdentityHeaders, config.identity))
             }.onFailure { message(it.message ?: "Identity storage budget exceeded") }
         }.onFailure { message(it.message ?: "Invalid identity headers") }
     }

@@ -112,6 +112,33 @@ class EditorDraftsTest {
         assertTrue(drafts.values.value.isEmpty())
     }
 
+    /**
+     * The same rule for the Browser editors, which the first fix missed. `browser_cookie_input` text
+     * is handed to the SELECTED identity's isolated cookie jar by `browser_set_cookie`, so a value
+     * typed under A must not still be in the field after a switch to B — that would store A's cookie
+     * under B. [Editor.identityScoped] is the one place that decides, so pin the set too.
+     */
+    @Test fun browserCookieAndScriptDraftsCannotCrossBetweenIdentities() {
+        val drafts = EditorDrafts()
+        val cookieUnderA = DraftKey.of(projectA, Editor.BrowserEdit, "A")
+        val cookieUnderB = DraftKey.of(projectA, Editor.BrowserEdit, "B")
+        assertNotEquals(cookieUnderA, cookieUnderB)
+        drafts.set(cookieUnderA, "session=secret_A; Path=/; Secure; HttpOnly")
+        // Under B the key is unset, so the field is empty and a Set press has nothing of A's to store.
+        assertEquals("", drafts.text(cookieUnderB))
+        assertEquals("session=secret_A; Path=/; Secure; HttpOnly", drafts.text(cookieUnderA))
+        drafts.set(cookieUnderB, "session=secret_B; Path=/; Secure")
+        assertEquals("session=secret_A; Path=/; Secure; HttpOnly", drafts.text(cookieUnderA))
+        // The console script shares that profile-bound lifetime; the address bar is project-wide.
+        assertEquals("B", DraftKey.of(projectA, Editor.BrowserScript, "B").identity)
+        assertNull(DraftKey.of(projectA, Editor.BrowserAddress, "B").identity)
+        assertEquals(setOf(Editor.ApiIdentityHeaders, Editor.BrowserEdit, Editor.BrowserScript),
+            Editor.entries.filter { it.identityScoped }.toSet())
+        // Both identities stay scoped to the project, so a project clear still removes both.
+        drafts.clearProject(projectA)
+        assertTrue(drafts.values.value.isEmpty())
+    }
+
     @Test fun transformAppliesTheCredentialStripToRetainedHeaderEditorsOnly() {
         val drafts = EditorDrafts()
         val headers = "Authorization: Bearer abc\nAccept: application/json"

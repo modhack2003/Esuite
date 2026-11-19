@@ -37,8 +37,10 @@ fun BrowserScreen(project: Project, identity: String, model: AppViewModel, modif
     val policy = remember(project.id) { ScopePolicy(project.origin) }
     // Pending editors live in the ViewModel: BrowserScreen is destroyed on every module switch.
     val pending by model.drafts.values.collectAsState()
-    fun draftText(editor: Editor, fallback: String = "") = pending[DraftKey(project.id, editor)] ?: fallback
-    fun write(editor: Editor, value: String) = model.drafts.set(DraftKey(project.id, editor), value)
+    // DraftKey.of adds the identity dimension for the editors that declare it, so the cookie and
+    // script editors keep one identity's text out of the other's isolated profile.
+    fun draftText(editor: Editor, fallback: String = "") = pending[DraftKey.of(project.id, editor, identity)] ?: fallback
+    fun write(editor: Editor, value: String) = model.drafts.set(DraftKey.of(project.id, editor, identity), value)
     val address = draftText(Editor.BrowserAddress, project.origin + "/")
     var webView by remember(project.id, identity) { mutableStateOf<WebView?>(null) }
     var rendererFailed by remember(project.id, identity) { mutableStateOf(false) }

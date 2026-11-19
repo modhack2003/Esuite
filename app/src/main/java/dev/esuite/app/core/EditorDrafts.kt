@@ -12,23 +12,43 @@ import kotlinx.coroutines.flow.asStateFlow
  * field value: [ToolsInput] feeds `importOpenApi`/`importHar`/`importCurl` and [ApiRaw] feeds
  * `DraftParser.raw`, both of which accept up to that limit. Capping those at the smaller default cut
  * a legitimate paste mid-document and surfaced as a parser syntax error instead of a truncation.
+ *
+ * [identityScoped] declares that this editor's text belongs to ONE identity, so its [DraftKey]
+ * carries the identity and an A->B switch can never carry the text across. It is the single source
+ * of truth for that rule — build keys with [DraftKey.of] rather than deciding per call site:
+ * - [ApiIdentityHeaders] is that identity's own credential configuration, and `api_save_identity`
+ *   writes the field straight into its `IdentityConfig`.
+ * - [BrowserEdit] backs `browser_cookie_input`, and `browser_set_cookie` writes the field into the
+ *   SELECTED identity's isolated cookie jar, so retaining it across a switch would store identity
+ *   A's cookie under identity B.
+ * - [BrowserScript] is evaluated in the selected identity's own profile-bound WebView, which is the
+ *   lifetime it had before drafts existed.
+ * [BrowserAddress] is deliberately project-wide: a URL is not credential-bearing and page loads stay
+ * explicit through Go.
  */
-enum class Editor(val valueChars: Int = EditorDrafts.VALUE_CHARS) {
-    ApiHeaders, ApiRaw(Limits.REQUEST_BYTES), ApiSavedName, ApiIdentityHeaders, FindingTitle, FindingDetail,
+enum class Editor(val valueChars: Int = EditorDrafts.VALUE_CHARS, val identityScoped: Boolean = false) {
+    ApiHeaders, ApiRaw(Limits.REQUEST_BYTES), ApiSavedName, ApiIdentityHeaders(identityScoped = true),
+    FindingTitle, FindingDetail,
     ToolsInput(Limits.REQUEST_BYTES),
     TaskPayload1, TaskPayload2, TaskPayload3, TaskPayload4, SequenceNames, TokenPath,
-    BrowserAddress, BrowserEdit, BrowserScript,
+    BrowserAddress, BrowserEdit(identityScoped = true), BrowserScript(identityScoped = true),
 }
 
 /**
  * Drafts are scoped to a project, so switching projects never shows another project's pending text.
  *
- * [identity] is set ONLY for an editor whose content belongs to one identity — currently just
- * [Editor.ApiIdentityHeaders], whose text is that identity's own credential configuration. Without
- * that dimension an A->B switch left identity A's pending text in the field, hid identity B's saved
- * headers and let a save write A's text into B's `IdentityConfig`. Every other editor leaves it null.
+ * [identity] is set only for an [Editor.identityScoped] editor. Without that dimension an A->B switch
+ * left identity A's pending text in the field: the identity-headers editor hid identity B's saved
+ * headers and let a save write A's text into B's `IdentityConfig`, and the browser cookie editor let
+ * `browser_set_cookie` store A's cookie in B's isolated jar. Every other editor leaves it null.
  */
-data class DraftKey(val projectId: String?, val editor: Editor, val identity: String? = null)
+data class DraftKey(val projectId: String?, val editor: Editor, val identity: String? = null) {
+    companion object {
+        /** The key factory screens use: [Editor.identityScoped] decides whether [identity] applies. */
+        fun of(projectId: String?, editor: Editor, identity: String): DraftKey =
+            DraftKey(projectId, editor, identity.takeIf { editor.identityScoped })
+    }
+}
 
 /**
  * In-memory pending editor text, owned by the ViewModel so it survives module switches, rotation and

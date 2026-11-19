@@ -331,6 +331,41 @@ class DeviceBoundaryTest {
         } finally { model.engine.close(); server.shutdown(); WorkspaceVault(context).erase() }
     }
 
+    // QA-05's acceptance says "including tasks", so the runner gates need their own deterministic
+    // case: the three above drive send() only, and ResultAttribution.accepts() is covered in
+    // isolation on the JVM. runPayloads() is the runner chosen here because it needs no saved
+    // requests. Both legs must still reach Traffic under the identity they ran as — recording is
+    // unconditional in every path — while the superseded message replaces the completion text.
+    @Test fun parameterTaskSupersededMidRunStillRecordsEveryLegAndReportsTheSwitch() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val server = MockWebServer(); server.start()
+        val (model, _) = loadedViewModel(server)
+        try {
+            // Built by string concatenation, not server.url(path): HttpUrl would percent-encode the
+            // {{P1}} braces and RequestPlans' marker regex would no longer match.
+            instrumentation.runOnMainSync { model.draft(RequestDraft(url = server.url("/api").toString() + "?p={{P1}}")) }
+            repeat(2) { leg -> server.enqueue(MockResponse().setResponseCode(200).setBody("leg-$leg").setBodyDelay(1200, TimeUnit.MILLISECONDS)) }
+            val before = model.state.value.workspace.exchanges.size
+            instrumentation.runOnMainSync {
+                model.runPayloads(listOf("first\nsecond"), dev.esuite.app.automation.PayloadMode.ONE_POSITION)
+            }
+            awaitState(model) { it.busy }
+            instrumentation.runOnMainSync { model.identity("B") } // switch while the first leg is in flight
+            awaitState(model, timeoutMs = 30_000) { !it.busy }
+            val state = model.state.value
+            assertEquals("B", state.identity)
+            // Every leg ran as identity A and every leg is recorded; nothing was dropped.
+            assertEquals(before + 2, state.workspace.exchanges.size)
+            assertEquals(2, state.workspace.exchanges.count { it.identity == "A" && it.status == 200 && it.source == "Parameter runner" })
+            // The superseded message replaced the completion text, and progress never advanced past
+            // the switch, so no leg was applied under identity B.
+            assertTrue(state.message.contains("recorded in Traffic and was not applied"))
+            assertFalse(state.message.contains("Parameter task complete"))
+            assertEquals("Task stopped / completed; captured results retained", state.taskProgress)
+        } finally { model.engine.close(); server.shutdown(); WorkspaceVault(context).erase() }
+    }
+
     // QA-08: the real ProfileStore contract against the installed provider. deleteProfile rejects a
     // profile the provider still holds loaded — destroying every WebView is not sufficient and there
     // is no API to unload one — so cleanup must REPORT the refusal rather than throw, and must never

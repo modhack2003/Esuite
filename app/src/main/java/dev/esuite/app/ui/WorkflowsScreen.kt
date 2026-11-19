@@ -17,8 +17,8 @@ private val payloadEditors = listOf(Editor.TaskPayload1, Editor.TaskPayload2, Ed
 @Composable
 fun WorkflowsScreen(state: AppState, model: AppViewModel) {
     val pending by model.drafts.values.collectAsState()
-    fun draftText(editor: Editor) = pending[DraftKey(state.projectId, editor)].orEmpty()
-    fun write(editor: Editor, value: String) = model.drafts.set(DraftKey(state.projectId, editor), value)
+    fun draftText(editor: Editor) = pending[DraftKey.of(state.projectId, editor, state.identity)].orEmpty()
+    fun write(editor: Editor, value: String) = model.drafts.set(DraftKey.of(state.projectId, editor, state.identity), value)
     val inputs = payloadEditors.map(::draftText)
     val sequence = draftText(Editor.SequenceNames); val tokenPath = draftText(Editor.TokenPath)
     // Mode and preview are view state derived from the inputs, so they stay screen-local.

@@ -182,14 +182,14 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val pending by model.drafts.values.collectAsState()
-    fun draftText(editor: Editor, fallback: String = "") = pending[DraftKey(state.projectId, editor)] ?: fallback
-    fun write(editor: Editor, value: String) = model.drafts.set(DraftKey(state.projectId, editor), value)
+    fun draftText(editor: Editor, fallback: String = "") = pending[DraftKey.of(state.projectId, editor, state.identity)] ?: fallback
+    fun write(editor: Editor, value: String) = model.drafts.set(DraftKey.of(state.projectId, editor, state.identity), value)
     val headers = draftText(Editor.ApiHeaders, draft.headers.joinToString("\n") { "${it.name}: ${it.value}" })
     val raw = draftText(Editor.ApiRaw)
     val savedName = draftText(Editor.ApiSavedName)
     // Keyed by identity as well as project, so this field always shows the SELECTED identity's
     // pending text or its saved configuration — never the other identity's.
-    val identityKey = DraftKey(state.projectId, Editor.ApiIdentityHeaders, state.identity)
+    val identityKey = DraftKey.of(state.projectId, Editor.ApiIdentityHeaders, state.identity)
     val identityHeaders = pending[identityKey]
         ?: state.workspace.identityConfigs.firstOrNull { it.projectId == state.projectId && it.identity == state.identity }?.headers.orEmpty().joinToString("\n") { "${it.name}: ${it.value}" }
     fun prepare(action: () -> Unit) { focus.clearFocus(); keyboard?.hide(); runCatching { DraftParser.headers(headers) }.onSuccess { model.draft(draft.copy(headers = it)); action() }.onFailure { model.message(it.message ?: "Invalid headers") } }
@@ -225,8 +225,8 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val pending by model.drafts.values.collectAsState()
-    val titleKey = DraftKey(state.projectId, Editor.FindingTitle)
-    val detailKey = DraftKey(state.projectId, Editor.FindingDetail)
+    val titleKey = DraftKey.of(state.projectId, Editor.FindingTitle, state.identity)
+    val detailKey = DraftKey.of(state.projectId, Editor.FindingDetail, state.identity)
     val title = pending[titleKey].orEmpty(); val detail = pending[detailKey].orEmpty()
     Text("Evidence before conclusions.", style = MaterialTheme.typography.headlineSmall)
     DraftNotice()
@@ -295,7 +295,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
 
 @Composable private fun ToolsScreen(state: AppState, model: AppViewModel) {
     val pending by model.drafts.values.collectAsState()
-    val inputKey = DraftKey(state.projectId, Editor.ToolsInput)
+    val inputKey = DraftKey.of(state.projectId, Editor.ToolsInput, state.identity)
     val input = pending[inputKey].orEmpty()
     // Output is derived from the input and the pressed transformation, so it stays screen-local.
     var output by remember { mutableStateOf("") }
