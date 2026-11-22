@@ -19,3 +19,18 @@ This candidate covers defensive local evidence, offline tools, and scoped manual
 - Add an on-device Diagnostics view for app/Android/WebView versions, vault size and save state, plus an explicit redacted support export. Expand TalkBack, OEM, document-provider and low-memory checks into a repeatable acceptance matrix.
 - Benchmark cold start, low-memory migration and large-history navigation with repeatable synthetic workspaces. Add deterministic cancellation and save-interleaving coverage. Update Compose, WebView integration and HTTP dependencies in small increments with migration, device and performance checks for each. Keep a release dependency inventory and gate release claims on recorded results.
 - Define the paid product's exact supported workflows, distribution, offline entitlement, support and refund terms. Maintain accurate privacy and dependency notices, signer continuity and an upgrade rehearsal for every release.
+
+## Local verification
+
+| Check | Result |
+| --- | --- |
+| Android JVM tests | 78 passed in debug and 78 passed in release |
+| Android lint | Debug and release passed with zero errors. Each reported 12 dependency-update notices. |
+| Packaging | Built debug, optimized release and both Android test APKs. The optimized build is code 6 with min SDK 28 and target SDK 37. |
+| APK integrity | The disposable-signer fixture passed signature, certificate pin, package metadata, zip alignment and 16 KiB native-library checks. The negative cases rejected wrong pins, wrong versions, unsigned APKs, debug APKs and tampering. |
+| Release scope | R8 mapping and DEX checks confirmed the optimized APK excludes the automated task UI and request-plan execution code. |
+| Web concept and Storage | Typecheck and build passed. Chromium passed the synthetic interaction suite and the Storage boundary cases, including escaping, Unicode truncation and omitted-key counts. The concept ran from a locally fulfilled fixture URL because this environment blocks Chromium file URLs. |
+| Native UI execution | The API 28 software emulator stayed offline in ADB. The device APK and independent UI harness compiled. |
+| Upgrade fixture | Independently downloaded the published 1.0.2 APK and matched its SHA-256 and existing production signing certificate. |
+
+The test-signed APK is for a fresh emulator or test device. Updating a published installation requires the existing production certificate. Physical-device, TalkBack, approved document-provider writes, the full candidate emulator matrix and the production-signed upgrade remain release gates.
