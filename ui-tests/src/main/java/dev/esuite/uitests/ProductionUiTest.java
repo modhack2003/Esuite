@@ -25,10 +25,11 @@ public class ProductionUiTest extends NativeUiDriver {
         enter("project_name", "UI persistence fixture");
         enter("project_origin", "https://example.test");
         click("create_project");
+        click("switch_project"); click("new_project");
         enter("project_name", "Last used project fixture");
         enter("project_origin", "https://second.example.test");
         click("create_project");
-        click("identity_B");
+        click("nav_api"); click("identity_B");
         click("nav_findings");
         enter("finding_title", "UI fixture observation");
         enter("finding_detail", "Synthetic local evidence");
@@ -41,10 +42,15 @@ public class ProductionUiTest extends NativeUiDriver {
         assertTrue("Last project or safe initial identity was not restored", waitText("workspace_context", "Last used project fixture · https://second.example.test · identity A", 15000));
         click("nav_findings");
         assertNotNull(find(By.textContains("Synthetic local evidence")));
+        click("finding_item");
         find(By.text("Preview observation report")).click();
         assertNotNull(device.wait(Until.findObject(By.textContains("esuite-observation")), 5000));
-        device.pressBack();
+        device.pressBack(); device.pressBack();
         click("nav_home"); click("home_tools");
+        enter("tools_input", "ESuite");
+        find(By.text("Base64 encode")).click();
+        assertTrue(waitText("tools_output", "RVN1aXRl", 5000));
+        click("tools_tab_review");
         assertNotNull(find(By.text("Review AWS JSON offline")));
         assertFalse(device.hasObject(By.res("task_preview")));
     }
@@ -120,7 +126,7 @@ public class ProductionUiTest extends NativeUiDriver {
         readCookies("synthetic-cookie");
         click("browser_reveal"); click("browser_read_cookies"); output("esuite_ui=[HIDDEN]");
         click("browser_transfer"); output("memory-only cookie jar replaced");
-        click("nav_api"); click("api_session_metadata"); top();
+        click("nav_api"); click("api_tab_identity"); click("api_session_metadata"); top();
         assertNotNull(find(By.textContains("esuite_ui")));
         // Profile A persists after leaving Browser; B remains independent.
         top(); click("identity_B"); click("nav_browser"); readCookies("No cookies for this URL");
@@ -136,11 +142,11 @@ public class ProductionUiTest extends NativeUiDriver {
         enter("project_origin", "https://example.com"); click("create_project");
         click("nav_api"); click("api_send"); top();
         assertTrue("HTTPS API request did not complete", waitText("workspace_status", "HTTP 200", 45000));
-        click("api_compare"); top();
+        click("api_tab_request"); click("api_compare"); top();
         assertTrue("A/B comparison did not finish", waitText("workspace_status", "Separate session jars used", 90000));
-        enter("api_saved_name", "Synthetic GET"); click("api_save_draft");
+        click("api_tab_collection"); enter("api_saved_name", "Synthetic GET"); click("api_save_draft");
         assertNotNull(find(By.text("Load: Synthetic GET")));
-        enter("api_url", "https://outside.invalid/"); click("api_send");
+        click("api_tab_request"); enter("api_url", "https://outside.invalid/"); click("api_send");
         assertNotNull(find(By.text(java.util.regex.Pattern.compile("(?s).*Error · .*"))));
         // The failed send must replace the old 200 result, with no request to outside.invalid.
         top(); assertTrue(waitText("workspace_status", "outside the selected project origin", 15000));

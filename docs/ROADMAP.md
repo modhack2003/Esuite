@@ -110,3 +110,8 @@ Evidence and exact acceptance: [Vivo 1.0.2 review](reviews/vivo-1.0.2-production
 - [ ] Verify QA-12 shared manual request cancellation through screen changes and delayed responses on the physical device. The optimized candidate exposes a shared Cancel for manual requests.
 - [ ] Define paid local-app distribution, offline entitlement/update/support and privacy/license disclosures without hosted evidence or automatic diagnostics uploads.
 - [ ] Pass fixes on the physical Vivo and supported providers, plus exact-source/signed upgrade gates, before claiming paid production readiness.
+
+## 1.0.4 delivery
+
+- [x] Streamline Home, API Lab, Findings and Tools. Move expensive admission and report work off the UI thread.
+- [ ] Record the exact-source Android matrix and signed upgrade results in the [1.0.4 release record](RELEASE_1.0.4.md).

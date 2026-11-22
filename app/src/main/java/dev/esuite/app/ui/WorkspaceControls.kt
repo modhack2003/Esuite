@@ -25,9 +25,10 @@ private class LocalReportDocument : ActivityResultContracts.CreateDocument("appl
 }
 
 @Composable
-fun LocalReportAction(label: String, filename: String, prepare: () -> String?, onMessage: (String) -> Unit, enabled: Boolean = true) {
+fun LocalReportAction(label: String, filename: String, prepare: suspend () -> String?, onMessage: (String) -> Unit, enabled: Boolean = true) {
     val context = LocalContext.current; val scope = rememberCoroutineScope()
     var export by remember { mutableStateOf("") }; var preview by remember { mutableStateOf(false) }
+    var preparing by remember { mutableStateOf(false) }
     val launcher = rememberLauncherForActivityResult(LocalReportDocument()) { uri ->
         val payload = export
         export = ""
@@ -45,10 +46,17 @@ fun LocalReportAction(label: String, filename: String, prepare: () -> String?, o
         }
     }
     OutlinedButton(onClick = {
-        val payload = prepare()
-        if (payload == null) onMessage("This report is unavailable.")
-        else { export = payload; preview = true }
-    }, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text(label) }
+        preparing = true
+        scope.launch {
+            try {
+                val payload = prepare()
+                if (payload == null) onMessage("This report is unavailable.")
+                else { export = payload; preview = true }
+            } finally { preparing = false }
+        }
+    }, enabled = enabled && !preparing, modifier = Modifier.fillMaxWidth()) {
+        Text(if (preparing) "Preparing report" else label)
+    }
     if (preview) AlertDialog(onDismissRequest = { preview = false; export = "" }, title = { Text("Review export") }, text = {
         Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("The origin, generated IDs and report metadata appear in the file. Paths, credentials, bodies and free text are omitted.")

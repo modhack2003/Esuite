@@ -10,6 +10,10 @@ Read this file first, then `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md
 - No analytics, hosted AI, remote workers, automatic evidence uploads or external callback collectors. The design services received synthetic data only.
 - The React prototype is a synthetic design reference. Native features must be assessed from Kotlin source and tests.
 
+## 1.0.4
+
+See the [1.0.4 release record](RELEASE_1.0.4.md) for workspace changes, performance work and exact-source verification.
+
 ## 1.0.3 candidate — native usability and local reports
 
 The candidate is code 6. Browser uses adaptive tabs and viewport controls, separates cookie and page-edit drafts, and reports bounded storage previews. Traffic opens details above the list. Findings can preview a redacted report for a specific observation. The last available project is restored by opaque ID with identity A and Home as the starting screen. The optimized candidate packages the defensive local and scoped manual workflows. Verification and open release gates are recorded in the [1.0.3 plan](RELEASE_1.0.3_PLAN.md).

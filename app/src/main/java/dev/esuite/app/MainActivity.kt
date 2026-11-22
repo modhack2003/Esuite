@@ -2,6 +2,7 @@ package dev.esuite.app
 
 import android.os.Bundle
 import android.webkit.WebView
+import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.automirrored.outlined.List
+import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,8 +31,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
@@ -40,11 +40,13 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.esuite.app.browser.BrowserProfiles
 import dev.esuite.app.browser.BrowserScreen
 import dev.esuite.app.core.*
 import dev.esuite.app.ui.*
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     // Activity-scoped ViewModel shared with Compose (same ViewModelStore), so onStop can flush it.
@@ -69,17 +71,27 @@ class MainActivity : ComponentActivity() {
 
 enum class Screen(val label: String, val icon: ImageVector) {
     Home("Home", Icons.Outlined.Home), Browser("Browser", Icons.Outlined.Search), Traffic("Traffic", Icons.AutoMirrored.Outlined.List),
-    Api("API Lab", Icons.Outlined.Build), Findings("Findings", Icons.Outlined.CheckCircle), Tools("Tools", Icons.Outlined.Build)
+    Api("API Lab", Icons.AutoMirrored.Outlined.Send), Findings("Findings", Icons.Outlined.CheckCircle), Tools("Tools", Icons.Outlined.Build)
 }
 
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun ESuiteApp(model: AppViewModel = viewModel()) {
-    val state by model.state.collectAsState()
+    val state by model.state.collectAsStateWithLifecycle()
     var selectedName by rememberSaveable { mutableStateOf(Screen.Home.name) }
     val screen = Screen.valueOf(selectedName)
+    BackHandler(enabled = screen != Screen.Home) { selectedName = Screen.Home.name }
     val project = state.workspace.projects.firstOrNull { it.id == state.projectId }
     if (!state.ready) {
+        if (state.openingWorkspace) {
+            Box(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    CircularProgressIndicator(Modifier.size(28.dp))
+                    Text("Opening workspace", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            return
+        }
         var erase by remember { mutableStateOf(false) }
         var removeProfiles by remember { mutableStateOf(false) }
         // Recovery is reachable without the vault, so its report is screen-local: an unreadable
@@ -106,6 +118,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
         return
     }
     val pageScroll = key(screen, state.projectId, state.identity) { rememberScrollState() }
+    val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val windowSize = LocalWindowInfo.current.containerSize
     val compactNavigation = with(density) { windowSize.height.toDp() < 450.dp }
@@ -142,6 +155,9 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
                         BrowserScreen(project, state.identity, model, Modifier.weight(1f))
                     }
                 }
+                screen == Screen.Findings -> {
+                    key(state.projectId) { FindingsScreen(state, model, project) { selectedName = Screen.Api.name } }
+                }
                 screen == Screen.Traffic -> {
                     key(state.projectId) { TrafficScreen(state, model, project) { selectedName = Screen.Api.name } }
                 }
@@ -150,13 +166,12 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
                         verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         Spacer(Modifier.height(8.dp))
                         WorkspaceStatus(project, state)
-                        if (project != null) IdentityControls(state, model)
                         when (screen) {
-                            Screen.Home -> HomeScreen(state, model) { selectedName = it.name }
+                            Screen.Home -> HomeScreen(state, model, project) { selectedName = it.name }
                             Screen.Browser -> Text("Create a project first.")
                             Screen.Traffic -> Unit
-                            Screen.Api -> ApiScreen(state, model)
-                            Screen.Findings -> FindingsScreen(state, model) { selectedName = Screen.Api.name }
+                            Screen.Api -> ApiScreen(state, model) { scope.launch { pageScroll.scrollTo(0) } }
+                            Screen.Findings -> Unit
                             Screen.Tools -> ToolsScreen(state, model)
                         }
                         Spacer(Modifier.height(20.dp))
@@ -193,7 +208,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     }
 }
 
-@Composable private fun IdentityControls(state: AppState, model: AppViewModel) {
+@Composable internal fun IdentityControls(state: AppState, model: AppViewModel) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         listOf("A", "B").forEach { identity ->
             FilterChip(modifier = Modifier.testTag("identity_$identity"), selected = state.identity == identity,
@@ -202,11 +217,11 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     }
 }
 
-@Composable private fun WorkspaceStatus(project: Project?, state: AppState) {
+@Composable internal fun WorkspaceStatus(project: Project?, state: AppState) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(project?.let { "${it.name} · ${it.origin} · identity ${state.identity}" } ?: "No active project", Modifier.testTag("workspace_context"),
             color = Signal, style = MaterialTheme.typography.bodySmall)
-        Text(state.message, Modifier.testTag("workspace_status").semantics { liveRegion = LiveRegionMode.Polite },
+        if (state.message.isNotBlank()) Text(state.message, Modifier.testTag("workspace_status").semantics { liveRegion = LiveRegionMode.Polite },
             style = MaterialTheme.typography.bodySmall, color = Muted)
         Text(state.saveError ?: if (state.pendingWrites == 0 && state.persistedWorkspace == state.workspace) "Workspace saved with AES-GCM" else "Workspace edits pending encrypted save…",
             Modifier.testTag("workspace_save_status"), style = MaterialTheme.typography.bodySmall, color = if (state.saveError == null) Muted else Amber)
@@ -234,33 +249,21 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     }
 }
 
-@Composable private fun HomeScreen(state: AppState, model: AppViewModel, navigate: (Screen) -> Unit) {
-    val focus = LocalFocusManager.current
-    val keyboard = LocalSoftwareKeyboardController.current
-    var name by remember { mutableStateOf("") }; var origin by remember { mutableStateOf("") }
-    Text("Your workspace.", style = MaterialTheme.typography.headlineLarge)
-    state.workspace.projects.forEach { p -> OutlinedButton(onClick = { model.selectProject(p.id) }, modifier = Modifier.fillMaxWidth()) { Text("${if (state.projectId == p.id) "✓ " else ""}${p.name} · ${p.origin}") } }
-    OutlinedTextField(name, { name = it }, label = { Text("Project name") }, modifier = Modifier.fillMaxWidth().testTag("project_name"))
-    OutlinedTextField(origin, { origin = it }, label = { Text("Exact origin, e.g. https://api.example.test") }, keyboardOptions = UrlKeyboard, modifier = Modifier.fillMaxWidth().testTag("project_origin"))
-    Button(modifier = Modifier.testTag("create_project"), onClick = { val count = model.state.value.workspace.projects.size; model.createProject(name, origin); if (model.state.value.workspace.projects.size > count) { focus.clearFocus(); keyboard?.hide() } }, enabled = !state.busy) { Text("Create scoped project") }
-    Text("HTTPS-only runtime with system trust validation. No requests run on startup.", style = MaterialTheme.typography.bodySmall)
-    Text("${state.workspace.exchanges.count { it.projectId == state.projectId }} history entries · ${state.workspace.findings.count { it.projectId == state.projectId }} observations")
-    listOf(Screen.Browser, Screen.Traffic, Screen.Api, Screen.Tools, Screen.Findings).forEach { target ->
-        OutlinedButton(onClick = { navigate(target) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("home_${target.name.lowercase()}")) { Text(target.label, Modifier.weight(1f)); Text("↗") }
-    }
-    Panel("Capture status", "Browser request metadata and API responses are available. Full browser interception and device-wide VPN forwarding are not implemented yet.")
-    WorkspaceControls(state, model)
-}
-
 @Composable private fun TrafficScreen(state: AppState, model: AppViewModel, project: Project?, openApi: () -> Unit) {
     var filter by remember { mutableStateOf("") }
     var detail by remember { mutableStateOf<Exchange?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
-    val history = state.workspace.exchanges.filter { it.projectId == state.projectId }
-    val entries = history.filter { "${it.request.method} ${it.request.url} ${it.source}".contains(filter.trim(), ignoreCase = true) }
+    val history = remember(state.workspace.exchanges, state.projectId) {
+        state.workspace.exchanges.filter { it.projectId == state.projectId }
+    }
+    val entries = remember(history, filter) {
+        val query = filter.trim()
+        if (query.isEmpty()) history else history.filter { exchange ->
+            "${exchange.request.method} ${exchange.request.url} ${exchange.source}".contains(query, ignoreCase = true)
+        }
+    }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { WorkspaceStatus(project, state) }
-        if (project != null) item { IdentityControls(state, model) }
         item { Text("Traffic", style = MaterialTheme.typography.headlineSmall) }
         item {
             OutlinedTextField(filter, { filter = it }, singleLine = true, keyboardOptions = TechnicalKeyboard,
@@ -302,141 +305,4 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
         text = { Text("This removes history entries for the active project. Evidence saved with observations stays in the workspace.") },
         confirmButton = { TextButton(onClick = { confirmClear = false; model.clearHistory() }) { Text("Clear history") } },
         dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } })
-}
-
-@Composable private fun ApiScreen(state: AppState, model: AppViewModel) {
-    val draft = state.draft
-    val focus = LocalFocusManager.current
-    val keyboard = LocalSoftwareKeyboardController.current
-    val pending by model.drafts.values.collectAsState()
-    fun draftText(editor: Editor, fallback: String = "") = pending[DraftKey.of(state.projectId, editor, state.identity)] ?: fallback
-    fun write(editor: Editor, value: String) = model.drafts.set(DraftKey.of(state.projectId, editor, state.identity), value)
-    val headers = draftText(Editor.ApiHeaders, draft.headers.joinToString("\n") { "${it.name}: ${it.value}" })
-    val raw = draftText(Editor.ApiRaw)
-    val savedName = draftText(Editor.ApiSavedName)
-    // Keyed by identity as well as project, so this field always shows the SELECTED identity's
-    // pending text or its saved configuration — never the other identity's.
-    val identityKey = DraftKey.of(state.projectId, Editor.ApiIdentityHeaders, state.identity)
-    val identityHeaders = pending[identityKey]
-        ?: state.workspace.identityConfigs.firstOrNull { it.projectId == state.projectId && it.identity == state.identity }?.headers.orEmpty().joinToString("\n") { "${it.name}: ${it.value}" }
-    fun prepare(action: () -> Unit) { focus.clearFocus(); keyboard?.hide(); runCatching { DraftParser.headers(headers) }.onSuccess { model.draft(draft.copy(headers = it)); action() }.onFailure { model.message(it.message ?: "Invalid headers") } }
-    Text("Request lab.", style = MaterialTheme.typography.headlineLarge)
-    DraftNotice()
-    OutlinedTextField(draft.method, { model.draft(draft.copy(method = it.uppercase())) }, label = { Text("HTTP method") }, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("api_method"))
-    OutlinedTextField(draft.url, { model.draft(draft.copy(url = it)) }, label = { Text("URL (must match project origin)") }, keyboardOptions = UrlKeyboard, modifier = Modifier.fillMaxWidth().testTag("api_url"))
-    OutlinedTextField(headers, { write(Editor.ApiHeaders, it) }, label = { Text("Headers — Name: value") }, minLines = 3, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("api_headers"))
-    OutlinedTextField(draft.body, { model.draft(draft.copy(body = it)) }, label = { Text("Request body") }, minLines = 3, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("api_body"))
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(modifier = Modifier.testTag("api_send"), onClick = { prepare { model.send() } }, enabled = !state.busy && state.projectId != null) { Text("Send") }
-        OutlinedButton(onClick = { model.cancelRequest() }, enabled = state.busy) { Text("Cancel") }
-    }
-    OutlinedButton(modifier = Modifier.testTag("api_compare"), onClick = { prepare { model.send(compare = true) } }, enabled = !state.busy && state.projectId != null) { Text("Send as A then B (two requests)") }
-    Text("Redirects/retries are disabled. Comparison strips known auth headers and uses each identity's configuration/jar. Body credentials remain unchanged; review them before comparing.", style = MaterialTheme.typography.bodySmall)
-    if (state.comparison.isNotBlank()) Panel("Comparison", state.comparison)
-    state.selected?.let { e -> Panel(ResultAttribution.label(e, state.workspace.projects.firstOrNull { it.id == e.projectId }?.name) + "\n${e.status ?: "Error"} · ${e.durationMs} ms · ${e.response.encoding}${if (e.response.truncated) " · TRUNCATED" else ""}", e.error ?: e.responseHeaders.joinToString("\n") { "${it.name}: ${it.value}" } + "\n\n" + e.response.value) }
-    OutlinedTextField(raw, { write(Editor.ApiRaw, it) }, label = { Text("Import raw HTTP/1.x message") }, minLines = 3, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth())
-    OutlinedButton(onClick = { model.currentProject()?.let { p -> runCatching { DraftParser.raw(raw, p.origin) }.onSuccess(model::draft).onFailure { model.message(it.message ?: "Invalid request") } } }) { Text("Import into editor") }
-    OutlinedButton(modifier = Modifier.testTag("api_session_metadata"), onClick = { model.message(model.currentProject()?.let { model.engine.sessions.jar(it.id, state.identity).describe() }.orEmpty().ifBlank { "No session cookies for this identity" }) }) { Text("Show API session metadata") }
-    OutlinedButton(onClick = { model.clearSessions() }) { Text("Clear API sessions") }
-    OutlinedTextField(identityHeaders, { model.drafts.set(identityKey, it) }, label = { Text("Identity ${state.identity} headers (encrypted)") }, minLines = 2, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("api_identity_headers"))
-    OutlinedButton(modifier = Modifier.testTag("api_save_identity"), onClick = { focus.clearFocus(); keyboard?.hide(); model.configureIdentity(identityHeaders) }) { Text("Save this identity's auth headers") }
-    OutlinedTextField(savedName, { write(Editor.ApiSavedName, it) }, label = { Text("Saved request name") }, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("api_saved_name"))
-    OutlinedButton(modifier = Modifier.testTag("api_save_draft"), onClick = { prepare { model.saveDraft(savedName) } }) { Text("Save request to collection") }
-    state.workspace.savedRequests.filter { it.projectId == state.projectId }.forEach { saved ->
-        OutlinedButton(onClick = { model.draft(saved.draft) }, modifier = Modifier.fillMaxWidth()) { Text("Load: ${saved.name}") }
-        TextButton(onClick = { model.deleteSavedRequest(saved.id) }) { Text("Remove saved request") }
-    }
-}
-
-@Composable private fun FindingsScreen(state: AppState, model: AppViewModel, openApi: () -> Unit) {
-    val focus = LocalFocusManager.current
-    val keyboard = LocalSoftwareKeyboardController.current
-    val pending by model.drafts.values.collectAsState()
-    val titleKey = DraftKey.of(state.projectId, Editor.FindingTitle, state.identity)
-    val detailKey = DraftKey.of(state.projectId, Editor.FindingDetail, state.identity)
-    val title = pending[titleKey].orEmpty(); val detail = pending[detailKey].orEmpty()
-    Text("Evidence before conclusions.", style = MaterialTheme.typography.headlineSmall)
-    DraftNotice()
-    state.selected?.let { exchange ->
-        PassiveAnalyzer.inspect(exchange).forEach { observation ->
-            Panel(observation.title, observation.evidence)
-            OutlinedButton(onClick = { model.addFinding(observation.title, observation.evidence, exchange) }) { Text("Save as observation") }
-        }
-    }
-    OutlinedTextField(title, { model.drafts.set(titleKey, it) }, label = { Text("Observation title") }, modifier = Modifier.fillMaxWidth().testTag("finding_title"))
-    OutlinedTextField(detail, { model.drafts.set(detailKey, it) }, label = { Text("Evidence / reproduction / next test") }, minLines = 3, modifier = Modifier.fillMaxWidth().testTag("finding_detail"))
-    Button(modifier = Modifier.testTag("save_finding"), onClick = { if (model.addFinding(title, detail)) { model.drafts.clear(titleKey); model.drafts.clear(detailKey); focus.clearFocus(); keyboard?.hide() } }, enabled = state.projectId != null) { Text("Save observation") }
-    state.workspace.findings.filter { it.projectId == state.projectId }.forEach { finding ->
-        key(finding.id) {
-            var confirmRemoval by remember { mutableStateOf(false) }
-            Panel("${finding.state}: ${finding.title}", finding.detail)
-            FindingEvidence(finding, model, openApi)
-            LocalReportAction("Preview observation report", "esuite-observation.json", { model.exportObservation(finding.id) }, model::message)
-            TextButton(onClick = { confirmRemoval = true }) { Text("Remove observation") }
-            if (confirmRemoval) AlertDialog(onDismissRequest = { confirmRemoval = false },
-                title = { Text("Remove this observation?") },
-                text = { Text("The note and its ${finding.evidence.size} retained request/response copies are deleted from the encrypted workspace. This cannot be undone.") },
-                confirmButton = { TextButton(onClick = { confirmRemoval = false; model.deleteFinding(finding.id) }) { Text("Remove observation and evidence") } },
-                dismissButton = { TextButton(onClick = { confirmRemoval = false }) { Text("Keep observation") } })
-        }
-    }
-}
-
-/** One row per referenced evidence id: a viewer for a retained snapshot, an explicit state for a reference with none. */
-@Composable private fun FindingEvidence(finding: Finding, model: AppViewModel, openApi: () -> Unit) {
-    if (finding.evidenceIds.isEmpty()) {
-        Text("No exchange was attached to this observation.", style = MaterialTheme.typography.bodySmall, color = Muted)
-        return
-    }
-    val missing = EvidenceRetention.missing(finding).toSet()
-    finding.evidenceIds.forEachIndexed { index, evidenceId ->
-        key(evidenceId) {
-            val snapshot = finding.evidence.firstOrNull { it.id == evidenceId }
-            if (snapshot == null || evidenceId in missing) {
-                Text("Evidence not retained — history was cleared or this observation predates evidence retention.",
-                    style = MaterialTheme.typography.bodySmall, color = Muted)
-            } else {
-                var shown by remember { mutableStateOf(false) }
-                var confirmEvidence by remember { mutableStateOf(false) }
-                OutlinedButton(modifier = Modifier.fillMaxWidth().testTag("finding_evidence_$index"), onClick = { shown = !shown }) {
-                    Text("${if (shown) "Hide" else "Show"} retained evidence · ${snapshot.request.method} ${snapshot.request.url}")
-                }
-                if (shown) {
-                    Panel("Retained evidence · ${snapshot.status ?: if (snapshot.error != null) "error" else "metadata only"} · ${snapshot.durationMs} ms",
-                        "identity ${snapshot.identity} · ${snapshot.source}\n${snapshot.completeness}\n" +
-                            "Immutable copy saved with the observation; bodies are capped at ${Limits.EVIDENCE_BYTES} bytes.\n${snapshot.error.orEmpty()}\n\n" +
-                            snapshot.request.headers.joinToString("\n") { "${it.name}: ${it.value}" } + "\n\n${snapshot.request.body}\n\n" +
-                            snapshot.responseHeaders.joinToString("\n") { "${it.name}: ${it.value}" } +
-                            "\n\n${snapshot.response.encoding}${if (snapshot.response.truncated) " · TRUNCATED" else ""}\n${snapshot.response.value}")
-                    Button(onClick = { model.replay(snapshot); openApi() }) { Text("To API Lab (review before sending)") }
-                    TextButton(onClick = { confirmEvidence = true }) { Text("Remove retained evidence") }
-                }
-                if (confirmEvidence) AlertDialog(onDismissRequest = { confirmEvidence = false },
-                    title = { Text("Remove this retained evidence?") },
-                    text = { Text("The saved request/response copy is deleted. The observation keeps its reference and will report evidence as not retained.") },
-                    confirmButton = { TextButton(onClick = { confirmEvidence = false; model.removeEvidence(finding.id, snapshot.id) }) { Text("Remove evidence") } },
-                    dismissButton = { TextButton(onClick = { confirmEvidence = false }) { Text("Keep evidence") } })
-            }
-        }
-    }
-}
-
-@Composable private fun ToolsScreen(state: AppState, model: AppViewModel) {
-    val pending by model.drafts.values.collectAsState()
-    val inputKey = DraftKey.of(state.projectId, Editor.ToolsInput, state.identity)
-    val input = pending[inputKey].orEmpty()
-    // Output is derived from the input and the pressed transformation, so it stays screen-local.
-    var output by remember { mutableStateOf("") }
-    fun transform(action: (String) -> String) { output = runCatching { action(input) }.getOrElse { it.message ?: "Invalid input" } }
-    Text("Local utilities.", style = MaterialTheme.typography.headlineLarge)
-    DraftNotice()
-    OutlinedTextField(input, { model.drafts.set(inputKey, it) }, label = { Text("Input") }, minLines = 4, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth())
-    listOf<Pair<String, (String) -> String>>("Base64 encode" to Codec::base64Encode, "Base64 decode" to Codec::base64Decode, "Form URL encode" to Codec::formEncode, "Form URL decode" to Codec::formDecode, "SHA-256" to Codec::sha256, "JWT claims (unverified)" to TokenTools::jwtClaims,
-        "Token sample statistics" to { TokenTools.sample(it.lines().filter(String::isNotBlank)) }, "Review AWS JSON offline" to CloudConfigReview::review).forEach { (name, action) -> OutlinedButton(onClick = { transform(action) }, modifier = Modifier.fillMaxWidth()) { Text(name) } }
-    OutlinedButton(onClick = { model.importCurl(input) }, modifier = Modifier.fillMaxWidth()) { Text("Import cURL into API Lab (no execution)") }
-    OutlinedButton(onClick = { model.importOpenApi(input) }, modifier = Modifier.fillMaxWidth()) { Text("Import OpenAPI 3 JSON to collection") }
-    OutlinedButton(onClick = { model.importHar(input) }, modifier = Modifier.fillMaxWidth()) { Text("Import in-scope HAR request drafts") }
-    OutlinedTextField(output, {}, readOnly = true, label = { Text("Output") }, minLines = 4, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth())
-    Text("All transformations run locally. JWT decoding is not verification; sample statistics do not prove unpredictability.", style = MaterialTheme.typography.bodySmall)
-    if (BuildConfig.AUTOMATED_REQUESTS) WorkflowsScreen(state, model)
 }

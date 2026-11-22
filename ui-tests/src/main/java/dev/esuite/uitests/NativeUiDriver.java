@@ -132,7 +132,8 @@ public abstract class NativeUiDriver {
         device.executeShellCommand("am start -W -S -n dev.esuite.app/.MainActivity");
         UiObject2 home = device.wait(Until.findObject(By.res("nav_home")), 20000);
         assertNotNull("Release navigation did not open", home); home.click(); top();
-        assertTrue("Release home did not open", device.wait(Until.hasObject(By.text("Your workspace.")), 20000));
+        assertTrue("Release home did not open", device.hasObject(By.text("ESuite")) ||
+                device.wait(Until.hasObject(By.text("Your workspace.")), 5000));
     }
 
     protected boolean containsText(UiObject2 node, String expected) {

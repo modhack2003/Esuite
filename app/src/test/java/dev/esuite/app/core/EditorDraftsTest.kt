@@ -159,8 +159,8 @@ class EditorDraftsTest {
         assertEquals(headers, drafts.text(DraftKey(projectA, Editor.FindingDetail)))
         assertEquals(headers, drafts.text(DraftKey(projectB, Editor.ApiHeaders)))
         // An unset editor stays unset rather than becoming an empty entry.
-        drafts.transform(projectA, listOf(Editor.TokenPath)) { "written" }
-        assertFalse(drafts.values.value.containsKey(DraftKey(projectA, Editor.TokenPath)))
+        drafts.transform(projectA, listOf(Editor.ApiRaw)) { "written" }
+        assertFalse(drafts.values.value.containsKey(DraftKey(projectA, Editor.ApiRaw)))
     }
 
     @Test fun stripHeaderLinesDropsExactlyTheHeadersCredentialPolicyWouldDrop() {

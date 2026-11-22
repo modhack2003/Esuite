@@ -27,7 +27,6 @@ enum class Editor(val valueChars: Int = EditorDrafts.VALUE_CHARS, val identitySc
     ApiHeaders, ApiRaw(Limits.REQUEST_BYTES), ApiSavedName, ApiIdentityHeaders(identityScoped = true),
     FindingTitle, FindingDetail,
     ToolsInput(Limits.REQUEST_BYTES),
-    TaskPayload1, TaskPayload2, TaskPayload3, TaskPayload4, SequenceNames, TokenPath,
     BrowserAddress(identityScoped = true), BrowserEdit(identityScoped = true),
     BrowserCookie(identityScoped = true), BrowserScript(identityScoped = true),
 }

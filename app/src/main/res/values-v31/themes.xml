@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.ESuite" parent="Theme.ESuite.Base">
+        <item name="android:windowSplashScreenBackground">@color/esuite_launch_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_esuite</item>
+    </style>
+</resources>

@@ -1,16 +1,11 @@
-# ESuite 1.0.3 — local evidence and native usability
+# ESuite 1.0.4
 
-## Changes
+- Open the active project from a streamlined Home. Switch projects from one menu and reach Browser, API Lab, Traffic and Findings directly.
+- API Lab separates Request, Response, Saved and Session. Sending opens the response, where headers and body are presented separately. Large bodies open with a bounded preview and can be expanded.
+- Search saved observations by title or note. Open one to review attached evidence and preview a redacted local report.
+- Tools groups text transformations, imports and offline reviews into separate views. Calculations, report preparation and durable workspace size checks run off the UI thread. Repeated saves of an already committed snapshot skip a vault rewrite.
+- Browser keeps its adaptive viewport and identity-specific drafts. Traffic displays the recorded exchange and its capture limits. The launch screen now uses the app's dark theme.
 
-- Traffic opens exchange details immediately and returns to the same list position. Details show the originating project, identity, source and capture limits. History clearing prompts for confirmation and retains evidence saved with observations.
-- Browser tabs expose selected state and scroll at large font sizes. Short windows use compact address and navigation controls. Workspace status and the operative browser address are reachable from the browser. Address, script, page-edit and cookie text stay in their respective in-memory editors.
-- Storage previews show how many keys were returned or omitted and flag shortened fields, including values that exceed the total preview budget.
-- Findings can preview and save a report for one observation to a device document provider. The report contains the origin, timestamps, generated IDs and allowlisted evidence metadata. Report data is visible before file selection.
-- ESuite remembers the last available project by ID. Fresh launches open Home with identity A. An in-flight manual API request exposes its origin context and a shared Cancel action across modules.
-- The encrypted workspace retains bounded finding evidence snapshots. Navigation preserves technical and finding drafts in memory. Loaded WebView profiles are queued for cleanup when a provider requires a process restart.
+This version supports manual scoped HTTPS inspection and offline review. Workspace data stays on the device. Android 9–17 is the supported build range, and separate browser profiles depend on the installed WebView provider.
 
-## Release requirements
-
-Publication requires exact-source Android build, lint and device results, plus install-over-1.0.2 validation using the production signing certificate. Android 9–17 remains the target range. Some WebView providers lack isolated profiles, and the corresponding device tests record capability skips.
-
-The optimized app supports scoped manual HTTPS and offline review. Browser history consists of request metadata. The vault key lives on the device, so report export is the available way to retain a summary outside ESuite. The [1.0.3 plan](https://github.com/modhack2003/Esuite/blob/main/docs/RELEASE_1.0.3_PLAN.md) tracks the remaining physical-device and recovery work.
+The published upgrade fixture is 1.0.2. The release process verifies the existing signer and encrypted-data retention before publication.

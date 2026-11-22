@@ -42,11 +42,7 @@ android {
         }
     }
     buildTypes {
-        getByName("debug") {
-            buildConfigField("boolean", "AUTOMATED_REQUESTS", "true")
-        }
         getByName("release") {
-            buildConfigField("boolean", "AUTOMATED_REQUESTS", "false")
             isDebuggable = false
             isMinifyEnabled = true
             isShrinkResources = true
@@ -72,6 +68,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.0")
     implementation("androidx.webkit:webkit:1.12.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")

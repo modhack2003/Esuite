@@ -6,7 +6,7 @@ import java.time.format.DateTimeFormatter
 
 /**
  * The project/identity/generation a long-running request launched under. A result may only be
- * APPLIED to the UI (selected/comparison/message/taskProgress) while the context it started in is
+ * APPLIED to the UI (selected/comparison/message) while the context it started in is
  * still current; recording into Traffic is unconditional and is never gated by this.
  */
 data class RequestContext(val generation: Int, val projectId: String?, val identity: String)

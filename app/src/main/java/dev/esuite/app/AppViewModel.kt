@@ -10,9 +10,9 @@ import dev.esuite.app.transport.ApiEngine
 import dev.esuite.app.storage.WorkspaceVault
 import dev.esuite.app.storage.WorkspaceStore
 import dev.esuite.app.browser.BrowserProfiles
-import dev.esuite.app.automation.PayloadMode
-import dev.esuite.app.automation.RequestPlans
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -25,8 +25,8 @@ data class AppState(
     val workspace: Workspace = Workspace(), val projectId: String? = null, val identity: String = "A",
     val draft: RequestDraft = RequestDraft(), val selected: Exchange? = null, val busy: Boolean = false,
     val message: String = "Opening encrypted workspace…", val comparison: String = "", val ready: Boolean = false,
-    val taskProgress: String = "No automation task running",
     val manualRequestLabel: String? = null,
+    val openingWorkspace: Boolean = true,
     val persistedWorkspace: Workspace? = null, val saveError: String? = null, val pendingWrites: Int = 0,
     /**
      * ESuite browser profiles the WebView provider refused to delete because it still has them
@@ -47,6 +47,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
     val drafts = EditorDrafts()
     private val workspacePreferences = application.getSharedPreferences("workspace_navigation", Context.MODE_PRIVATE)
     private var requestJob: Job? = null
+    private val saveMutex = Mutex()
     private val storageDispatcher = Dispatchers.IO.limitedParallelism(1)
     private var persistenceJob: Job? = null
     private var loadJob: Job? = null
@@ -67,7 +68,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         persistenceJob?.cancel()
         cancelRequest()
         loadJob = viewModelScope.launch {
-            mutable.update { it.copy(ready = false) }
+            mutable.update { it.copy(ready = false, openingWorkspace = true) }
             try {
                 val workspace = withContext(storageDispatcher) { vault.load() }
                 if (generation != workspaceGeneration) return@launch
@@ -79,9 +80,9 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
                 val sweep = BrowserProfiles.sweepOrphans(workspace.projects.map { it.id }.toSet())
                 val note = profileCleanupNote?.let { " $it" }.orEmpty()
                 profileCleanupNote = null
-                mutable.update { it.copy(workspace = workspace, projectId = project?.id, identity = "A", draft = RequestDraft(url = project?.origin?.plus("/").orEmpty()), ready = true,
+                mutable.update { it.copy(workspace = workspace, projectId = project?.id, identity = "A", draft = RequestDraft(url = project?.origin?.plus("/").orEmpty()), ready = true, openingWorkspace = false,
                     selected = null, comparison = "", persistedWorkspace = workspace, saveError = null, pendingWrites = 0, pendingProfileCleanup = sweep.pending,
-                    message = "Encrypted workspace open. Requests only run when you explicitly start them.$note") }
+                    message = note.trim()) }
                 persistenceJob?.cancel()
                 persistenceJob = viewModelScope.launch {
                     state.map { it.workspace }.distinctUntilChanged().drop(1).debounce(500).collect { _ ->
@@ -89,18 +90,24 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
                     }
                 }
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { if (generation == workspaceGeneration) message("Workspace could not be opened. No file was overwritten. ${e.message ?: e.javaClass.simpleName}") }
+            catch (e: Exception) {
+                if (generation == workspaceGeneration) mutable.update {
+                    it.copy(openingWorkspace = false, message = "Could not open encrypted workspace. ${e.message ?: e.javaClass.simpleName}")
+                }
+            }
         }
     }
     fun saveNow() { viewModelScope.launch { saveWorkspace() } }
     // An awaitable commit result. UI acknowledgement is derived from the committed snapshot,
     // never from a generic success message belonging to an earlier edit.
-    suspend fun saveWorkspace(): Boolean {
-        if (!state.value.ready) return false
+    suspend fun saveWorkspace(): Boolean = saveMutex.withLock {
+        val current = state.value
+        if (!current.ready) return@withLock false
+        if (current.persistedWorkspace == current.workspace && current.saveError == null) return@withLock true
         val generation = workspaceGeneration
         val snapshot = state.value.workspace
         mutable.update { it.copy(pendingWrites = it.pendingWrites + 1, saveError = null) }
-        return try {
+        try {
             val persisted = withContext(storageDispatcher) { vault.save(snapshot) }
             if (generation == workspaceGeneration) mutable.update { current ->
                 current.copy(workspace = WorkspacePersistence.reconcile(current.workspace, snapshot, persisted),
@@ -125,7 +132,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         loadJob?.cancel()
         cancelRequest(); persistenceJob?.cancel(); engine.sessions.clearAll()
         viewModelScope.launch {
-            mutable.update { it.copy(ready = false) }
+            mutable.update { it.copy(ready = false, openingWorkspace = true) }
             runCatching { withContext(storageDispatcher) { vault.erase() } }
                 .onSuccess {
                     rememberProject(null)
@@ -137,7 +144,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
                     profileCleanupNote = BrowserProfiles.clearAllEsuiteOwned().describe()
                     mutable.value = AppState(); loadWorkspace()
                 }
-                .onFailure { message("Could not erase encrypted workspace: ${it.message}") }
+                .onFailure { failure -> mutable.update { it.copy(openingWorkspace = false, message = "Could not erase encrypted workspace. ${failure.message}") } }
         }
     }
     fun message(text: String) = mutable.update { it.copy(message = text.take(4000)) }
@@ -208,6 +215,10 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         mutable.update { it.copy(draft = value) }
         if (refreshHeaders) writeHeaderEditor(value.headers)
     }
+    fun replaceDraft(value: RequestDraft) {
+        mutable.update { it.copy(draft = value) }
+        writeHeaderEditor(value.headers)
+    }
     fun select(exchange: Exchange) = mutable.update { it.copy(selected = exchange) }
     fun replay(exchange: Exchange) {
         mutable.update { it.copy(draft = CredentialPolicy.strip(exchange.request, it.workspace.identityConfigs.filter { c -> c.projectId == it.projectId }), selected = exchange,
@@ -229,7 +240,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         val started = currentContext()
         requestJob = viewModelScope.launch {
             val identities = if (compare) "identities A and B" else "identity ${snapshot.identity}"
-            mutable.update { it.copy(busy = true, manualRequestLabel = "${project.name} · $identities · ${project.origin}", comparison = "", message = "Sending to ${project.origin}…") }
+            mutable.update { it.copy(busy = true, manualRequestLabel = "${project.name} · $identities · ${project.origin}", selected = null, comparison = "", message = "Sending to ${project.origin}…") }
             var attemptedIdentity = snapshot.identity
             var attemptedDraft = snapshot.draft
             try {
@@ -240,9 +251,10 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
                     attemptedIdentity = "B"; attemptedDraft = withIdentity(draft, project.id, "B")
                     val b = engine.execute(project, "B", attemptedDraft, "Identity comparison"); record(b)
                     // Both legs are already in Traffic; only the comparison view is context-guarded.
+                    val comparison = withContext(Dispatchers.Default) { ResponseComparer.compare(a, b) }
                     val current = currentContext()
                     if (ResultAttribution.accepts(started, current))
-                        mutable.update { it.copy(selected = b, comparison = ResponseComparer.compare(a, b), message = "Separate session jars used; explicit Cookie/Authorization headers omitted.") }
+                        mutable.update { it.copy(selected = b, comparison = comparison, message = "Separate session jars used; explicit Cookie/Authorization headers omitted.") }
                     else message(supersededMessage(started, current))
                 } else {
                     attemptedDraft = withIdentity(snapshot.draft, project.id, snapshot.identity)
@@ -266,87 +278,20 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         }
     }
     fun cancelRequest() { requestJob?.cancel() }
-    fun previewPayloads(inputs: List<String>, mode: PayloadMode): List<RequestDraft> {
-        return RequestPlans.payloadsFromText(state.value.draft, inputs, mode).also { drafts ->
-            val project = currentProject() ?: error("Create a project first")
-            drafts.forEach { DraftParser.validate(it); ScopePolicy(project.origin).requireAllowed(it.url) }
-        }
-    }
-    fun runPayloads(inputs: List<String>, mode: PayloadMode) {
-        if (!BuildConfig.AUTOMATED_REQUESTS) return
-        if (state.value.busy) return
-        val project = currentProject() ?: return
-        val identity = state.value.identity
-        val drafts = runCatching { previewPayloads(inputs, mode) }.getOrElse { message(it.message ?: "Invalid plan"); return }
-        val started = currentContext()
-        requestJob = viewModelScope.launch {
-            mutable.update { it.copy(busy = true, taskProgress = "Parameter task: 0/${drafts.size}") }
-            try {
-                for ((index, draft) in drafts.withIndex()) {
-                    ensureActive()
-                    val result = engine.execute(project, identity, withIdentity(draft, project.id, identity), "Parameter runner")
-                    // Recording is unconditional; only the selected/taskProgress view is context-guarded.
-                    record(result)
-                    if (ResultAttribution.accepts(started, currentContext()))
-                        mutable.update { it.copy(selected = result, taskProgress = "Parameter task: ${index + 1}/${drafts.size}") }
-                    if (result.status in listOf(429, 503)) { message("Task stopped on HTTP ${result.status}; no automatic retry."); return@launch }
-                    if (index != drafts.lastIndex) delay(1000)
-                }
-                val current = currentContext()
-                message(if (ResultAttribution.accepts(started, current)) "Parameter task complete; inspect results in Traffic" else supersededMessage(started, current))
-            } catch (e: CancellationException) { message("Parameter task cancelled"); throw e }
-            catch (e: Exception) { message("Task stopped: ${e.message}") }
-            finally { mutable.update { it.copy(busy = false, taskProgress = "Task stopped / completed; captured results retained") } }
-        }
-    }
-    fun runMacro(names: String, tokenPath: String) {
-        if (!BuildConfig.AUTOMATED_REQUESTS) return
-        if (state.value.busy) return
-        val project = currentProject() ?: return
-        val identity = state.value.identity
-        val steps = runCatching {
-            val requested = names.lines().filter(String::isNotBlank)
-            require(requested.size in 1..10) { "Provide 1–10 exact saved-request names" }
-            requested.map { name ->
-                val matches = state.value.workspace.savedRequests.filter { it.projectId == project.id && it.name == name.trim() }
-                require(matches.size == 1) { "Saved request '$name' is missing or ambiguous" }
-                matches.single().draft.also { DraftParser.validate(it); ScopePolicy(project.origin).requireAllowed(it.url) }
-            }
-        }.getOrElse { message(it.message ?: "Invalid sequence"); return }
-        val started = currentContext()
-        requestJob = viewModelScope.launch {
-            mutable.update { it.copy(busy = true, taskProgress = "Sequence: 0/${steps.size}") }
-            try {
-                var token: String? = null
-                for ((index, template) in steps.withIndex()) {
-                    ensureActive()
-                    if (token == null && (template.url + template.body + template.headers.joinToString { it.value }).contains("{{token}}")) {
-                        // A superseded sequence skipped the extraction on purpose, so report THAT
-                        // rather than an extraction-order problem the user did not cause.
-                        val current = currentContext()
-                        if (!ResultAttribution.accepts(started, current)) { message(supersededMessage(started, current)); return@launch }
-                        throw IllegalArgumentException("{{token}} is unavailable before the first extraction")
-                    }
-                    val draft = token?.let { RequestPlans.applyToken(template, it) } ?: template
-                    val result = engine.execute(project, identity, withIdentity(draft, project.id, identity), "Request sequence")
-                    // Recording is unconditional; selected/taskProgress and the extracted token are context-guarded.
-                    record(result)
-                    val applied = ResultAttribution.accepts(started, currentContext())
-                    if (applied) mutable.update { it.copy(selected = result, taskProgress = "Sequence: ${index + 1}/${steps.size}") }
-                    require(result.status != null && result.status in 200..299) { "Sequence stopped at non-success HTTP ${result.status}" }
-                    if (applied && index == 0 && steps.size > 1 && tokenPath.isNotBlank()) token = RequestPlans.extractToken(result.response.value, tokenPath.trim())
-                    if (index != steps.lastIndex) delay(1000)
-                }
-                val current = currentContext()
-                message(if (ResultAttribution.accepts(started, current)) "Sequence complete. No automatic retries or unattended MFA handling." else supersededMessage(started, current))
-            } catch (e: CancellationException) { message("Sequence cancelled"); throw e }
-            catch (e: Exception) { message("Sequence stopped: ${e.message}") }
-            finally { mutable.update { it.copy(busy = false, taskProgress = "Task stopped / completed; captured results retained") } }
-        }
-    }
     fun importCurl(text: String) {
-        val p = currentProject() ?: return message("Create a project first")
-        runCatching { ApiImports.curl(text, p.origin) }.onSuccess { draft(it); message("cURL imported as data; no command or network request was executed.") }.onFailure { message(it.message ?: "Import failed") }
+        val project = currentProject() ?: return message("Create a project first")
+        val context = currentContext()
+        viewModelScope.launch {
+            try {
+                val imported = withContext(Dispatchers.Default) { ApiImports.curl(text, project.origin) }
+                if (ResultAttribution.accepts(context, currentContext())) {
+                    replaceDraft(imported)
+                    message("cURL imported. Review it in API Lab.")
+                }
+            } catch (failure: IllegalArgumentException) {
+                message(failure.message ?: "Check the imported cURL")
+            }
+        }
     }
     fun importOpenApi(text: String) = importCollection { project -> ApiImports.openApi(text, project) }
     fun importHar(text: String) = importCollection { project -> ApiImports.har(text, project) }
@@ -375,34 +320,58 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
             catch (e: Exception) { message(e.message ?: "Import failed") }
         }
     }
-    private fun mergeSaved(requests: List<SavedRequest>) {
-        mutable.update {
-            require(requests.size + it.workspace.savedRequests.size <= 100) { "Collection limit is 100 requests. Remove saved items before importing more." }
-            val next = it.workspace.copy(savedRequests = requests + it.workspace.savedRequests)
-            WorkspaceBudget.requireDurableCapacity(next); it.copy(workspace = next)
+    /**
+     * Validate an immutable candidate off the UI thread and merge only its durable changes.
+     * Browser history can still receive captures while JSON size is being checked.
+     */
+    private suspend fun admitDurable(message: String, prepare: (Workspace) -> Workspace): Boolean {
+        val context = currentContext()
+        try {
+            repeat(3) {
+                val current = state.value
+                require(current.ready && ResultAttribution.accepts(context, currentContext())) {
+                    "The active project or identity changed. Try the edit again in its original workspace."
+                }
+                val snapshot = current.workspace
+                val candidate = withContext(Dispatchers.Default) {
+                    prepare(snapshot).also(WorkspaceBudget::requireDurableCapacity)
+                }
+                val latest = state.value
+                require(latest.ready && ResultAttribution.accepts(context, currentContext())) {
+                    "The active project or identity changed. Try the edit again in its original workspace."
+                }
+                if (WorkspacePersistence.sameDurable(snapshot, latest.workspace) &&
+                    mutable.compareAndSet(latest, latest.copy(
+                        workspace = candidate.copy(exchanges = latest.workspace.exchanges),
+                        message = message,
+                    ))
+                ) {
+                    persistDurable()
+                    return true
+                }
+            }
+            message("The workspace is busy. Try saving again.")
+        } catch (failure: IllegalArgumentException) {
+            message(failure.message ?: "The edit could not be saved")
         }
-        persistDurable()
+        return false
     }
+
     private fun withIdentity(draft: RequestDraft, project: String, identity: String): RequestDraft {
         val configured = state.value.workspace.identityConfigs.firstOrNull { it.projectId == project && it.identity == identity }?.headers.orEmpty()
         return draft.copy(headers = draft.headers + configured.filterNot { incoming -> draft.headers.any { it.name.equals(incoming.name, true) } })
     }
-    fun configureIdentity(text: String) {
-        val p = currentProject() ?: return
-        runCatching { DraftParser.headers(text) }.onSuccess { headers ->
-            val config = IdentityConfig(p.id, state.value.identity, headers)
-            runCatching {
-                mutable.update {
-                    val next = it.workspace.copy(identityConfigs = it.workspace.identityConfigs.filterNot { c -> c.projectId == p.id && c.identity == config.identity } + config)
-                    WorkspaceBudget.requireDurableCapacity(next)
-                    it.copy(workspace = next, message = "Identity headers updated; check encrypted-save status. Cookie jar sessions remain memory-only.")
-                }
-                persistDurable()
-                // Cleared on success exactly as a saved finding clears its title/detail drafts, so
-                // the editor falls back to the configuration that was just stored.
-                drafts.clear(DraftKey.of(p.id, Editor.ApiIdentityHeaders, config.identity))
-            }.onFailure { message(it.message ?: "Identity storage budget exceeded") }
-        }.onFailure { message(it.message ?: "Invalid identity headers") }
+    suspend fun configureIdentity(text: String) {
+        val project = currentProject() ?: return
+        val identity = state.value.identity
+        val key = DraftKey.of(project.id, Editor.ApiIdentityHeaders, identity)
+        val saved = admitDurable("Identity headers updated. Check workspace status for save confirmation.") { workspace ->
+            val config = IdentityConfig(project.id, identity, DraftParser.headers(text))
+            workspace.copy(identityConfigs = workspace.identityConfigs.filterNot {
+                it.projectId == project.id && it.identity == identity
+            } + config)
+        }
+        if (saved && drafts.text(key) == text) drafts.clear(key)
     }
     fun clearSessions() {
         currentProject()?.let { p -> engine.sessions.clearProject(p.id); mutable.update { it.copy(workspace = it.workspace.copy(identityConfigs = it.workspace.identityConfigs.filterNot { c -> c.projectId == p.id })) }; persistDurable() }
@@ -413,22 +382,32 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         return runCatching {
             val target = ScopePolicy(project.origin).requireAllowed(url)
             val count = engine.sessions.jar(project.id, state.value.identity).replaceFromBrowser(target, cookies)
-            draft(RequestDraft(url = target.toString()))
+            replaceDraft(RequestDraft(url = target.toString()))
             message("Replaced API identity ${state.value.identity}'s memory-only cookie jar with $count browser cookies for this URL. Review API Lab before sending.")
         }.onFailure { message(it.message ?: "Cookie transfer failed") }.isSuccess
     }
-    fun saveDraft(name: String) {
-        val p = currentProject() ?: return
-        runCatching {
-            require(name.isNotBlank() && name.length <= 100) { "Saved request name must be 1–100 characters" }; DraftParser.validate(state.value.draft); ScopePolicy(p.origin).requireAllowed(state.value.draft.url)
-            val saved = SavedRequest(projectId = p.id, name = name, draft = state.value.draft)
-            mergeSaved(listOf(saved)); message("Request added to the collection; check encrypted-save status")
-        }.onFailure { message(it.message ?: "Cannot save request") }
+    suspend fun saveDraft(name: String) {
+        val project = currentProject() ?: return
+        val draft = state.value.draft
+        val saved = SavedRequest(projectId = project.id, name = name.trim(), draft = draft)
+        admitDurable("Request saved to this project.") { workspace ->
+            require(saved.name.isNotBlank() && saved.name.length <= 100) { "Use a saved request name between 1 and 100 characters." }
+            require(workspace.savedRequests.size < 100) { "Collection limit is 100 requests. Remove a saved request before adding one." }
+            DraftParser.validate(draft)
+            ScopePolicy(project.origin).requireAllowed(draft.url)
+            workspace.copy(savedRequests = listOf(saved) + workspace.savedRequests)
+        }
     }
-    fun exportSanitized(): String = currentProject()?.let { ReportExporter.sanitized(state.value.workspace, it.id) } ?: "{}"
-    fun exportObservation(id: String): String? = state.value.let {
-        val projectId = it.projectId ?: return null
-        ReportExporter.selectedObservation(it.workspace, projectId, id)
+    suspend fun exportSanitized(): String? {
+        val snapshot = state.value
+        val project = snapshot.projectId ?: return null
+        return withContext(Dispatchers.Default) { ReportExporter.sanitized(snapshot.workspace, project) }
+    }
+
+    suspend fun exportObservation(id: String): String? {
+        val snapshot = state.value
+        val project = snapshot.projectId ?: return null
+        return withContext(Dispatchers.Default) { ReportExporter.selectedObservation(snapshot.workspace, project, id) }
     }
     fun deleteProject() {
         val p = currentProject() ?: return
@@ -451,25 +430,18 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         if (result.unsupported) return message(result.describe())
         mutable.update { it.copy(pendingProfileCleanup = result.pending, message = result.describe()) }
     }
-    fun addFinding(title: String, detail: String, evidence: Exchange? = state.value.selected): Boolean {
+    suspend fun addFinding(title: String, detail: String, evidence: Exchange? = state.value.selected): Boolean {
         val project = currentProject() ?: return false
-        return runCatching {
-            require(title.isNotBlank() && title.length <= 200 && detail.isNotBlank() && detail.length <= 16000) { "Use a 1–200 character title and 1–16000 character detail" }
-            // The bounded snapshot is part of the admitted record: the durable budget decides on the
-            // finding WITH its retained evidence, so an accepted observation can never lose it later.
-            val finding = Finding(projectId = project.id, title = title, detail = detail, evidenceIds = listOfNotNull(evidence?.id),
-                evidence = listOfNotNull(evidence?.let(EvidenceRetention::snapshot)))
-            mutable.update {
-                require(it.workspace.findings.size < Limits.FINDINGS) { "Observation limit reached. Remove saved items before adding more." }
-                val next = it.workspace.copy(findings = listOf(finding) + it.workspace.findings)
-                try { WorkspaceBudget.requireDurableCapacity(next) } catch (e: IllegalArgumentException) {
-                    throw if (finding.evidence.isEmpty()) e
-                    else IllegalArgumentException("Retained evidence does not fit the durable budget. Remove saved observations or their evidence before adding more.")
-                }
-                it.copy(workspace = next, message = "Observation added; not automatically verified.")
+        return admitDurable("Observation added. Check workspace status for save confirmation.") { workspace ->
+            require(title.isNotBlank() && title.length <= 200 && detail.isNotBlank() && detail.length <= 16000) {
+                "Use a title between 1 and 200 characters and notes between 1 and 16,000 characters."
             }
-            persistDurable()
-        }.onFailure { message(it.message ?: "Observation budget exceeded") }.isSuccess
+            require(workspace.findings.size < Limits.FINDINGS) { "Observation limit reached. Remove a saved observation before adding one." }
+            val attached = evidence?.takeIf { it.projectId == project.id }
+            val finding = Finding(projectId = project.id, title = title, detail = detail,
+                evidenceIds = listOfNotNull(attached?.id), evidence = listOfNotNull(attached?.let(EvidenceRetention::snapshot)))
+            workspace.copy(findings = listOf(finding) + workspace.findings)
+        }
     }
     fun deleteSavedRequest(id: String) { mutable.update { it.copy(workspace = it.workspace.copy(savedRequests = it.workspace.savedRequests.filterNot { r -> r.id == id })) }; persistDurable() }
     fun deleteFinding(id: String) { mutable.update { it.copy(workspace = it.workspace.copy(findings = it.workspace.findings.filterNot { f -> f.id == id })) }; persistDurable() }
