@@ -114,4 +114,4 @@ Evidence and exact acceptance: [Vivo 1.0.2 review](reviews/vivo-1.0.2-production
 ## 1.0.4 delivery
 
 - [x] Streamline Home, API Lab, Findings and Tools. Move expensive admission and report work off the UI thread.
-- [ ] Record the exact-source Android matrix and signed upgrade results in the [1.0.4 release record](RELEASE_1.0.4.md).
+- [x] Record the exact-source Android matrix and signed upgrade results in the [1.0.4 release record](RELEASE_1.0.4.md).

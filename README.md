@@ -100,11 +100,11 @@ Workspace protections include Keystore-backed authenticated encryption, bounded 
 
 ## Try ESuite
 
-**1.0.2 fixes browser visibility and encrypted-evidence reliability.** Page and inspector controls have bounded, reachable viewports; saves acknowledge the committed snapshot; deployed workspaces migrate without dropping durable evidence; guarded imports run off main; large vaults work around Android 9 Keystore chunk loss. [Read the verification record](docs/VERIFICATION.md), including capability skips and remaining limits. Install over production 1.0.1 to retain the encrypted workspace.
+**1.0.4 brings a faster workspace and clearer navigation.** Switch projects from Home, move between request editing and responses in API Lab, and search observations before opening their evidence. The signed update preserved encrypted evidence when installed over 1.0.2. [Download ESuite 1.0.4](https://github.com/modhack2003/Esuite/releases/tag/v1.0.4) · [Release verification](docs/RELEASE_1.0.4.md)
 
 ### Android builds and production delivery
 
-Requested compatibility: **Android 9–17 (API 28–37)**. The build targets API 37 with the 37.0 platform, AGP 9.2.1, Gradle 9.4.1 and JDK 17. All ten Android 9–17 emulator jobs passed: 38 native passes, 12 explicit WebView capability skips and zero failures. Full browser UI flows passed on four compatible providers. The exact production-signed APK also passed UI and install-over-1.0.0 encrypted-evidence checks on API 28/35/37.0. Physical/OEM verification remains open. See [release delivery](docs/RELEASING.md) for signing and verification gates.
+**Android 9–17 (API 28–37.0).** The build uses AGP 9.2.1, Gradle 9.4.1 and JDK 17. All ten emulator jobs passed, with 180 native passes and 30 WebView capability skips. The exact signed APK passed the upgrade from 1.0.2 on API 28, 35 and 37.0. Physical-device and TalkBack coverage remain open. [Release verification](docs/RELEASE_1.0.4.md)
 
 ```bash
 git clone https://github.com/modhack2003/Esuite.git
