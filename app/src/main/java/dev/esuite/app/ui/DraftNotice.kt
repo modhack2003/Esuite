@@ -6,6 +6,6 @@ import androidx.compose.runtime.Composable
 
 /** States the exact lifetime of pending editor text, including that process death loses it. */
 @Composable fun DraftNotice() {
-    Text("Pending drafts are kept in memory for this project only. They survive switching modules and rotation, and are lost if the app is closed.",
+    Text("Drafts stay in memory while you switch tabs or rotate the device. Save a request or finding to keep it after closing ESuite.",
         style = MaterialTheme.typography.bodySmall, color = Muted)
 }

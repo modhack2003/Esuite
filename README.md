@@ -13,7 +13,7 @@
 
 <p align="center"><strong>Native Android</strong> &nbsp; / &nbsp; <strong>No root required</strong> &nbsp; / &nbsp; <strong>No computer during use</strong> &nbsp; / &nbsp; <strong>Local processing</strong></p>
 
-> **Available now: native web/API workbench.** API Lab now executes scoped HTTP requests with separate identity cookie jars; the native browser implements local page inspection, cookie tools, console and storage views on compatible WebViews. Browser history currently contains **request metadata only**, without response bodies. Offline tools include AWS JSON review, text transforms and request imports for manual review. Full proxy interception, VPN capture, active scanning and cloud account connectors remain planned. The web concept below stays synthetic. See [the current agent handoff](docs/AGENT_HANDOFF.md).
+> **Available now: native web/API workbench.** API Lab now executes scoped HTTP requests with separate identity cookie jars; the native browser opens an HTTPS site or a search and inspects the current page using Android WebView. Browser Developer tools show current-page cookie, storage, console and same-origin request metadata. Offline tools include AWS JSON review, text transforms and request imports for manual review. Full proxy interception, VPN capture, active scanning and cloud account connectors remain planned. The web concept below stays synthetic. See [the current agent handoff](docs/AGENT_HANDOFF.md).
 
 ## A connected workflow, built for a phone
 
@@ -44,7 +44,7 @@ Explore the [self-contained UI concept](docs/ui/index.html), [editable Canva con
 | Android app | Native Home, live Browser, Traffic, API Lab, Findings and Tools |
 | Native utilities | UTF-8 Base64 encode/decode, form URL encode/decode and SHA-256 hashing |
 | Native request editor | Real scoped HTTP, cancellation, response limits, raw HTTP import and account A/B comparison |
-| Browser | Compatible per-project/identity WebView profiles, element selection, HTML/CSS edits, native cookies, console, storage and request metadata |
+| Browser | Standalone HTTPS browsing, search, page outline, cookie names and flags, console, storage metadata, and request paths |
 | Local tools | Grouped text transformations, request imports and offline configuration review |
 | Imports & cloud review | cURL/raw HTTP, OpenAPI 3 JSON, textual HAR request drafts and offline AWS configuration observations |
 | Local evidence | AES-GCM project persistence, request collections, observations, sanitized report preview/export and project deletion |

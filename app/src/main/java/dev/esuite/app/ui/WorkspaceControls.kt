@@ -68,11 +68,11 @@ fun LocalReportAction(label: String, filename: String, prepare: suspend () -> St
 @Composable
 fun WorkspaceControls(state: AppState, model: AppViewModel) {
     var delete by remember { mutableStateOf(false) }; var erase by remember { mutableStateOf(false) }
-    Text("Local data controls", style = MaterialTheme.typography.titleMedium)
+    Text("Saved site data", style = MaterialTheme.typography.titleMedium)
     Text("This device holds the workspace key. Erasing app data or losing the device can make the workspace unrecoverable. Export a report to retain its summary outside ESuite.", style = MaterialTheme.typography.bodySmall)
-    OutlinedButton(onClick = model::saveNow, modifier = Modifier.fillMaxWidth()) { Text("Save encrypted workspace now") }
+    OutlinedButton(onClick = model::saveNow, modifier = Modifier.fillMaxWidth()) { Text("Save local data now") }
     LocalReportAction("Preview sanitized local export", "esuite-sanitized-report.json", model::exportSanitized, model::message, enabled = state.projectId != null)
-    OutlinedButton(onClick = { delete = true }, enabled = state.projectId != null, modifier = Modifier.fillMaxWidth()) { Text("Delete selected project and browser profiles") }
+    OutlinedButton(onClick = { delete = true }, enabled = state.projectId != null, modifier = Modifier.fillMaxWidth()) { Text("Remove selected site data") }
     // Beside the delete control, not only in the top status line: the audit found the deletion
     // outcome was otherwise discoverable only by scrolling back to the top.
     if (state.pendingProfileCleanup.isNotEmpty()) {
@@ -80,14 +80,14 @@ fun WorkspaceControls(state: AppState, model: AppViewModel) {
             Modifier.testTag("workspace_profile_cleanup"), style = MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick = model::retryProfileCleanup, modifier = Modifier.fillMaxWidth().testTag("retry_profile_cleanup")) { Text("Retry browser profile cleanup") }
     }
-    OutlinedButton(onClick = { erase = true }, modifier = Modifier.fillMaxWidth()) { Text("Erase encrypted workspace") }
-    if (delete) AlertDialog(onDismissRequest = { delete = false }, title = { Text("Delete selected project?") }, text = { Text("This removes its saved requests, history, observations and identity configuration, and asks Android WebView to delete its isolated browser profiles. A profile the browser still has loaded is removed when ESuite restarts. Other projects remain.") },
-        confirmButton = { TextButton(onClick = { delete = false; model.deleteProject() }) { Text("Delete project") } }, dismissButton = { TextButton(onClick = { delete = false }) { Text("Cancel") } })
+    OutlinedButton(onClick = { erase = true }, modifier = Modifier.fillMaxWidth()) { Text("Erase saved site data") }
+    if (delete) AlertDialog(onDismissRequest = { delete = false }, title = { Text("Remove selected site data?") }, text = { Text("This removes its saved requests, history, observations and identity configuration, and asks Android WebView to delete its isolated browser profiles. A profile the browser still has loaded is removed when ESuite restarts. Other sites stay saved.") },
+        confirmButton = { TextButton(onClick = { delete = false; model.deleteProject() }) { Text("Remove site") } }, dismissButton = { TextButton(onClick = { delete = false }) { Text("Cancel") } })
     if (erase) EraseVaultDialog({ erase = false }, model)
 }
 
 @Composable
 fun EraseVaultDialog(close: () -> Unit, model: AppViewModel) {
-    AlertDialog(onDismissRequest = close, title = { Text("Erase encrypted workspace?") }, text = { Text("All encrypted API projects and evidence will be removed and the vault key deleted. ESuite's own browser profiles are removed in the same step by name prefix, so projects do not have to be deleted individually first; other apps' WebView data and the default profile are untouched. A profile the browser still has loaded is removed when ESuite restarts.") },
+    AlertDialog(onDismissRequest = close, title = { Text("Erase saved site data?") }, text = { Text("This removes all saved requests, activity, findings and API identity settings. Use Clear browsing data to clear the current browser’s cookies and storage.") },
         confirmButton = { TextButton(onClick = { close(); model.eraseVault() }) { Text("Erase vault") } }, dismissButton = { TextButton(onClick = close) { Text("Cancel") } })
 }

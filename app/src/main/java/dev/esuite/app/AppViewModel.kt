@@ -10,6 +10,7 @@ import dev.esuite.app.transport.ApiEngine
 import dev.esuite.app.storage.WorkspaceVault
 import dev.esuite.app.storage.WorkspaceStore
 import dev.esuite.app.browser.BrowserProfiles
+import dev.esuite.app.browser.BrowserAddress
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -162,7 +163,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
     fun createProject(name: String, origin: String) {
         runCatching {
             require(name.isNotBlank() && name.length <= 100) { "Enter a project name (up to 100 characters)" }
-            require(state.value.workspace.projects.size < 20) { "Project limit reached (20)" }
+            require(state.value.workspace.projects.size < 20) { "Saved site limit reached (20)" }
             val scope = ScopePolicy(origin.trim())
             require(scope.target.isHttps) { "This Android build requires an HTTPS project origin" }
             val project = Project(name = name.trim(), origin = scope.canonicalOrigin)
@@ -175,6 +176,25 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
             persistDurable()
         }.onFailure { message(it.message ?: "Invalid project") }
     }
+    fun openSite(address: String): Boolean {
+        if (!state.value.ready) { message("Saved site data is opening."); return false }
+        val text = address.trim()
+        val url = BrowserAddress.https(if ("://" in text) text else "https://$text")
+        if (url == null) { message("Enter a valid HTTPS address."); return false }
+        val origin = BrowserAddress.origin(url)
+        val current = currentProject()
+        val existing = current?.takeIf { it.origin == origin }
+            ?: state.value.workspace.projects.firstOrNull { it.origin == origin }
+        if (existing != null) selectProject(existing.id)
+        else {
+            createProject(url.host.take(100), origin)
+            if (currentProject()?.origin != origin) return false
+        }
+        replaceDraft(RequestDraft(url = url.newBuilder().fragment(null).build().toString()))
+        message("")
+        return true
+    }
+
     fun selectProject(id: String) {
         val previous = state.value
         if (id == previous.projectId) return
@@ -229,10 +249,6 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         drafts.set(DraftKey.of(state.value.projectId, Editor.ApiHeaders, state.value.identity), headers.joinToString("\n") { "${it.name}: ${it.value}" })
     fun record(exchange: Exchange) {
         mutable.update { if (!it.ready || it.workspace.projects.none { p -> p.id == exchange.projectId }) it else it.copy(workspace = it.workspace.copy(exchanges = (listOf(exchange) + it.workspace.exchanges).take(Limits.HISTORY))) }
-    }
-    fun observeBrowser(project: Project, identity: String, draft: RequestDraft) {
-        record(Exchange(projectId = project.id, identity = identity, source = "Browser metadata", request = draft,
-            completeness = "URL/method/request headers only. WebView does not supply request bodies or response messages through this callback."))
     }
     fun send(compare: Boolean = false) {
         val snapshot = state.value; val project = currentProject() ?: return message("Create a project first")
@@ -376,15 +392,6 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
     fun clearSessions() {
         currentProject()?.let { p -> engine.sessions.clearProject(p.id); mutable.update { it.copy(workspace = it.workspace.copy(identityConfigs = it.workspace.identityConfigs.filterNot { c -> c.projectId == p.id })) }; persistDurable() }
         message("API sessions and saved identity headers cleared. Browser profiles have separate controls.")
-    }
-    fun transferBrowserCookies(url: String, cookies: List<String>): Boolean {
-        val project = currentProject() ?: return false
-        return runCatching {
-            val target = ScopePolicy(project.origin).requireAllowed(url)
-            val count = engine.sessions.jar(project.id, state.value.identity).replaceFromBrowser(target, cookies)
-            replaceDraft(RequestDraft(url = target.toString()))
-            message("Replaced API identity ${state.value.identity}'s memory-only cookie jar with $count browser cookies for this URL. Review API Lab before sending.")
-        }.onFailure { message(it.message ?: "Cookie transfer failed") }.isSuccess
     }
     suspend fun saveDraft(name: String) {
         val project = currentProject() ?: return

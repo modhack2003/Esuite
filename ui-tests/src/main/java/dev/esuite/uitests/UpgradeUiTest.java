@@ -6,7 +6,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import static org.junit.Assert.*;
 
-/** Seed the immutable v1.0.2 baseline, then verify the update without clearing app data. */
+/** Seed the immutable v1.0.4 baseline, then verify the update without clearing app data. */
 @RunWith(AndroidJUnit4.class)
 public class UpgradeUiTest extends NativeUiDriver {
     private static final String NOTE="Synthetic upgrade evidence retained";
@@ -24,7 +24,8 @@ public class UpgradeUiTest extends NativeUiDriver {
         launch(); readObservation(); checkpoint("baseline-note-after-process-restart");
     }
     @Test public void verifyUpgradeRetainsEncryptedWorkspace() throws Exception {
-        launch(); assertNotNull(find(By.textContains("Same signer upgrade fixture")));
-        readObservation(); checkpoint("upgraded-note-retained");
+        launch();
+        readObservation();
+        top(); assertTrue(waitText("workspace_context", "https://example.test", 15000)); checkpoint("upgraded-note-retained");
     }
 }

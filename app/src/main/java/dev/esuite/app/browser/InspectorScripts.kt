@@ -82,4 +82,24 @@ object InspectorScripts {
           } catch (e) { return String(e); }
         })()
     """.trimIndent()
+    val documentOutline = """
+        (() => {
+          const rows = Array.from(document.querySelectorAll('main, nav, article, section, h1, h2, h3, a, button, input')).slice(0, 60);
+          return rows.map(element => element.tagName + (element.id ? '#' + element.id.slice(0, 80) : '')).join('\n') || 'No matching elements';
+        })()
+    """.trimIndent()
+
+    val storageMetadata = """
+        (() => {
+          const keys = storage => {
+            const records = [];
+            for (let index = 0; index < Math.min(storage.length, 50); index++) {
+              const key = storage.key(index);
+              if (key !== null) records.push(key.slice(0, 80) + ' · ' + (storage.getItem(key) || '').length + ' characters');
+            }
+            return [storage.length + ' keys', ...records].join('\n');
+          };
+          return 'Local storage · ' + keys(localStorage) + '\n\nSession storage · ' + keys(sessionStorage);
+        })()
+    """.trimIndent()
 }

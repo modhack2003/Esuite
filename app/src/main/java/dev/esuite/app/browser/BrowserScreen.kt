@@ -2,248 +2,451 @@ package dev.esuite.app.browser
 
 import android.annotation.SuppressLint
 import android.net.http.SslError
-import android.graphics.Bitmap
-import java.io.ByteArrayInputStream
-import android.webkit.*
+import android.view.View
+import android.view.ViewGroup
+import android.webkit.CookieManager
+import android.webkit.RenderProcessGoneDetail
+import android.webkit.SslErrorHandler
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
+import android.webkit.WebStorage
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.webkit.CookieManagerCompat
-import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
-import dev.esuite.app.AppViewModel
-import dev.esuite.app.core.*
-import dev.esuite.app.ui.TechnicalKeyboard
+import dev.esuite.app.R
 import dev.esuite.app.ui.UrlKeyboard
+import dev.esuite.app.ui.WorkspaceTabs
 import dev.esuite.app.ui.technicalTextStyle
-import kotlinx.serialization.json.*
+import java.io.ByteArrayInputStream
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+
+private enum class ToolPanel { Page, Elements, Cookies, Storage, Console, Network }
 
 @SuppressLint("SetJavaScriptEnabled")
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun BrowserScreen(project: Project, identity: String, model: AppViewModel, modifier: Modifier = Modifier) {
+internal fun BrowserScreen(
+    visible: Boolean,
+    motion: Boolean,
+    clearRequest: Int,
+    onSettings: () -> Unit,
+    onDataCleared: (Boolean) -> Unit,
+    onOpenApi: (String) -> Unit,
+) {
+    val context = LocalContext.current
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
-    fun dismissEditor() { focus.clearFocus(); keyboard?.hide() }
-    val policy = remember(project.id) { ScopePolicy(project.origin) }
-    // Pending editors live in the ViewModel: BrowserScreen is destroyed on every module switch.
-    val pending by model.drafts.values.collectAsState()
-    // DraftKey.of adds the identity dimension for the editors that declare it, so the cookie and
-    // script editors keep one identity's text out of the other's isolated profile.
-    fun draftText(editor: Editor, fallback: String = "") = pending[DraftKey.of(project.id, editor, identity)] ?: fallback
-    fun write(editor: Editor, value: String) = model.drafts.set(DraftKey.of(project.id, editor, identity), value)
-    val address = draftText(Editor.BrowserAddress, project.origin + "/")
-    val latestAddress by rememberUpdatedState(address)
-    var webView by remember(project.id, identity) { mutableStateOf<WebView?>(null) }
-    var rendererFailed by remember(project.id, identity) { mutableStateOf(false) }
-    var panel by remember(project.id, identity) { mutableStateOf("Page") }
-    var output by remember(project.id, identity) { mutableStateOf("Press Go to load the selected target. Inspection is local to this WebView.") }
-    var console by remember(project.id, identity) { mutableStateOf(emptyList<String>()) }
-    val script = draftText(Editor.BrowserScript, "document.title")
-    val edit = draftText(Editor.BrowserEdit)
-    val cookie = draftText(Editor.BrowserCookie)
-    var reveal by remember(project.id, identity) { mutableStateOf(false) }
-    var loadedAddress by remember(project.id, identity) { mutableStateOf<String?>(null) }
-    var requestedAddress by remember(project.id, identity) { mutableStateOf<String?>(null) }
-    var addressExpanded by remember(project.id, identity) { mutableStateOf(false) }
-    var clearStorage by remember(project.id, identity) { mutableStateOf(false) }
-    val windowHeight = LocalWindowInfo.current.containerSize.height
-    val compact = with(LocalDensity.current) { windowHeight.toDp() < 450.dp || fontScale > 1.3f }
-    val supported = remember { WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE) }
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val provider = remember { WebViewCompat.getCurrentWebViewPackage(context)?.let { "${it.packageName} ${it.versionName}" } ?: "No WebView provider" }
-    if (!supported) {
-        Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Update Android System WebView to use separate browser profiles. API Lab sessions remain available.", Modifier.testTag("browser_unsupported"))
-            Text(provider, style = MaterialTheme.typography.bodySmall)
+    val requestLog = remember { BrowserRequestLog() }
+    var generation by remember { mutableIntStateOf(0) }
+    val browser = remember(context, generation) { runCatching { WebView(context) }.getOrNull() }
+    val destroyed = remember(browser) { java.util.concurrent.atomic.AtomicBoolean(false) }
+    var address by remember { mutableStateOf("") }
+    var pageUrl by remember { mutableStateOf<String?>(null) }
+    var pageTitle by remember { mutableStateOf("") }
+    var progress by remember { mutableIntStateOf(0) }
+    var loading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var rendererGone by remember { mutableStateOf(false) }
+    var canGoBack by remember { mutableStateOf(false) }
+    var canGoForward by remember { mutableStateOf(false) }
+    var clearing by remember { mutableStateOf(false) }
+    var inspectors by remember { mutableStateOf(false) }
+    var panel by remember { mutableStateOf(ToolPanel.Page) }
+    var output by remember { mutableStateOf("") }
+    var console by remember { mutableStateOf(emptyList<String>()) }
+    var previousClearRequest by remember { mutableIntStateOf(clearRequest) }
+
+    fun endNavigation(view: WebView) {
+        loading = false
+        canGoBack = view.canGoBack()
+        canGoForward = view.canGoForward()
+    }
+
+    fun openAddress() {
+        focus.clearFocus()
+        keyboard?.hide()
+        if (browser == null || rendererGone) return
+        inspectors = false
+        val target = runCatching { BrowserAddress.resolve(address) }.getOrElse {
+            error = it.message
+            return
         }
-        return
+        browser.stopLoading()
+        address = target.toString()
+        requestLog.page(target)
+        error = null
+        loading = true
+        progress = 0
+        browser.loadUrl(target.toString())
     }
-    fun evaluate(js: String) {
-        dismissEditor()
-        if (!policy.allows((webView?.url ?: "").substringBefore('#'))) { output = "Load an in-scope page first"; return }
-        webView?.evaluateJavascript(js) { result -> output = runCatching { val e = Json.parseToJsonElement(result); if (e is JsonPrimitive && e.isString) e.content else e.toString() }.getOrDefault(result).let { text -> if (text.length > 24000) "TRUNCATED: showing first 24000 of ${text.length} characters.\n" + text.take(24000) else text } }
-    }
-    fun cookieManager(): CookieManager? = webView?.let { if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) WebViewCompat.getProfile(it).cookieManager else null }
-    fun readCookies() {
-        val url = runCatching { policy.requireAllowed(address.substringBefore('#')).toString() }.getOrElse { output = "Enter an in-scope URL"; return }
-        val manager = cookieManager() ?: return
-        val rows = if (WebViewFeature.isFeatureSupported(WebViewFeature.GET_COOKIE_INFO)) CookieManagerCompat.getCookieInfo(manager, url)
-            else manager.getCookie(url)?.split(';')?.map { it.trim() }.orEmpty()
-        output = (if (!WebViewFeature.isFeatureSupported(WebViewFeature.GET_COOKIE_INFO)) "Cookie attributes unavailable on this WebView.\n\n" else "") + if (rows.isEmpty()) "No cookies for this URL" else rows.joinToString("\n\n") { row ->
-            if (reveal) row else row.split(';').mapIndexed { i, value -> if (i == 0) value.substringBefore('=') + "=[HIDDEN]" else value }.joinToString(";")
-        }
-    }
-    fun go() {
-        dismissEditor()
-        output = "Loading…"
-        runCatching { policy.requireAllowed(address.substringBefore('#')) }.onSuccess {
-            val target = webView ?: run { output = "Restart the browser renderer to load a page"; return }
-            requestedAddress = address
-            addressExpanded = false
-            target.loadUrl(it.newBuilder().encodedFragment(address.substringAfter('#', "").ifEmpty { null }).build().toString())
-        }.onFailure { output = it.message ?: "Invalid URL" }
-    }
-    DisposableEffect(project.id, identity) { onDispose { webView?.apply { stopLoading(); cookieManager()?.flush(); webChromeClient = null; destroy() } } }
-    Column(modifier.fillMaxSize().padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (panel == "Page") {
-            if (!compact || addressExpanded) OutlinedTextField(address, { write(Editor.BrowserAddress, it) },
-                label = { Text("Target HTTPS URL") }, keyboardOptions = UrlKeyboard, textStyle = technicalTextStyle(),
-                modifier = Modifier.fillMaxWidth().testTag("browser_url"), singleLine = true)
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (compact) TextButton(onClick = { addressExpanded = !addressExpanded; if (!addressExpanded) dismissEditor() }) {
-                    Text(if (addressExpanded) "Hide address" else "Address")
+
+    fun readPanel(selection: ToolPanel) {
+        panel = selection
+        output = ""
+        val current = pageUrl ?: return
+        val view = browser ?: return
+        when (selection) {
+            ToolPanel.Page -> output = pageTitle
+            ToolPanel.Network -> output = requestLog.snapshot().joinToString("\n").ifEmpty { "No same-site requests recorded." }
+            ToolPanel.Cookies -> {
+                val cookieManager = CookieManager.getInstance()
+                val attributes = WebViewFeature.isFeatureSupported(WebViewFeature.GET_COOKIE_INFO)
+                val rows = if (attributes) CookieManagerCompat.getCookieInfo(cookieManager, current)
+                else cookieManager.getCookie(current)?.split(';').orEmpty()
+                output = cookieMetadata(rows, attributes).joinToString("\n").ifEmpty { "No cookies for this page." }
+            }
+            ToolPanel.Console -> output = console.joinToString("\n").ifEmpty { "No console messages for this page." }
+            ToolPanel.Elements, ToolPanel.Storage -> {
+                val script = if (selection == ToolPanel.Elements) InspectorScripts.documentOutline else InspectorScripts.storageMetadata
+                view.evaluateJavascript(script) { result ->
+                    if (pageUrl == current && panel == selection && !loading) {
+                        output = runCatching { (Json.parseToJsonElement(result) as JsonPrimitive).content }.getOrDefault("").take(12_000)
+                    }
                 }
-                Button(modifier = Modifier.testTag("browser_go"), onClick = ::go) { Text("Go") }
-                OutlinedButton(onClick = { webView?.stopLoading(); if (output == "Loading…") output = "Page load stopped" }) { Text("Stop") }
-                OutlinedButton(onClick = { if (webView?.canGoBack() == true) webView?.goBack() }) { Text("Back") }
             }
         }
-        if (rendererFailed) OutlinedButton(onClick = { rendererFailed = false; output = "Press Go to reload the target" }) { Text("Restart browser renderer") }
-        else key(project.id, identity) {
-            AndroidView(modifier = Modifier.fillMaxWidth().clipToBounds().testTag("browser_page").then(if (panel == "Page") Modifier.weight(1f) else Modifier.height(0.dp)), factory = { context ->
-                WebView(context).apply {
-                    setBackgroundColor(android.graphics.Color.WHITE)
-                    clipToOutline = true
-                    outlineProvider = android.view.ViewOutlineProvider.BOUNDS
-                    if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) WebViewCompat.setProfile(this, "esuite_${project.id}_$identity")
-                    settings.javaScriptEnabled = true; settings.domStorageEnabled = true
-                    settings.allowFileAccess = false; settings.allowContentAccess = false
-                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW; settings.safeBrowsingEnabled = true
-                    settings.mediaPlaybackRequiresUserGesture = true
-                    if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) WebViewCompat.getProfile(this).cookieManager.setAcceptThirdPartyCookies(this, false)
-                    webChromeClient = object : WebChromeClient() {
-                        override fun onConsoleMessage(message: ConsoleMessage): Boolean { console = (console + "${message.messageLevel()}: ${message.message().take(2000)}").takeLast(50); return true }
-                    }
-                    webViewClient = object : WebViewClient() {
-                        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                            val blocked = request.isForMainFrame && !policy.allows(request.url.toString().substringBefore('#'))
-                            if (blocked) output = "Blocked navigation outside project scope"
-                            return blocked
+    }
+
+    LifecycleStartEffect(browser, visible, rendererGone) {
+        if (visible && !destroyed.get()) browser?.onResume()
+        onStopOrDispose { if (!destroyed.get()) browser?.onPause() }
+    }
+    DisposableEffect(browser) {
+        onDispose {
+            if (destroyed.compareAndSet(false, true)) browser?.destroy()
+        }
+    }
+    LaunchedEffect(clearRequest) {
+        if (clearRequest != previousClearRequest) {
+            previousClearRequest = clearRequest
+            val view = browser?.takeUnless { rendererGone }
+            view?.stopLoading()
+            view?.clearCache(true)
+            if (view != null) {
+                clearing = true
+                view.loadUrl("about:blank")
+            }
+            runCatching {
+                val cookies = CookieManager.getInstance()
+                WebStorage.getInstance().deleteAllData()
+                cookies.removeAllCookies {
+                    cookies.flush()
+                    onDataCleared(true)
+                }
+            }.onFailure { onDataCleared(false) }
+            address = ""
+            pageUrl = null
+            pageTitle = ""
+            error = null
+            loading = false
+            canGoBack = false
+            canGoForward = false
+            inspectors = false
+            console = emptyList()
+            output = ""
+            requestLog.page(null)
+        }
+    }
+    BackHandler(visible && (inspectors || canGoBack)) {
+        if (inspectors) inspectors = false else browser?.goBack()
+    }
+
+    Column(if (visible) Modifier.fillMaxSize() else Modifier.size(0.dp)) {
+        if (visible) {
+            Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 1.dp) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
+                    OutlinedTextField(
+                        value = address,
+                        onValueChange = { address = it; if (!loading) error = null },
+                        singleLine = true,
+                        placeholder = { Text("Search or enter an address") },
+                        keyboardOptions = UrlKeyboard.copy(imeAction = ImeAction.Go),
+                        keyboardActions = KeyboardActions(onGo = { openAddress() }),
+                        modifier = Modifier.fillMaxWidth().testTag("browser_url"),
+                        trailingIcon = {
+                            TextButton(
+                                onClick = ::openAddress,
+                                enabled = browser != null && !rendererGone && address.isNotBlank(),
+                                modifier = Modifier.testTag("browser_go"),
+                            ) { Text("Go") }
+                        },
+                    )
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { browser?.goBack() }, enabled = canGoBack) {
+                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
                         }
-                        override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-                            // POST navigations do not invoke shouldOverrideUrlLoading.
-                            if (request.isForMainFrame && !policy.allows(request.url.toString().substringBefore('#'))) {
-                                view.post { output = "Blocked navigation outside project scope" }
-                                return WebResourceResponse("text/plain", "UTF-8", 403, "Outside project scope", emptyMap(), ByteArrayInputStream("Blocked navigation outside project scope".toByteArray()))
+                        IconButton(onClick = { browser?.goForward() }, enabled = canGoForward) {
+                            Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = "Forward")
+                        }
+                        IconButton(onClick = {
+                            if (loading) { browser?.stopLoading(); loading = false }
+                            else if (browser != null) { loading = true; progress = 0; error = null; browser.reload() }
+                        }, enabled = loading || pageUrl != null, modifier = Modifier.testTag("browser_reload")) {
+                            Icon(if (loading) Icons.Outlined.Close else Icons.Outlined.Refresh,
+                                contentDescription = if (loading) "Stop loading" else "Reload")
+                        }
+                        Spacer(Modifier.weight(1f))
+                        IconButton(
+                            enabled = pageUrl != null && !loading,
+                            onClick = { inspectors = !inspectors; if (inspectors) readPanel(panel) },
+                            modifier = Modifier.testTag("browser_tools"),
+                        ) { Icon(Icons.Outlined.Build, contentDescription = if (inspectors) "Close Developer tools" else "Developer tools") }
+                        IconButton(onClick = onSettings, modifier = Modifier.testTag("open_settings")) {
+                            Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                        }
+                    }
+                }
+            }
+            if (loading) LinearProgressIndicator(progress = { progress.coerceIn(0, 100) / 100f }, modifier = Modifier.fillMaxWidth())
+        }
+
+        Box(if (visible) Modifier.fillMaxWidth().weight(1f).clipToBounds() else Modifier.size(0.dp)) {
+            if (browser != null && !rendererGone) {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize().testTag("browser_page").clipToBounds(),
+                    factory = {
+                        browser.apply {
+                            setBackgroundColor(android.graphics.Color.WHITE)
+                            clipToOutline = true
+                            outlineProvider = android.view.ViewOutlineProvider.BOUNDS
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.allowFileAccess = false
+                            settings.allowContentAccess = false
+                            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                            settings.safeBrowsingEnabled = true
+                            CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
+                            webChromeClient = object : WebChromeClient() {
+                                override fun onProgressChanged(view: WebView, newProgress: Int) {
+                                    progress = newProgress
+                                }
+
+                                override fun onConsoleMessage(message: android.webkit.ConsoleMessage): Boolean {
+                                    if (loading || pageUrl != null) {
+                                        val line = "${message.messageLevel()} · ${message.message().take(400)}"
+                                        console = (console + line).takeLast(30)
+                                    }
+                                    return true
+                                }
                             }
-                            if (policy.allows(request.url.toString().substringBefore('#'))) model.observeBrowser(project, identity, RequestDraft(request.method, request.url.toString(), request.requestHeaders.entries.map { Header(it.key, it.value) }))
-                            return null
+                            webViewClient = object : WebViewClient() {
+                                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                                    val block = request.isForMainFrame && BrowserAddress.https(request.url.toString()) == null
+                                    if (block) error = "This link requires an HTTPS address."
+                                    return block
+                                }
+
+                                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                                    val parsed = BrowserAddress.https(request.url.toString())
+                                    if (parsed != null) {
+                                        requestLog.add(request.method, parsed)
+                                    } else if (request.isForMainFrame && request.url.toString() != "about:blank") {
+                                        return WebResourceResponse("text/plain", "UTF-8", 403, "HTTPS required", emptyMap(),
+                                            ByteArrayInputStream("HTTPS is required.".toByteArray()))
+                                    }
+                                    return null
+                                }
+
+                                override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                                    if (url == "about:blank") return
+                                    val target = BrowserAddress.https(url)
+                                    if (target == null) {
+                                        view.stopLoading()
+                                        error = "This page requires HTTPS."
+                                        endNavigation(view)
+                                        return
+                                    }
+                                    val sameRequest = url == address && pageUrl == null
+                                    requestLog.page(target, preserveExisting = sameRequest)
+                                    requestLog.add("Page", target)
+                                    loading = true
+                                    pageUrl = null
+                                    console = emptyList()
+                                    output = ""
+                                }
+
+                                override fun onPageFinished(view: WebView, url: String) {
+                                    if (clearing && url == "about:blank") {
+                                        view.clearHistory()
+                                        clearing = false
+                                        return
+                                    }
+                                    val target = BrowserAddress.https(url) ?: return
+                                    val active = view.url?.let(BrowserAddress::https)
+                                    if (active != null && active.newBuilder().fragment(null).build() != target.newBuilder().fragment(null).build()) return
+                                    pageUrl = target.toString().takeIf { error == null }
+                                    if (pageUrl != null) {
+                                        address = url
+                                        pageTitle = view.title.orEmpty()
+                                    }
+                                    endNavigation(view)
+                                }
+
+                                override fun onReceivedError(view: WebView, request: WebResourceRequest, problem: WebResourceError) {
+                                    if (request.isForMainFrame) {
+                                        error = problem.description.toString()
+                                        endNavigation(view)
+                                    }
+                                }
+
+                                override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, problem: SslError) {
+                                    handler.cancel()
+                                    if (view.url == problem.url || address == problem.url) {
+                                        error = "The site’s certificate could not be verified."
+                                        endNavigation(view)
+                                    }
+                                }
+
+                                override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                                    (view.parent as? ViewGroup)?.removeView(view)
+                                    if (destroyed.compareAndSet(false, true)) view.destroy()
+                                    rendererGone = true
+                                    loading = false
+                                    pageUrl = null
+                                    inspectors = false
+                                    canGoBack = false
+                                    canGoForward = false
+                                    return true
+                                }
+                            }
                         }
-                        override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-                            if (!policy.allows(url.substringBefore('#'))) { view.stopLoading(); output = "Blocked navigation outside project scope" }
-                        }
-                        override fun onPageFinished(view: WebView, url: String) {
-                            if (!policy.allows(url.substringBefore('#'))) return
-                            if (latestAddress == requestedAddress || latestAddress == loadedAddress) write(Editor.BrowserAddress, url)
-                            loadedAddress = url
-                            requestedAddress = null
-                            if (output == "Loading…") output = "Page loaded"
-                        }
-                        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
-                            (view.parent as? android.view.ViewGroup)?.removeView(view)
-                            view.destroy(); webView = null; loadedAddress = null; requestedAddress = null; rendererFailed = true
-                            output = "WebView renderer stopped. Use Restart browser renderer, then Go. Profile data is retained."
-                            return true
-                        }
-                        override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) { handler.cancel(); output = "TLS validation failed. Connection cancelled." }
-                        override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) { if (request.isForMainFrame) output = "Navigation failed: ${error.description}" }
-                    }
-                    webView = this
-                }
-            }, update = { view -> view.visibility = if (panel == "Page") android.view.View.VISIBLE else android.view.View.INVISIBLE })
-        }
-        Row(Modifier.fillMaxWidth().selectableGroup().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            listOf("Page", "Elements", "Cookies", "Storage", "Console").forEach { tab ->
-                val selected = panel == tab
-                Box(Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)
-                    .testTag("browser_tab_${tab.lowercase()}")
-                    .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.background, MaterialTheme.shapes.small)
-                    .selectable(selected, role = Role.Tab, onClick = { dismissEditor(); panel = tab; output = "" })
-                    .padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
-                    Text(tab, style = MaterialTheme.typography.labelMedium,
-                        color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                    },
+                    update = { view ->
+                        val showPage = visible && !inspectors && pageUrl != null && error == null
+                        view.visibility = if (visible && !inspectors) View.VISIBLE else View.INVISIBLE
+                        view.alpha = if (showPage) 1f else 0f
+                        view.importantForAccessibility = if (showPage) View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+                        else View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+                    },
+                )
             }
-        }
-        val panelScroll = key(panel) { rememberScrollState() }
-        Column(Modifier.fillMaxWidth().testTag("browser_inspector").then(if (panel == "Page") Modifier.heightIn(max = if (compact) 36.dp else 64.dp) else Modifier.weight(1f))
-            .verticalScroll(panelScroll), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (panel != "Page") {
-            val scopeLabel = if (panel == "Cookies") "Cookie lookup URL · ${address.substringBefore('?').substringBefore('#')}"
-                else loadedAddress?.let { "Loaded page · ${it.substringBefore('?').substringBefore('#')}" } ?: "Load a page to use $panel"
-            Text(scopeLabel, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        }
-        when (panel) {
-            "Elements" -> {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(modifier = Modifier.testTag("browser_select"), onClick = { evaluate(InspectorScripts.select); panel = "Page" }) { Text("Select element") }
-                    OutlinedButton(modifier = Modifier.testTag("browser_read_selection"), onClick = { evaluate(InspectorScripts.selection) }) { Text("Read selection") }
+
+            if (visible) when {
+                rendererGone -> BrowserNotice("Browser needs to restart", "The page renderer stopped.") {
+                    Button(onClick = { generation++; rendererGone = false; error = null }) { Text("Restart Browser") }
                 }
-                OutlinedTextField(edit, { write(Editor.BrowserEdit, it) }, maxLines = 5, label = { Text("HTML or CSS edit (local page only)") }, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("browser_edit"))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(modifier = Modifier.testTag("browser_apply_html"), onClick = { evaluate(InspectorScripts.html.replace("__ESUITE_VALUE__", JsonPrimitive(edit).toString())) }) { Text("Apply HTML") }
-                    TextButton(modifier = Modifier.testTag("browser_apply_css"), onClick = { evaluate(InspectorScripts.css.replace("__ESUITE_VALUE__", JsonPrimitive(edit).toString())) }) { Text("Apply CSS") }
+                browser == null -> BrowserNotice("Browser unavailable", "Install or update Android System WebView.") {}
+                inspectors -> BrowserInspector(panel, output, pageUrl, { readPanel(it) }, { readPanel(panel) }, onOpenApi)
+                error != null -> BrowserNotice("Page couldn’t open", error.orEmpty()) {
+                    Button(onClick = ::openAddress, enabled = address.isNotBlank()) { Text("Try again") }
                 }
+                pageUrl == null && !loading -> BrowserNotice("ESuite Browser", "Enter an HTTPS address or search with DuckDuckGo.", brand = true) {}
             }
-            "Cookies" -> {
-                Row { Text("Reveal cookie values", Modifier.weight(1f)); Switch(reveal, modifier = Modifier.testTag("browser_reveal"), onCheckedChange = { reveal = it; output = "Refresh to apply visibility choice" }) }
-                OutlinedButton(modifier = Modifier.testTag("browser_read_cookies"), onClick = { dismissEditor(); readCookies() }) { Text("Read native cookies") }
-                OutlinedTextField(cookie, { write(Editor.BrowserCookie, it) }, maxLines = 5, label = { Text("Set-Cookie value including attributes") }, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("browser_cookie_input"))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    TextButton(modifier = Modifier.testTag("browser_set_cookie"), onClick = { dismissEditor(); runCatching { policy.requireAllowed(address.substringBefore('#')) }.onSuccess { cookieManager()?.setCookie(it.toString(), cookie) { ok -> cookieManager()?.flush(); output = if (ok) "Cookie stored" else "Cookie rejected" } }.onFailure { output = "Invalid cookie origin" } }) { Text("Set") }
-                    TextButton(onClick = { cookieManager()?.removeAllCookies { cookieManager()?.flush(); output = "Cookies cleared for this isolated profile" } }) { Text("Clear profile") }
-                    TextButton(modifier = Modifier.testTag("browser_transfer"), onClick = {
-                        runCatching { policy.requireAllowed(address.substringBefore('#')) }.onSuccess { url ->
-                            val manager = cookieManager() ?: return@onSuccess
-                            val cookies = if (WebViewFeature.isFeatureSupported(WebViewFeature.GET_COOKIE_INFO)) CookieManagerCompat.getCookieInfo(manager, url.toString())
-                                else manager.getCookie(url.toString())?.split(';')?.map { it.trim() + "; Path=/; Secure" }.orEmpty()
-                            output = if (model.transferBrowserCookies(url.toString(), cookies)) "API identity $identity's memory-only cookie jar replaced. Switch to API Lab to review. Without metadata support, only the current URL's cookies are transferred with host/root-path defaults." else "Transfer failed; see workspace status."
-                        }.onFailure { output = "Invalid cookie origin" }
-                    }) { Text("To API jar") }
-                }
-            }
-            "Storage" -> {
-                OutlinedButton(modifier = Modifier.testTag("browser_read_storage"), onClick = { evaluate(InspectorScripts.storage) }) { Text("Read storage (reveals values)") }
-                OutlinedButton(onClick = { clearStorage = true }, enabled = loadedAddress != null) { Text("Clear page storage") }
-            }
-            "Console" -> {
-                OutlinedTextField(script, { write(Editor.BrowserScript, it) }, maxLines = 5, label = { Text("JavaScript in current page") }, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("browser_script"))
-                OutlinedButton(modifier = Modifier.testTag("browser_evaluate"), onClick = { evaluate(script) }) { Text("Evaluate") }
-                Text(console.joinToString("\n"), style = MaterialTheme.typography.bodySmall)
-            }
-        }
-        Box(Modifier.fillMaxWidth().heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
-            SelectionContainer { Text(output, Modifier.testTag("browser_output").fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }, style = technicalTextStyle()) }
-        }
+            AnimatedSkeleton(visible && loading && !inspectors, motion)
         }
     }
-    if (clearStorage) AlertDialog(onDismissRequest = { clearStorage = false }, title = { Text("Clear page storage?") },
-        text = { Text("This removes local and session storage for the loaded page in identity $identity's browser profile.") },
-        confirmButton = { TextButton(onClick = {
-            clearStorage = false
-            evaluate("(() => {localStorage.clear();sessionStorage.clear();return 'Page storage cleared';})()")
-        }) { Text("Clear storage") } }, dismissButton = { TextButton(onClick = { clearStorage = false }) { Text("Cancel") } })
+}
+
+@Composable
+private fun BrowserInspector(
+    panel: ToolPanel,
+    output: String,
+    currentUrl: String?,
+    choose: (ToolPanel) -> Unit,
+    refresh: () -> Unit,
+    openApi: (String) -> Unit,
+) {
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Developer tools", style = MaterialTheme.typography.titleLarge)
+            currentUrl?.let { Text(BrowserAddress.https(it)?.let(BrowserAddress::origin).orEmpty(),
+                style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+            WorkspaceTabs(ToolPanel.entries, panel, "browser_tool", { it.name }, choose)
+            val detail = when (panel) {
+                ToolPanel.Page -> "Page title"
+                ToolPanel.Elements -> "Document outline"
+                ToolPanel.Cookies -> "Cookie names and available flags"
+                ToolPanel.Storage -> "Storage keys and value lengths"
+                ToolPanel.Console -> "Recent console messages"
+                ToolPanel.Network -> "Recent same-site requests · method and path"
+            }
+            Text(detail, style = MaterialTheme.typography.titleSmall, modifier = Modifier.testTag("browser_tool_heading"))
+            SelectionContainer {
+                Text(output, Modifier.fillMaxWidth().testTag("browser_output"), style = technicalTextStyle())
+            }
+            OutlinedButton(onClick = refresh) { Text("Refresh inspection") }
+            if (panel == ToolPanel.Page && currentUrl != null) {
+                TextButton(onClick = { openApi(currentUrl) }, modifier = Modifier.testTag("browser_open_api")) {
+                    Text("Open in API Lab")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrowserNotice(title: String, message: String, brand: Boolean = false, action: @Composable () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+    ) {
+        if (brand) Icon(painterResource(R.drawable.ic_esuite), null, Modifier.size(55.dp), tint = Color.Unspecified)
+        Text(title, style = MaterialTheme.typography.headlineMedium)
+        Text(message, style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        action()
+    }
+}
+
+@Composable
+private fun AnimatedSkeleton(visible: Boolean, motion: Boolean) {
+    AnimatedVisibility(visible,
+        enter = if (motion) fadeIn() else androidx.compose.animation.EnterTransition.None,
+        exit = if (motion) fadeOut() else androidx.compose.animation.ExitTransition.None) {
+        BrowserSkeleton()
+    }
+}
+
+@Composable
+internal fun BrowserSkeleton(label: String = "Loading page") {
+    Surface(Modifier.fillMaxSize().testTag("browser_loading"), color = MaterialTheme.colorScheme.background) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text(label, style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            listOf(0.66f to 26, 1f to 112, 0.94f to 12, 0.78f to 12, 0.9f to 12).forEach { (width, height) ->
+                Box(Modifier.fillMaxWidth(width).height(height.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.medium))
+            }
+        }
+    }
 }

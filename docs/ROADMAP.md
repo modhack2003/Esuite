@@ -115,3 +115,8 @@ Evidence and exact acceptance: [Vivo 1.0.2 review](reviews/vivo-1.0.2-production
 
 - [x] Streamline Home, API Lab, Findings and Tools. Move expensive admission and report work off the UI thread.
 - [x] Record the exact-source Android matrix and signed upgrade results in the [1.0.4 release record](RELEASE_1.0.4.md).
+
+## 1.0.5 browser refresh
+
+- [x] Implement standalone browsing, in-app inspection, site-based saved data, and appearance and privacy settings.
+- [ ] Record native browser and signed upgrade results in the [1.0.5 notes](RELEASE_1.0.5.md).

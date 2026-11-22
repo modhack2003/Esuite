@@ -10,6 +10,10 @@ Read this file first, then `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md
 - No analytics, hosted AI, remote workers, automatic evidence uploads or external callback collectors. The design services received synthetic data only.
 - The React prototype is a synthetic design reference. Native features must be assessed from Kotlin source and tests.
 
+## 1.0.5 browser refresh
+
+Browser opens without a saved site and uses the app-private WebView profile independently of legacy profile support. Activity and Findings open saved records by site. The [1.0.5 notes](RELEASE_1.0.5.md) cover inspector scope, settings and release verification.
+
 ## 1.0.4
 
 See the [1.0.4 release record](RELEASE_1.0.4.md) for workspace changes, performance work and exact-source verification.

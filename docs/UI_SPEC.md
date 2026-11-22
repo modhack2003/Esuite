@@ -75,3 +75,7 @@ The native app implements compatible isolated WebView profiles, local page inspe
 - No network requests from the self-contained concept after loading. No bundled tokens or real target data.
 - Keyboard focus, dialog dismissal and reduced-motion behavior are reviewed.
 - Native APK builds and local codec unit tests pass; device-specific UI, VPN and TLS checks remain separate future milestones.
+
+## 1.0.5 Browser refresh
+
+Launch opens Browser with a combined search and HTTPS address field, navigation controls, page loading and errors, and a Developer tools panel for the current page. Settings provides appearance, animation preferences, local browsing controls, version and credits. Activity and Findings browse saved records by site. The app prepares an API origin through an explicit HTTPS address or a Browser handoff. See the [release notes](RELEASE_1.0.5.md).

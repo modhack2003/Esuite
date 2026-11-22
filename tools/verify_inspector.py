@@ -1,5 +1,6 @@
 """Verify page-side inspector behavior in Chromium, without native capability claims."""
 import json
+import os
 import re
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -8,11 +9,17 @@ root = Path(__file__).resolve().parents[1]
 source = (root / "app/src/main/java/dev/esuite/app/browser/InspectorScripts.kt").read_text()
 scripts = dict(re.findall(r'val (\w+) = """(.*?)"""', source, re.S))
 with sync_playwright() as p:
-    browser = p.chromium.launch()
+    options = {"executable_path": os.environ["ESUITE_CHROMIUM_PATH"]} if "ESUITE_CHROMIUM_PATH" in os.environ else {}
+    browser = p.chromium.launch(**options)
     page = browser.new_page()
     page.route("**/*", lambda route: route.fulfill(body='<html><button id="profile" onclick="window.clicked=true">Profile</button></html>', content_type="text/html"))
     page.goto("https://example.test/")
     page.evaluate("localStorage.setItem('test', 'value'); sessionStorage.setItem('session', 'one')")
+    outline = page.evaluate(scripts["documentOutline"])
+    assert "BUTTON#profile" in outline and "window.clicked" not in outline
+    metadata = page.evaluate(scripts["storageMetadata"])
+    assert "test · 5 characters" in metadata and "session · 3 characters" in metadata
+    assert "value" not in metadata and "one" not in metadata
     stored = json.loads(page.evaluate(scripts["storage"]))
     assert stored["localStorage"]["entries"][0]["value"] == "value"
     assert stored["sessionStorage"]["entries"][0]["value"] == "one"

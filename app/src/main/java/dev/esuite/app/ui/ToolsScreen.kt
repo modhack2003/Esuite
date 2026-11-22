@@ -66,8 +66,8 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel) {
             }
         }
         ToolGroup.Import -> {
-            Text("Import into the active project for manual review.", style = MaterialTheme.typography.bodySmall, color = Muted)
-            if (state.projectId == null) Text("Create a project to import requests.", color = Amber)
+            Text("Import into the selected site for manual review.", style = MaterialTheme.typography.bodySmall, color = Muted)
+            if (state.projectId == null) Text("Open a site in API Lab to import requests.", color = Amber)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val importable = input.takeIf { state.projectId != null }.orEmpty()
                 ToolButton("Import cURL", importable) { model.importCurl(input) }

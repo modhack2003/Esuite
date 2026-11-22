@@ -72,8 +72,9 @@ internal fun FindingsScreen(state: AppState, model: AppViewModel, project: Proje
                 }
             }
         }
+        item { SitePicker(state, project, model) }
         if (project == null) {
-            item { Text("Create a project from Home to save observations.", color = Muted) }
+            item { Text("Open a site in API Lab to save observations.", color = Muted) }
         } else {
             if (composeNote) item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

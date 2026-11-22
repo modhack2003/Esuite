@@ -3,11 +3,19 @@ package dev.esuite.app
 import android.os.Bundle
 import android.webkit.WebView
 import androidx.activity.compose.BackHandler
+import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,8 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Search
@@ -44,6 +51,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.esuite.app.browser.BrowserProfiles
 import dev.esuite.app.browser.BrowserScreen
+import dev.esuite.app.browser.BrowserSkeleton
 import dev.esuite.app.core.*
 import dev.esuite.app.ui.*
 import kotlinx.coroutines.launch
@@ -58,7 +66,24 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
         WebView.setWebContentsDebuggingEnabled(false)
-        setContent { ESuiteTheme { ESuiteApp(model) } }
+        val preferences = getSharedPreferences("appearance", Context.MODE_PRIVATE)
+        setContent {
+            var appearance by remember {
+                mutableStateOf(Appearance.entries.firstOrNull { it.name == preferences.getString("theme", null) } ?: Appearance.Dark)
+            }
+            var motion by remember { mutableStateOf(preferences.getBoolean("motion", true)) }
+            val dark = isDark(appearance)
+            SideEffect {
+                val color = android.graphics.Color.TRANSPARENT
+                val style = if (dark) SystemBarStyle.dark(color) else SystemBarStyle.light(color, color)
+                enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+            }
+            ESuiteTheme(appearance) {
+                ESuiteApp(model, appearance, motion,
+                    onAppearance = { appearance = it; preferences.edit().putString("theme", it.name).apply() },
+                    onMotion = { motion = it; preferences.edit().putBoolean("motion", it).apply() })
+            }
+        }
     }
 
     // Best-effort background save. Only the committed-snapshot indicator acknowledges durability.
@@ -70,66 +95,48 @@ class MainActivity : ComponentActivity() {
 }
 
 enum class Screen(val label: String, val icon: ImageVector) {
-    Home("Home", Icons.Outlined.Home), Browser("Browser", Icons.Outlined.Search), Traffic("Traffic", Icons.AutoMirrored.Outlined.List),
-    Api("API Lab", Icons.AutoMirrored.Outlined.Send), Findings("Findings", Icons.Outlined.CheckCircle), Tools("Tools", Icons.Outlined.Build)
+    Browser("Browser", Icons.Outlined.Search),
+    Traffic("Activity", Icons.AutoMirrored.Outlined.List),
+    Api("API Lab", Icons.AutoMirrored.Outlined.Send),
+    Findings("Findings", Icons.Outlined.CheckCircle),
+    Tools("Tools", Icons.Outlined.Build),
+    Settings("Settings", Icons.Outlined.Settings),
 }
 
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
-fun ESuiteApp(model: AppViewModel = viewModel()) {
+internal fun ESuiteApp(
+    model: AppViewModel = viewModel(),
+    appearance: Appearance = Appearance.Dark,
+    motion: Boolean = true,
+    onAppearance: (Appearance) -> Unit = {},
+    onMotion: (Boolean) -> Unit = {},
+) {
     val state by model.state.collectAsStateWithLifecycle()
-    var selectedName by rememberSaveable { mutableStateOf(Screen.Home.name) }
-    val screen = Screen.valueOf(selectedName)
-    BackHandler(enabled = screen != Screen.Home) { selectedName = Screen.Home.name }
-    val project = state.workspace.projects.firstOrNull { it.id == state.projectId }
-    if (!state.ready) {
-        if (state.openingWorkspace) {
-            Box(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    CircularProgressIndicator(Modifier.size(28.dp))
-                    Text("Opening workspace", style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-            return
-        }
-        var erase by remember { mutableStateOf(false) }
-        var removeProfiles by remember { mutableStateOf(false) }
-        // Recovery is reachable without the vault, so its report is screen-local: an unreadable
-        // workspace cannot tell us which projects owned which profile.
-        var profileReport by remember { mutableStateOf("") }
-        Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("ESuite · encrypted workspace", style = MaterialTheme.typography.titleLarge)
-            Text(state.message)
-            OutlinedButton(onClick = model::loadWorkspace) { Text("Retry open") }
-            TextButton(onClick = { removeProfiles = true }) { Text("Remove all ESuite browser profiles") }
-            if (profileReport.isNotBlank()) Text(profileReport, style = MaterialTheme.typography.bodySmall, color = Muted)
-            TextButton(onClick = { erase = true }) { Text("Erase unreadable vault") }
-            if (removeProfiles) AlertDialog(onDismissRequest = { removeProfiles = false },
-                title = { Text("Remove all ESuite browser profiles?") },
-                text = { Text("Every browser profile ESuite created is deleted by name prefix, including profiles belonging to projects in a workspace that cannot be opened. Other apps' WebView data and the default profile are untouched. This does not need the vault and cannot be undone.") },
-                confirmButton = { TextButton(onClick = {
-                    removeProfiles = false
-                    val result = BrowserProfiles.clearAllEsuiteOwned()
-                    profileReport = "Deleted ${result.deleted.size} · pending ${result.pending.size}. ${result.describe()}"
-                }) { Text("Remove profiles") } },
-                dismissButton = { TextButton(onClick = { removeProfiles = false }) { Text("Cancel") } })
-            if (erase) EraseVaultDialog({ erase = false }, model)
-        }
-        return
+    var selectedName by rememberSaveable { mutableStateOf(Screen.Browser.name) }
+    var previousName by rememberSaveable { mutableStateOf(Screen.Browser.name) }
+    var clearRequest by remember { mutableIntStateOf(0) }
+    var browserMessage by remember { mutableStateOf<String?>(null) }
+    val screen = Screen.entries.firstOrNull { it.name == selectedName } ?: Screen.Browser
+    val site = state.workspace.projects.firstOrNull { it.id == state.projectId }
+    fun navigate(next: Screen) { selectedName = next.name }
+    fun settings() { previousName = screen.name; navigate(Screen.Settings) }
+    fun closeSettings() { selectedName = previousName }
+
+    BackHandler(enabled = screen != Screen.Browser) {
+        if (screen == Screen.Settings) closeSettings() else navigate(Screen.Browser)
     }
-    val pageScroll = key(screen, state.projectId, state.identity) { rememberScrollState() }
-    val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val windowSize = LocalWindowInfo.current.containerSize
-    val compactNavigation = with(density) { windowSize.height.toDp() < 450.dp }
-    val displayLabels = !compactNavigation && density.fontScale <= 1.3f && with(density) { windowSize.width.toDp() >= 360.dp }
+    val compact = with(density) { windowSize.height.toDp() < 450.dp }
+    val displayLabels = !compact && density.fontScale <= 1.3f && with(density) { windowSize.width.toDp() >= 320.dp }
     val imeVisible = WindowInsets.ime.getBottom(density) > 0
     Scaffold(
         modifier = Modifier.semantics { testTagsAsResourceId = true },
         containerColor = Midnight,
         contentWindowInsets = WindowInsets.safeDrawing.exclude(WindowInsets.ime),
         bottomBar = {
-            if (!imeVisible) WorkspaceNavigation(screen, compactNavigation, displayLabels) { selectedName = it.name }
+            if (!imeVisible && screen != Screen.Settings) WorkspaceNavigation(screen, compact, displayLabels, ::navigate)
         },
     ) { inset ->
         Column(Modifier.fillMaxSize().padding(inset).consumeWindowInsets(inset).imePadding()) {
@@ -140,41 +147,61 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
                     TextButton(onClick = model::cancelRequest, modifier = Modifier.testTag("cancel_running_request")) { Text("Cancel") }
                 }
             }
-            when {
-                screen == Screen.Browser && project != null -> {
-                    Column(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
-                        Row(Modifier.fillMaxWidth().testTag("browser_identity_row"),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(project.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, color = Signal)
-                            listOf("A", "B").forEach { identity ->
-                                FilterChip(modifier = Modifier.testTag("identity_$identity"), selected = state.identity == identity,
-                                    onClick = { model.identity(identity) }, label = { Text(identity) })
+            Box(Modifier.fillMaxSize()) {
+                BrowserScreen(
+                    visible = screen == Screen.Browser,
+                    motion = motion,
+                    clearRequest = clearRequest,
+                    onSettings = ::settings,
+                    onDataCleared = { cleared ->
+                        val cleanup = BrowserProfiles.clearAllEsuiteOwned()
+                        browserMessage = when {
+                            !cleared -> "Browser data couldn’t be cleared. Check Android System WebView."
+                            cleanup.pending.isNotEmpty() -> "Browsing data cleared. Restart ESuite to finish removing legacy profiles."
+                            else -> "Browsing data cleared."
+                        }
+                    },
+                    onOpenApi = {
+                        model.openSite(it)
+                        navigate(Screen.Api)
+                    },
+                )
+                if (screen != Screen.Browser) {
+                    AnimatedContent(
+                        targetState = screen,
+                        modifier = Modifier.fillMaxSize(),
+                        transitionSpec = {
+                            if (motion) fadeIn(tween(150)) togetherWith fadeOut(tween(100))
+                            else EnterTransition.None togetherWith ExitTransition.None
+                        },
+                        label = "Primary navigation",
+                    ) { destination ->
+                        Surface(Modifier.fillMaxSize(), color = Midnight) {
+                            when {
+                                destination == Screen.Settings -> SettingsScreen(state, model, appearance, motion,
+                                    onAppearance, onMotion, { browserMessage = "Clearing browsing data…"; clearRequest++ },
+                                    browserMessage, ::closeSettings)
+                                !state.ready && destination != Screen.Tools -> SavedDataState(state, ::settings)
+                                destination == Screen.Findings -> key(state.projectId) {
+                                    FindingsScreen(state, model, site) { navigate(Screen.Api) }
+                                }
+                                destination == Screen.Traffic -> key(state.projectId) {
+                                    TrafficScreen(state, model, site) { navigate(Screen.Api) }
+                                }
+                                else -> {
+                                    val pageScroll = key(destination, state.projectId) { rememberScrollState() }
+                                    val scope = rememberCoroutineScope()
+                                    Column(Modifier.fillMaxSize().verticalScroll(pageScroll).padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                        if (destination == Screen.Api) {
+                                            WorkspaceStatus(site, state)
+                                            SitePicker(state, site, model, allowNew = true)
+                                            if (site != null) ApiScreen(state, model) { scope.launch { pageScroll.scrollTo(0) } }
+                                        } else ToolsScreen(state, model)
+                                    }
+                                }
                             }
-                            WorkspaceStatusButton(project, state)
                         }
-                        BrowserScreen(project, state.identity, model, Modifier.weight(1f))
-                    }
-                }
-                screen == Screen.Findings -> {
-                    key(state.projectId) { FindingsScreen(state, model, project) { selectedName = Screen.Api.name } }
-                }
-                screen == Screen.Traffic -> {
-                    key(state.projectId) { TrafficScreen(state, model, project) { selectedName = Screen.Api.name } }
-                }
-                else -> {
-                    Column(Modifier.fillMaxSize().verticalScroll(pageScroll).padding(horizontal = 18.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Spacer(Modifier.height(8.dp))
-                        WorkspaceStatus(project, state)
-                        when (screen) {
-                            Screen.Home -> HomeScreen(state, model, project) { selectedName = it.name }
-                            Screen.Browser -> Text("Create a project first.")
-                            Screen.Traffic -> Unit
-                            Screen.Api -> ApiScreen(state, model) { scope.launch { pageScroll.scrollTo(0) } }
-                            Screen.Findings -> Unit
-                            Screen.Tools -> ToolsScreen(state, model)
-                        }
-                        Spacer(Modifier.height(20.dp))
                     }
                 }
             }
@@ -182,8 +209,20 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     }
 }
 
+@Composable
+private fun SavedDataState(state: AppState, settings: () -> Unit) {
+    Box(Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
+        if (state.openingWorkspace) BrowserSkeleton("Opening saved data")
+        else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Saved site data couldn’t open", style = MaterialTheme.typography.titleLarge)
+            Text(state.message, style = MaterialTheme.typography.bodyMedium)
+            Button(onClick = settings) { Text("Open settings") }
+        }
+    }
+}
+
 @Composable private fun WorkspaceNavigation(screen: Screen, compact: Boolean, displayLabels: Boolean, navigate: (Screen) -> Unit) {
-    val destinations = Screen.entries.filter { it != Screen.Tools }
+    val destinations = Screen.entries.filter { it != Screen.Settings }
     if (compact) {
         Row(Modifier.fillMaxWidth().navigationBarsPadding().selectableGroup()) {
             destinations.forEach { target ->
@@ -219,23 +258,13 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
 
 @Composable internal fun WorkspaceStatus(project: Project?, state: AppState) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(project?.let { "${it.name} · ${it.origin} · identity ${state.identity}" } ?: "No active project", Modifier.testTag("workspace_context"),
+        Text(project?.let { "${it.origin} · identity ${state.identity}" } ?: "No site selected", Modifier.testTag("workspace_context"),
             color = Signal, style = MaterialTheme.typography.bodySmall)
         if (state.message.isNotBlank()) Text(state.message, Modifier.testTag("workspace_status").semantics { liveRegion = LiveRegionMode.Polite },
             style = MaterialTheme.typography.bodySmall, color = Muted)
-        Text(state.saveError ?: if (state.pendingWrites == 0 && state.persistedWorkspace == state.workspace) "Workspace saved with AES-GCM" else "Workspace edits pending encrypted save…",
+        Text(state.saveError ?: if (state.pendingWrites == 0 && state.persistedWorkspace == state.workspace) "Saved on this device" else "Saving local data…",
             Modifier.testTag("workspace_save_status"), style = MaterialTheme.typography.bodySmall, color = if (state.saveError == null) Muted else Amber)
     }
-}
-
-@Composable private fun WorkspaceStatusButton(project: Project, state: AppState) {
-    var open by remember { mutableStateOf(false) }
-    IconButton(onClick = { open = true }) {
-        Icon(Icons.Outlined.Info, contentDescription = "Workspace status", tint = if (state.saveError == null) Signal else Amber)
-    }
-    if (open) AlertDialog(onDismissRequest = { open = false }, title = { Text("Workspace status") },
-        text = { Box(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) { WorkspaceStatus(project, state) } },
-        confirmButton = { TextButton(onClick = { open = false }) { Text("Close") } })
 }
 
 @Composable fun Panel(title: String, body: String) {
@@ -264,7 +293,8 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { WorkspaceStatus(project, state) }
-        item { Text("Traffic", style = MaterialTheme.typography.headlineSmall) }
+        item { Text("Activity", style = MaterialTheme.typography.headlineSmall) }
+        item { SitePicker(state, project, model) }
         item {
             OutlinedTextField(filter, { filter = it }, singleLine = true, keyboardOptions = TechnicalKeyboard,
                 label = { Text("Filter method, URL or source") }, modifier = Modifier.fillMaxWidth())
@@ -275,7 +305,7 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
                 Text("${exchange.request.method} ${exchange.request.url}\n${exchange.source} · identity ${exchange.identity} · ${exchange.status ?: if (exchange.error != null) "error" else "metadata only"}", Modifier.fillMaxWidth())
             }
         }
-        if (history.isNotEmpty()) item { OutlinedButton(onClick = { confirmClear = true }) { Text("Clear this project's history") } }
+        if (history.isNotEmpty()) item { OutlinedButton(onClick = { confirmClear = true }) { Text("Clear site history") } }
     }
     detail?.let { exchange ->
         AlertDialog(onDismissRequest = { detail = null }, title = { Text("Exchange detail", Modifier.testTag("traffic_detail")) }, text = {
@@ -301,8 +331,8 @@ fun ESuiteApp(model: AppViewModel = viewModel()) {
         }, confirmButton = { TextButton(onClick = { detail = null; model.replay(exchange); openApi() }) { Text("Review in API Lab") } },
             dismissButton = { TextButton(onClick = { detail = null }) { Text("Close") } })
     }
-    if (confirmClear) AlertDialog(onDismissRequest = { confirmClear = false }, title = { Text("Clear project history?") },
-        text = { Text("This removes history entries for the active project. Evidence saved with observations stays in the workspace.") },
+    if (confirmClear) AlertDialog(onDismissRequest = { confirmClear = false }, title = { Text("Clear site history?") },
+        text = { Text("This removes history entries for the selected site. Evidence saved with observations stays in the workspace.") },
         confirmButton = { TextButton(onClick = { confirmClear = false; model.clearHistory() }) { Text("Clear history") } },
         dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } })
 }

@@ -26,7 +26,7 @@ private enum class ApiSection(val label: String) {
 internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> Unit) {
     val project = model.currentProject()
     if (project == null) {
-        Text("Create a project from Home to use API Lab.", style = MaterialTheme.typography.titleMedium)
+        Text("Open an HTTPS site to use API Lab.", style = MaterialTheme.typography.titleMedium)
         return
     }
     val draft = state.draft
@@ -117,7 +117,7 @@ internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> 
                 }
             }, enabled = !capacityCheck && name.isNotBlank(), modifier = Modifier.testTag("api_save_draft")) { Text("Save current request") }
             val saved = remember(state.workspace.savedRequests, project.id) { state.workspace.savedRequests.filter { it.projectId == project.id } }
-            if (saved.isEmpty()) Text("Saved requests for this project appear here.", color = Muted)
+            if (saved.isEmpty()) Text("Saved requests for this site appear here.", color = Muted)
             saved.forEach { request ->
                 key(request.id) {
                     var remove by remember { mutableStateOf(false) }
@@ -170,7 +170,7 @@ internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> 
             TextButton(onClick = { clear = true }) { Text("Clear API sessions") }
             if (clear) AlertDialog(
                 onDismissRequest = { clear = false }, title = { Text("Clear API sessions?") },
-                text = { Text("Remove API cookies and saved identity headers for both identities in this project.") },
+                text = { Text("Remove API cookies and saved identity headers for both identities on this site.") },
                 confirmButton = { TextButton(onClick = { clear = false; model.clearSessions() }) { Text("Clear sessions") } },
                 dismissButton = { TextButton(onClick = { clear = false }) { Text("Keep sessions") } },
             )
