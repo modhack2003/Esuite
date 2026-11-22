@@ -17,6 +17,7 @@ import dev.esuite.app.storage.WorkspaceVault
 import dev.esuite.app.storage.WorkspaceStore
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
@@ -30,6 +31,7 @@ import java.io.File
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(AndroidJUnit4::class)
@@ -253,6 +255,50 @@ class DeviceBoundaryTest {
         val model = holder.get()
         awaitState(model) { it.ready && it.projectId == project.id }
         return model to project
+    }
+
+    @Test fun overlappingSavesSkipTheAlreadyCommittedSnapshot() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val application = ApplicationProvider.getApplicationContext<android.app.Application>()
+        val started = CountDownLatch(1)
+        val releaseWriter = CountDownLatch(1)
+        val finished = CountDownLatch(1)
+        val writes = AtomicInteger()
+        val store = object : WorkspaceStore {
+            override fun load() = Workspace()
+            override fun save(workspace: Workspace): Workspace {
+                writes.incrementAndGet()
+                started.countDown()
+                check(releaseWriter.await(10, TimeUnit.SECONDS))
+                return workspace
+            }
+            override fun erase() = Unit
+        }
+        val holder = AtomicReference<AppViewModel>()
+        instrumentation.runOnMainSync { holder.set(AppViewModel(application, store)) }
+        val model = holder.get()
+        try {
+            awaitState(model) { it.ready }
+            instrumentation.runOnMainSync {
+                model.createProject("Save fixture", "https://example.test")
+                model.saveNow()
+            }
+            assertTrue(started.await(10, TimeUnit.SECONDS))
+            assertNull(model.state.value.saveError)
+            assertEquals(1, model.state.value.pendingWrites)
+            releaseWriter.countDown()
+            instrumentation.runOnMainSync {
+                model.viewModelScope.launch {
+                    if (model.saveWorkspace()) finished.countDown()
+                }
+            }
+            assertTrue(finished.await(10, TimeUnit.SECONDS))
+            assertEquals(1, writes.get())
+            assertEquals(model.state.value.workspace, model.state.value.persistedWorkspace)
+        } finally {
+            releaseWriter.countDown()
+            instrumentation.runOnMainSync { model.viewModelScope.cancel(); model.engine.close() }
+        }
     }
 
     @Test fun productionVaultStillRejectsHttpProjectsWithoutChangingBytes() {

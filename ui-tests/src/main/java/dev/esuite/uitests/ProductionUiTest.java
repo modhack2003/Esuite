@@ -25,7 +25,7 @@ public class ProductionUiTest extends NativeUiDriver {
         enter("project_name", "UI persistence fixture");
         enter("project_origin", "https://example.test");
         click("create_project");
-        click("switch_project"); click("new_project");
+        click("switch_project"); find(By.text("New project")).click();
         enter("project_name", "Last used project fixture");
         enter("project_origin", "https://second.example.test");
         click("create_project");
@@ -80,8 +80,10 @@ public class ProductionUiTest extends NativeUiDriver {
                 waitText("finding_title", "Retained draft title", 10000));
         assertTrue("Pending observation detail was lost on a module switch",
                 waitText("finding_detail", "Retained draft detail", 10000));
-        // Saving an observation still clears its own drafts.
+        // Saving an observation clears its own drafts and returns to the list.
         click("save_finding");
+        assertTrue(waitText("finding_editor_toggle", "New observation", 10000));
+        click("finding_editor_toggle");
         assertFalse("Saving an observation left its title draft behind",
                 waitText("finding_title", "Retained draft title", 3000));
     }

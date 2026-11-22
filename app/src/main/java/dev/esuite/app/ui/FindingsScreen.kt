@@ -51,9 +51,11 @@ internal fun FindingsScreen(state: AppState, model: AppViewModel, project: Proje
         saving = true
         scope.launch {
             try {
-                if (model.addFinding(noteTitle, noteDetail, evidence) && clearComposer) {
-                    if (model.drafts.text(titleKey) == noteTitle) model.drafts.clear(titleKey)
-                    if (model.drafts.text(detailKey) == noteDetail) model.drafts.clear(detailKey)
+                if (model.addFinding(noteTitle, noteDetail, evidence) && clearComposer &&
+                    model.drafts.text(titleKey) == noteTitle && model.drafts.text(detailKey) == noteDetail
+                ) {
+                    model.drafts.clear(titleKey)
+                    model.drafts.clear(detailKey)
                     composeNote = false
                 }
             } finally { saving = false }
@@ -65,7 +67,7 @@ internal fun FindingsScreen(state: AppState, model: AppViewModel, project: Proje
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Findings", style = MaterialTheme.typography.headlineSmall)
-                if (project != null) TextButton(onClick = { composeNote = !composeNote }) {
+                if (project != null) TextButton(onClick = { composeNote = !composeNote }, modifier = Modifier.testTag("finding_editor_toggle")) {
                     Text(if (composeNote) "Hide editor" else "New observation")
                 }
             }
