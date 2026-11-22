@@ -89,7 +89,7 @@ public class ProductionUiTest extends NativeUiDriver {
         assertTrue("The real page never became visible", device.wait(Until.hasObject(By.text("Example Domain")), 45000));
         click("browser_tools");
         assertTrue(waitText("browser_output", "Example Domain", 10000));
-        click("browser_tool_tab_elements"); assertTrue(waitText("browser_output", "H1", 10000));
+        click("browser_tool_tab_elements"); assertTrue("Document outline is missing the page body", waitText("browser_output", "BODY", 10000));
         click("browser_tool_tab_cookies");
         assertTrue(waitText("browser_tool_heading", "Cookie names and available flags", 10000));
         assertNotNull(find(By.res("browser_output")));

@@ -16,7 +16,8 @@ with sync_playwright() as p:
     page.goto("https://example.test/")
     page.evaluate("localStorage.setItem('test', 'value'); sessionStorage.setItem('session', 'one')")
     outline = page.evaluate(scripts["documentOutline"])
-    assert "BUTTON#profile" in outline and "window.clicked" not in outline
+    assert "HTML" in outline and "BODY" in outline and "BUTTON#profile" in outline
+    assert "window.clicked" not in outline
     metadata = page.evaluate(scripts["storageMetadata"])
     assert "test · 5 characters" in metadata and "session · 3 characters" in metadata
     assert "value" not in metadata and "one" not in metadata

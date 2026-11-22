@@ -84,7 +84,7 @@ object InspectorScripts {
     """.trimIndent()
     val documentOutline = """
         (() => {
-          const rows = Array.from(document.querySelectorAll('main, nav, article, section, h1, h2, h3, a, button, input')).slice(0, 60);
+          const rows = Array.from(document.querySelectorAll('html, body, main, nav, article, section, h1, h2, h3, a, button, input')).slice(0, 60);
           return rows.map(element => element.tagName + (element.id ? '#' + element.id.slice(0, 80) : '')).join('\n') || 'No matching elements';
         })()
     """.trimIndent()
