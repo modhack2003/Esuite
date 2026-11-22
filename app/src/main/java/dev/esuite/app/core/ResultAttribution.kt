@@ -24,8 +24,8 @@ object ResultAttribution {
      * Describes the exchange by its OWN origin — the identity, source, project and time recorded on
      * the exchange itself, never the currently selected identity.
      */
-    fun label(exchange: Exchange, projectName: String?): String {
-        val project = projectName?.takeIf { it.isNotBlank() } ?: exchange.projectId
-        return "Project $project · identity ${exchange.identity} · ${exchange.source} · ${stamp.format(Instant.ofEpochMilli(exchange.timestamp))}"
+    fun label(exchange: Exchange, siteLabel: String?): String {
+        val site = siteLabel?.takeIf { it.isNotBlank() } ?: exchange.projectId
+        return "Site $site · identity ${exchange.identity} · ${exchange.source} · ${stamp.format(Instant.ofEpochMilli(exchange.timestamp))}"
     }
 }

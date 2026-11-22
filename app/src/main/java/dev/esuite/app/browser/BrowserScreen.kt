@@ -44,6 +44,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -202,7 +203,8 @@ internal fun BrowserScreen(
                         placeholder = { Text("Search or enter an address") },
                         keyboardOptions = UrlKeyboard.copy(imeAction = ImeAction.Go),
                         keyboardActions = KeyboardActions(onGo = { openAddress() }),
-                        modifier = Modifier.fillMaxWidth().testTag("browser_url"),
+                        modifier = Modifier.fillMaxWidth().testTag("browser_url")
+                            .semantics { contentDescription = "Search or enter an address" },
                         trailingIcon = {
                             TextButton(
                                 onClick = ::openAddress,

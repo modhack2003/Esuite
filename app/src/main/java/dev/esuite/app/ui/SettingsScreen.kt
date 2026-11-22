@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.webkit.WebViewCompat
 import dev.esuite.app.AppState
@@ -47,7 +49,7 @@ internal fun SettingsScreen(
         WorkspaceTabs(Appearance.entries, appearance, "appearance", Appearance::label, setAppearance)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Interface animations", Modifier.weight(1f))
-            Switch(checked = motion, onCheckedChange = setMotion, modifier = Modifier.testTag("settings_motion"))
+            Switch(checked = motion, onCheckedChange = setMotion, modifier = Modifier.testTag("settings_motion").semantics { contentDescription = "Interface animations" })
         }
         HorizontalDivider()
         Text("Browsing data", style = MaterialTheme.typography.titleMedium)

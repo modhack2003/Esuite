@@ -202,7 +202,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         cancelRequest()
         contextGeneration += 1
         drafts.clearProject(previous.projectId)
-        mutable.update { it.copy(projectId = id, identity = "A", draft = RequestDraft(url = project.origin + "/"), selected = null, comparison = "", message = "Selected ${project.name}") }
+        mutable.update { it.copy(projectId = id, identity = "A", draft = RequestDraft(url = project.origin + "/"), selected = null, comparison = "", message = "Selected ${project.origin}") }
         rememberProject(id)
     }
     fun identity(value: String) {

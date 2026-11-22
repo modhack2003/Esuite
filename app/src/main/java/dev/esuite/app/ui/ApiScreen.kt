@@ -88,7 +88,7 @@ internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> 
             }
             if (state.comparison.isNotBlank()) Panel("Identity comparison", state.comparison)
             state.selected?.let { exchange ->
-                Text(ResultAttribution.label(exchange, project.name), style = MaterialTheme.typography.bodySmall, color = Muted)
+                Text(ResultAttribution.label(exchange, project.origin), style = MaterialTheme.typography.bodySmall, color = Muted)
                 val responseTitle = "${exchange.status ?: "Error"} · ${exchange.durationMs} ms · ${exchange.response.encoding}"
                 val headerText = remember(exchange.responseHeaders) { exchange.responseHeaders.asEditorText() }
                 val preview = remember(exchange.id) { exchange.response.value.take(48_000) }

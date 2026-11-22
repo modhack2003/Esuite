@@ -310,7 +310,7 @@ private fun SavedDataState(state: AppState, settings: () -> Unit) {
     detail?.let { exchange ->
         AlertDialog(onDismissRequest = { detail = null }, title = { Text("Exchange detail", Modifier.testTag("traffic_detail")) }, text = {
             Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(ResultAttribution.label(exchange, project?.name))
+                Text(ResultAttribution.label(exchange, project?.origin))
                 Text(exchange.completeness)
                 exchange.error?.let { Text(it) }
                 SelectionContainer {
