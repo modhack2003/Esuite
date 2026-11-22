@@ -14,8 +14,29 @@ with sync_playwright() as p:
     page.goto("https://example.test/")
     page.evaluate("localStorage.setItem('test', 'value'); sessionStorage.setItem('session', 'one')")
     stored = json.loads(page.evaluate(scripts["storage"]))
-    assert stored["localStorage"]["test"] == "value"
-    assert stored["sessionStorage"]["session"] == "one"
+    assert stored["localStorage"]["entries"][0]["value"] == "value"
+    assert stored["sessionStorage"]["entries"][0]["value"] == "one"
+    page.evaluate("""() => {
+        localStorage.clear();
+        localStorage.setItem('exact', 'x'.repeat(4096));
+        localStorage.setItem('large', 'x'.repeat(4095) + '🧪');
+    }""")
+    entries = {entry["key"]: entry for entry in json.loads(page.evaluate(scripts["storage"]))["localStorage"]["entries"]}
+    assert entries['exact']['valueCharacters'] == len(entries['exact']['value']) == 4096
+    assert entries['exact']['valueTruncated'] is False
+    assert entries['large']['valueCharacters'] == 4097 and entries['large']['valueTruncated'] is True
+    assert entries['large']['value'] == 'x' * 4095, "Storage preview must preserve surrogate boundaries"
+    page.evaluate("""() => {
+        localStorage.clear();
+        for (let i = 0; i < 101; i++) localStorage.setItem('key' + i, String.fromCharCode(1).repeat(4097));
+    }""")
+    bounded = page.evaluate(scripts["storage"])
+    assert len(bounded) < 24000, "Page-side output must fit the native display cap"
+    summary = json.loads(bounded)["localStorage"]
+    assert summary["totalKeys"] == 101
+    assert 0 < summary["returnedKeys"] == len(summary["entries"]) <= 100
+    assert summary["omittedKeys"] + summary["returnedKeys"] == summary["totalKeys"]
+    assert all(entry["valueTruncated"] for entry in summary["entries"])
     page.evaluate(scripts["select"])
     page.locator("#profile").click()
     selected = json.loads(page.evaluate(scripts["selection"]))

@@ -25,6 +25,10 @@ public class ProductionUiTest extends NativeUiDriver {
         enter("project_name", "UI persistence fixture");
         enter("project_origin", "https://example.test");
         click("create_project");
+        enter("project_name", "Last used project fixture");
+        enter("project_origin", "https://second.example.test");
+        click("create_project");
+        click("identity_B");
         click("nav_findings");
         enter("finding_title", "UI fixture observation");
         enter("finding_detail", "Synthetic local evidence");
@@ -34,16 +38,15 @@ public class ProductionUiTest extends NativeUiDriver {
         // Fresh process, not just recreation with a retained ViewModel.
         device.executeShellCommand("am force-stop dev.esuite.app");
         launch();
+        assertTrue("Last project or safe initial identity was not restored", waitText("workspace_context", "Last used project fixture · https://second.example.test · identity A", 15000));
         click("nav_findings");
         assertNotNull(find(By.textContains("Synthetic local evidence")));
-        // Validate four real task inputs without sending a target request.
-        click("nav_api"); enter("api_url", "https://example.test/?a={{P1}}&b={{P2}}&c={{P3}}&d={{P4}}");
+        find(By.text("Preview observation report")).click();
+        assertNotNull(device.wait(Until.findObject(By.textContains("esuite-observation")), 5000));
+        device.pressBack();
         click("nav_home"); click("home_tools");
-        enter("task_payload_1", "a"); enter("task_payload_2", "b");
-        enter("task_payload_3", "c"); enter("task_payload_4", "d");
-        click("task_preview"); assertTrue(waitText("task_preview_result", "4 requests", 10000));
-        enter("task_payload_4", ""); click("task_preview");
-        assertTrue(waitText("task_preview_result", "Provide values for P4", 10000));
+        assertNotNull(find(By.text("Review AWS JSON offline")));
+        assertFalse(device.hasObject(By.res("task_preview")));
     }
     /**
      * QA-02 on a real device: pending editors must survive leaving and re-entering a module. This
@@ -141,7 +144,11 @@ public class ProductionUiTest extends NativeUiDriver {
         assertNotNull(find(By.text(java.util.regex.Pattern.compile("(?s).*Error · .*"))));
         // The failed send must replace the old 200 result, with no request to outside.invalid.
         top(); assertTrue(waitText("workspace_status", "outside the selected project origin", 15000));
-        click("nav_traffic"); assertNotNull(find(By.textContains("Identity comparison · identity B · 200")));
+        click("nav_traffic"); find(By.textContains("Identity comparison · identity B · 200")).click();
+        assertNotNull(device.wait(Until.findObject(By.text("Exchange detail")), 5000));
+        assertNotNull(device.wait(Until.findObject(By.textContains("identity B")), 5000));
+        device.pressBack();
+        assertNotNull(find(By.textContains("Identity comparison · identity B · 200")));
     }
 
     private boolean hasPagePattern(android.graphics.Bitmap bitmap, android.graphics.Rect bounds) {

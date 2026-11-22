@@ -1,6 +1,8 @@
 package dev.esuite.app
 
 import android.app.Application
+import android.content.Context
+import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.esuite.app.core.*
@@ -24,6 +26,7 @@ data class AppState(
     val draft: RequestDraft = RequestDraft(), val selected: Exchange? = null, val busy: Boolean = false,
     val message: String = "Opening encrypted workspace…", val comparison: String = "", val ready: Boolean = false,
     val taskProgress: String = "No automation task running",
+    val manualRequestLabel: String? = null,
     val persistedWorkspace: Workspace? = null, val saveError: String? = null, val pendingWrites: Int = 0,
     /**
      * ESuite browser profiles the WebView provider refused to delete because it still has them
@@ -42,6 +45,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
      * trigger an encrypted save and nothing in this path reaches disk.
      */
     val drafts = EditorDrafts()
+    private val workspacePreferences = application.getSharedPreferences("workspace_navigation", Context.MODE_PRIVATE)
     private var requestJob: Job? = null
     private val storageDispatcher = Dispatchers.IO.limitedParallelism(1)
     private var persistenceJob: Job? = null
@@ -61,20 +65,22 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         val generation = workspaceGeneration
         loadJob?.cancel()
         persistenceJob?.cancel()
+        cancelRequest()
         loadJob = viewModelScope.launch {
             mutable.update { it.copy(ready = false) }
             try {
                 val workspace = withContext(storageDispatcher) { vault.load() }
                 if (generation != workspaceGeneration) return@launch
-                val project = workspace.projects.firstOrNull()
+                val rememberedId = workspacePreferences.getString("last_project", null)
+                val project = workspace.projects.firstOrNull { it.id == rememberedId } ?: workspace.projects.firstOrNull()
                 // Back on Main once the load returns, which is the documented contract for the
                 // profile store: retry every ESuite profile whose project is gone, which is how a
                 // profile left loaded by the previous process is finally removed.
                 val sweep = BrowserProfiles.sweepOrphans(workspace.projects.map { it.id }.toSet())
                 val note = profileCleanupNote?.let { " $it" }.orEmpty()
                 profileCleanupNote = null
-                mutable.update { it.copy(workspace = workspace, projectId = project?.id, draft = RequestDraft(url = project?.origin?.plus("/").orEmpty()), ready = true,
-                    selected = null, persistedWorkspace = workspace, saveError = null, pendingWrites = 0, pendingProfileCleanup = sweep.pending,
+                mutable.update { it.copy(workspace = workspace, projectId = project?.id, identity = "A", draft = RequestDraft(url = project?.origin?.plus("/").orEmpty()), ready = true,
+                    selected = null, comparison = "", persistedWorkspace = workspace, saveError = null, pendingWrites = 0, pendingProfileCleanup = sweep.pending,
                     message = "Encrypted workspace open. Requests only run when you explicitly start them.$note") }
                 persistenceJob?.cancel()
                 persistenceJob = viewModelScope.launch {
@@ -122,6 +128,8 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
             mutable.update { it.copy(ready = false) }
             runCatching { withContext(storageDispatcher) { vault.erase() } }
                 .onSuccess {
+                    rememberProject(null)
+                    drafts.clearProject(state.value.projectId)
                     // Erasing the vault loses the project index, so ESuite's own browser profiles are
                     // removed by prefix instead — the vault is not needed to decide what ESuite
                     // created. Ordered AFTER the erase succeeds (back on Main, which is the profile
@@ -140,6 +148,10 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         else
             "A result arrived after the project or workspace changed. It is recorded in Traffic and was not applied here."
     fun currentProject(): Project? = state.value.workspace.projects.firstOrNull { it.id == state.value.projectId }
+    private fun rememberProject(id: String?) {
+        workspacePreferences.edit { putString("last_project", id) }
+    }
+
     fun createProject(name: String, origin: String) {
         runCatching {
             require(name.isNotBlank() && name.length <= 100) { "Enter a project name (up to 100 characters)" }
@@ -147,19 +159,24 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
             val scope = ScopePolicy(origin.trim())
             require(scope.target.isHttps) { "This Android build requires an HTTPS project origin" }
             val project = Project(name = name.trim(), origin = scope.canonicalOrigin)
-            mutable.update { it.copy(workspace = it.workspace.copy(projects = it.workspace.projects + project), projectId = project.id,
+            cancelRequest()
+            contextGeneration += 1
+            drafts.clearProject(state.value.projectId)
+            mutable.update { it.copy(workspace = it.workspace.copy(projects = it.workspace.projects + project), projectId = project.id, identity = "A",
                 draft = RequestDraft(url = project.origin + "/"), selected = null, comparison = "", message = "Project created. Only this exact scheme, host and port are in scope.") }
+            rememberProject(project.id)
             persistDurable()
         }.onFailure { message(it.message ?: "Invalid project") }
     }
     fun selectProject(id: String) {
+        val previous = state.value
+        if (id == previous.projectId) return
+        val project = previous.workspace.projects.firstOrNull { it.id == id } ?: return
         cancelRequest()
         contextGeneration += 1
-        drafts.clearProject(state.value.projectId)
-        mutable.update { current ->
-            val project = current.workspace.projects.first { it.id == id }
-            current.copy(projectId = id, draft = RequestDraft(url = project.origin + "/"), selected = null, comparison = "", message = "Selected ${project.name}")
-        }
+        drafts.clearProject(previous.projectId)
+        mutable.update { it.copy(projectId = id, identity = "A", draft = RequestDraft(url = project.origin + "/"), selected = null, comparison = "", message = "Selected ${project.name}") }
+        rememberProject(id)
     }
     fun identity(value: String) {
         require(value in listOf("A", "B"))
@@ -211,7 +228,8 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         if (snapshot.busy) return
         val started = currentContext()
         requestJob = viewModelScope.launch {
-            mutable.update { it.copy(busy = true, comparison = "", message = "Sending to ${project.origin}…") }
+            val identities = if (compare) "identities A and B" else "identity ${snapshot.identity}"
+            mutable.update { it.copy(busy = true, manualRequestLabel = "${project.name} · $identities · ${project.origin}", comparison = "", message = "Sending to ${project.origin}…") }
             var attemptedIdentity = snapshot.identity
             var attemptedDraft = snapshot.draft
             try {
@@ -244,7 +262,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
                 if (ResultAttribution.accepts(started, current))
                     mutable.update { it.copy(selected = failed, comparison = "", message = detail) }
                 else message(supersededMessage(started, current))
-            } finally { mutable.update { it.copy(busy = false) } }
+            } finally { mutable.update { it.copy(busy = false, manualRequestLabel = null) } }
         }
     }
     fun cancelRequest() { requestJob?.cancel() }
@@ -255,6 +273,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         }
     }
     fun runPayloads(inputs: List<String>, mode: PayloadMode) {
+        if (!BuildConfig.AUTOMATED_REQUESTS) return
         if (state.value.busy) return
         val project = currentProject() ?: return
         val identity = state.value.identity
@@ -281,6 +300,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         }
     }
     fun runMacro(names: String, tokenPath: String) {
+        if (!BuildConfig.AUTOMATED_REQUESTS) return
         if (state.value.busy) return
         val project = currentProject() ?: return
         val identity = state.value.identity
@@ -406,6 +426,10 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         }.onFailure { message(it.message ?: "Cannot save request") }
     }
     fun exportSanitized(): String = currentProject()?.let { ReportExporter.sanitized(state.value.workspace, it.id) } ?: "{}"
+    fun exportObservation(id: String): String? = state.value.let {
+        val projectId = it.projectId ?: return null
+        ReportExporter.selectedObservation(it.workspace, projectId, id)
+    }
     fun deleteProject() {
         val p = currentProject() ?: return
         // A profile the provider still holds loaded no longer aborts the deletion: the workspace
@@ -418,6 +442,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
             identityConfigs = it.workspace.identityConfigs.filterNot { c -> c.projectId == p.id }),
             pendingProfileCleanup = (it.pendingProfileCleanup + cleanup.pending).distinct(),
             message = "Project and its API evidence removed. ${cleanup.describe()}") }
+        rememberProject(null)
         persistDurable()
     }
     /** Re-attempt every ESuite profile whose project is gone. Called from the UI thread. */
@@ -457,6 +482,9 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         }
         persistDurable()
     }
-    fun clearHistory() { mutable.update { it.copy(workspace = it.workspace.copy(exchanges = it.workspace.exchanges.filterNot { e -> e.projectId == it.projectId }), selected = null) } }
+    fun clearHistory() {
+        mutable.update { it.copy(workspace = it.workspace.copy(exchanges = it.workspace.exchanges.filterNot { e -> e.projectId == it.projectId }), selected = null) }
+        persistDurable()
+    }
     override fun onCleared() { engine.close(); super.onCleared() }
 }

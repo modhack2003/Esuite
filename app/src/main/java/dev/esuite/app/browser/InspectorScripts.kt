@@ -48,8 +48,38 @@ object InspectorScripts {
         })()
     """.trimIndent()
     val storage = """
-        (() => { try { const read=s=>Object.fromEntries(Object.keys(s).slice(0,100).map(k=>[k,s.getItem(k)?.slice(0,4096)]));
-          return JSON.stringify({localStorage:read(localStorage),sessionStorage:read(sessionStorage)},null,2);
-        } catch(e) { return String(e); } })()
+        (() => {
+          const prefix = (text, limit) => {
+            const last = text.charCodeAt(limit - 1);
+            return text.slice(0, text.length > limit && last >= 0xd800 && last <= 0xdbff ? limit - 1 : limit);
+          };
+          const read = (storage) => {
+            const total = storage.length;
+            const entries = [];
+            let remaining = 9500;
+            for (let index = 0; index < Math.min(total, 100); index++) {
+              const key = storage.key(index);
+              if (key === null) break;
+              const value = storage.getItem(key);
+              if (value === null) continue;
+              const name = prefix(key, 384);
+              let preview = prefix(value, 4096);
+              const entry = () => ({key:name, keyCharacters:key.length, keyTruncated:name.length < key.length,
+                value:preview, valueCharacters:value.length, valueTruncated:preview.length < value.length});
+              let cost = JSON.stringify(entry(), null, 2).length + 100;
+              if (cost > remaining) {
+                preview = prefix(value, Math.max(0, Math.floor((remaining - JSON.stringify({...entry(), value:''}, null, 2).length - 100) / 6)));
+                cost = JSON.stringify(entry(), null, 2).length + 100;
+              }
+              if (cost > remaining) break;
+              entries.push(entry());
+              remaining -= cost;
+            }
+            return {totalKeys:total, returnedKeys:entries.length, omittedKeys:total - entries.length, entries};
+          };
+          try {
+            return JSON.stringify({localStorage:read(localStorage),sessionStorage:read(sessionStorage)},null,2);
+          } catch (e) { return String(e); }
+        })()
     """.trimIndent()
 }

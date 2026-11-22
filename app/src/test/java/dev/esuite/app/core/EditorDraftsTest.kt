@@ -118,10 +118,10 @@ class EditorDraftsTest {
      * typed under A must not still be in the field after a switch to B — that would store A's cookie
      * under B. [Editor.identityScoped] is the one place that decides, so pin the set too.
      */
-    @Test fun browserCookieAndScriptDraftsCannotCrossBetweenIdentities() {
+    @Test fun browserDraftsCannotCrossBetweenIdentitiesOrBetweenCookieAndPageEditors() {
         val drafts = EditorDrafts()
-        val cookieUnderA = DraftKey.of(projectA, Editor.BrowserEdit, "A")
-        val cookieUnderB = DraftKey.of(projectA, Editor.BrowserEdit, "B")
+        val cookieUnderA = DraftKey.of(projectA, Editor.BrowserCookie, "A")
+        val cookieUnderB = DraftKey.of(projectA, Editor.BrowserCookie, "B")
         assertNotEquals(cookieUnderA, cookieUnderB)
         drafts.set(cookieUnderA, "session=secret_A; Path=/; Secure; HttpOnly")
         // Under B the key is unset, so the field is empty and a Set press has nothing of A's to store.
@@ -129,10 +129,10 @@ class EditorDraftsTest {
         assertEquals("session=secret_A; Path=/; Secure; HttpOnly", drafts.text(cookieUnderA))
         drafts.set(cookieUnderB, "session=secret_B; Path=/; Secure")
         assertEquals("session=secret_A; Path=/; Secure; HttpOnly", drafts.text(cookieUnderA))
-        // The console script shares that profile-bound lifetime; the address bar is project-wide.
+        assertEquals("", drafts.text(DraftKey.of(projectA, Editor.BrowserEdit, "A")))
         assertEquals("B", DraftKey.of(projectA, Editor.BrowserScript, "B").identity)
-        assertNull(DraftKey.of(projectA, Editor.BrowserAddress, "B").identity)
-        assertEquals(setOf(Editor.ApiIdentityHeaders, Editor.BrowserEdit, Editor.BrowserScript),
+        assertEquals("B", DraftKey.of(projectA, Editor.BrowserAddress, "B").identity)
+        assertEquals(setOf(Editor.ApiIdentityHeaders, Editor.BrowserAddress, Editor.BrowserCookie, Editor.BrowserEdit, Editor.BrowserScript),
             Editor.entries.filter { it.identityScoped }.toSet())
         // Both identities stay scoped to the project, so a project clear still removes both.
         drafts.clearProject(projectA)

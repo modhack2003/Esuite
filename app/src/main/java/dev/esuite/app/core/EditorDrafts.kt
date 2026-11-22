@@ -18,20 +18,18 @@ import kotlinx.coroutines.flow.asStateFlow
  * of truth for that rule — build keys with [DraftKey.of] rather than deciding per call site:
  * - [ApiIdentityHeaders] is that identity's own credential configuration, and `api_save_identity`
  *   writes the field straight into its `IdentityConfig`.
- * - [BrowserEdit] backs `browser_cookie_input`, and `browser_set_cookie` writes the field into the
- *   SELECTED identity's isolated cookie jar, so retaining it across a switch would store identity
- *   A's cookie under identity B.
- * - [BrowserScript] is evaluated in the selected identity's own profile-bound WebView, which is the
- *   lifetime it had before drafts existed.
- * [BrowserAddress] is deliberately project-wide: a URL is not credential-bearing and page loads stay
- * explicit through Go.
+ * - [BrowserCookie] writes to the selected profile's cookie jar. It has its own editor separate from
+ *   [BrowserEdit], which applies HTML or CSS to the page.
+ * - [BrowserScript] runs in the selected profile's WebView. [BrowserAddress] can contain private URL
+ *   values and is used by both navigation and cookie lookup in that profile.
  */
 enum class Editor(val valueChars: Int = EditorDrafts.VALUE_CHARS, val identityScoped: Boolean = false) {
     ApiHeaders, ApiRaw(Limits.REQUEST_BYTES), ApiSavedName, ApiIdentityHeaders(identityScoped = true),
     FindingTitle, FindingDetail,
     ToolsInput(Limits.REQUEST_BYTES),
     TaskPayload1, TaskPayload2, TaskPayload3, TaskPayload4, SequenceNames, TokenPath,
-    BrowserAddress, BrowserEdit(identityScoped = true), BrowserScript(identityScoped = true),
+    BrowserAddress(identityScoped = true), BrowserEdit(identityScoped = true),
+    BrowserCookie(identityScoped = true), BrowserScript(identityScoped = true),
 }
 
 /**

@@ -11,12 +11,17 @@ val Signal = Color(0xFF5BE0D6)
 val Amber = Color(0xFFFFB86B)
 val Ink = Color(0xFFE7EEF6)
 val Muted = Color(0xFF92A5B8)
+private val CyanContainer = Color(0xFF193C42)
+private val Border = Color(0xFF4E6677)
 
 @Composable
 fun ESuiteTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = darkColorScheme(
-        primary = Signal, onPrimary = Midnight, secondary = Amber,
+        primary = Signal, onPrimary = Midnight, primaryContainer = CyanContainer, onPrimaryContainer = Signal,
+        secondary = Signal, onSecondary = Midnight, secondaryContainer = CyanContainer, onSecondaryContainer = Signal,
+        tertiary = Amber, onTertiary = Midnight,
         background = Midnight, surface = Raised, onSurface = Ink,
-        onBackground = Ink, onSurfaceVariant = Muted,
+        surfaceVariant = Raised, surfaceContainer = Raised, surfaceContainerHigh = Color(0xFF172638),
+        onBackground = Ink, onSurfaceVariant = Muted, outline = Border, outlineVariant = Color(0xFF304657),
     ), content = content)
 }

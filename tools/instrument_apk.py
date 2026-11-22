@@ -95,7 +95,7 @@ try:
     command('adb', 'uninstall', 'dev.esuite.app')
     command('adb', 'install', unique('**/app/build/outputs/apk/ci/app-release-ci.apk'))
     command('adb', 'install', '-r', '-t', unique('**/ui-tests/build/outputs/apk/debug/ui-tests-debug.apk'))
-    suite('dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner', 'OptimizedUi', 3, 'dev.esuite.uitests.ProductionUiTest')
+    suite('dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner', 'OptimizedUi', 4, 'dev.esuite.uitests.ProductionUiTest')
     subprocess.run(['adb', 'pull', '/sdcard/Android/data/dev.esuite.uitests/files', str(out / 'ui-evidence')], check=False, timeout=30)
 except Exception as error:
     case = ET.SubElement(root, 'testcase', classname='Instrumentation', name='setupAndExecution')

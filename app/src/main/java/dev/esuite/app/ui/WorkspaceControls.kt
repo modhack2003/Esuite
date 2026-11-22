@@ -25,30 +25,45 @@ private class LocalReportDocument : ActivityResultContracts.CreateDocument("appl
 }
 
 @Composable
-fun WorkspaceControls(state: AppState, model: AppViewModel) {
+fun LocalReportAction(label: String, filename: String, prepare: () -> String?, onMessage: (String) -> Unit, enabled: Boolean = true) {
     val context = LocalContext.current; val scope = rememberCoroutineScope()
     var export by remember { mutableStateOf("") }; var preview by remember { mutableStateOf(false) }
-    var delete by remember { mutableStateOf(false) }; var erase by remember { mutableStateOf(false) }
     val launcher = rememberLauncherForActivityResult(LocalReportDocument()) { uri ->
+        val payload = export
+        export = ""
         if (uri != null) {
             val allowed = setOf("com.android.externalstorage.documents", "com.android.providers.downloads.documents", "com.android.providers.media.documents")
-            if (uri.authority !in allowed) model.message("Choose device storage or Downloads. Remote and unrecognized document providers are not used for export.")
-            else if (export.isBlank()) model.message("Prepare the export again; no data was written.")
+            if (uri.scheme != "content" || uri.authority !in allowed) onMessage("Choose device storage or Downloads to save the report.")
+            else if (payload.isBlank()) onMessage("Prepare the export again to save the report.")
             else {
-                val payload = export
                 scope.launch {
                     runCatching { withContext(Dispatchers.IO) { context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(payload.toByteArray(Charsets.UTF_8)) } ?: error("File could not be opened") } }
-                        .onSuccess { model.message("Sanitized report exported to selected device storage") }
-                        .onFailure { model.message("Could not write report: ${it.message}") }
-                    export = ""
+                        .onSuccess { onMessage("Report exported to selected device storage") }
+                        .onFailure { onMessage("Could not write report. Check the destination and try again.") }
                 }
             }
         }
     }
+    OutlinedButton(onClick = {
+        val payload = prepare()
+        if (payload == null) onMessage("This report is unavailable.")
+        else { export = payload; preview = true }
+    }, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text(label) }
+    if (preview) AlertDialog(onDismissRequest = { preview = false; export = "" }, title = { Text("Review export") }, text = {
+        Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("The origin, generated IDs and report metadata appear in the file. Paths, credentials, bodies and free text are omitted.")
+            SelectionContainer { Text(export, style = technicalTextStyle()) }
+        }
+    }, confirmButton = { TextButton(onClick = { preview = false; launcher.launch(filename) }) { Text("Choose local file") } }, dismissButton = { TextButton(onClick = { preview = false; export = "" }) { Text("Cancel") } })
+}
+
+@Composable
+fun WorkspaceControls(state: AppState, model: AppViewModel) {
+    var delete by remember { mutableStateOf(false) }; var erase by remember { mutableStateOf(false) }
     Text("Local data controls", style = MaterialTheme.typography.titleMedium)
-    Text("Encrypted project history is autosaved after a short debounce; Save now flushes it explicitly. Browser profile data is held by Android WebView and is removed by the delete and erase controls below.", style = MaterialTheme.typography.bodySmall)
+    Text("This device holds the workspace key. Erasing app data or losing the device can make the workspace unrecoverable. Export a report to retain its summary outside ESuite.", style = MaterialTheme.typography.bodySmall)
     OutlinedButton(onClick = model::saveNow, modifier = Modifier.fillMaxWidth()) { Text("Save encrypted workspace now") }
-    OutlinedButton(onClick = { export = model.exportSanitized(); preview = true }, enabled = state.projectId != null, modifier = Modifier.fillMaxWidth()) { Text("Preview sanitized local export") }
+    LocalReportAction("Preview sanitized local export", "esuite-sanitized-report.json", model::exportSanitized, model::message, enabled = state.projectId != null)
     OutlinedButton(onClick = { delete = true }, enabled = state.projectId != null, modifier = Modifier.fillMaxWidth()) { Text("Delete selected project and browser profiles") }
     // Beside the delete control, not only in the top status line: the audit found the deletion
     // outcome was otherwise discoverable only by scrolling back to the top.
@@ -58,12 +73,6 @@ fun WorkspaceControls(state: AppState, model: AppViewModel) {
         OutlinedButton(onClick = model::retryProfileCleanup, modifier = Modifier.fillMaxWidth().testTag("retry_profile_cleanup")) { Text("Retry browser profile cleanup") }
     }
     OutlinedButton(onClick = { erase = true }, modifier = Modifier.fillMaxWidth()) { Text("Erase encrypted workspace") }
-    if (preview) AlertDialog(onDismissRequest = { preview = false; export = "" }, title = { Text("Review export") }, text = {
-        Column {
-            Text("Bodies, queries, paths, header values, identity configuration and free-text findings are omitted. The origin and generated IDs remain visible.")
-            SelectionContainer { Text(export, Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()), style = MaterialTheme.typography.bodySmall) }
-        }
-    }, confirmButton = { TextButton(onClick = { preview = false; launcher.launch("esuite-sanitized-report.json") }) { Text("Choose local file") } }, dismissButton = { TextButton(onClick = { preview = false; export = "" }) { Text("Cancel") } })
     if (delete) AlertDialog(onDismissRequest = { delete = false }, title = { Text("Delete selected project?") }, text = { Text("This removes its saved requests, history, observations and identity configuration, and asks Android WebView to delete its isolated browser profiles. A profile the browser still has loaded is removed when ESuite restarts. Other projects remain.") },
         confirmButton = { TextButton(onClick = { delete = false; model.deleteProject() }) { Text("Delete project") } }, dismissButton = { TextButton(onClick = { delete = false }) { Text("Cancel") } })
     if (erase) EraseVaultDialog({ erase = false }, model)
