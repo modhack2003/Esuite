@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.debounce
 data class AppState(
     val workspace: Workspace = Workspace(), val projectId: String? = null, val identity: String = "A",
     val draft: RequestDraft = RequestDraft(), val selected: Exchange? = null, val busy: Boolean = false,
-    val message: String = "Opening encrypted workspace…", val comparison: String = "", val ready: Boolean = false,
+    val message: String = "Opening saved site data…", val comparison: String = "", val ready: Boolean = false,
     val manualRequestLabel: String? = null,
     val openingWorkspace: Boolean = true,
     val persistedWorkspace: Workspace? = null, val saveError: String? = null, val pendingWrites: Int = 0,
@@ -93,7 +93,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 if (generation == workspaceGeneration) mutable.update {
-                    it.copy(openingWorkspace = false, message = "Could not open encrypted workspace. ${e.message ?: e.javaClass.simpleName}")
+                    it.copy(openingWorkspace = false, message = "Could not open saved site data. ${e.message ?: e.javaClass.simpleName}")
                 }
             }
         }
@@ -145,16 +145,16 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
                     profileCleanupNote = BrowserProfiles.clearAllEsuiteOwned().describe()
                     mutable.value = AppState(); loadWorkspace()
                 }
-                .onFailure { failure -> mutable.update { it.copy(openingWorkspace = false, message = "Could not erase encrypted workspace. ${failure.message}") } }
+                .onFailure { failure -> mutable.update { it.copy(openingWorkspace = false, message = "Could not erase saved site data. ${failure.message}") } }
         }
     }
     fun message(text: String) = mutable.update { it.copy(message = text.take(4000)) }
     private fun currentContext() = RequestContext(contextGeneration, state.value.projectId, state.value.identity)
     private fun supersededMessage(started: RequestContext, current: RequestContext): String =
         if (started.identity != current.identity)
-            "A result for identity ${started.identity} arrived after you switched to ${current.identity}. It is recorded in Traffic and was not applied here."
+            "A result for identity ${started.identity} arrived after you switched to ${current.identity}. It is recorded in Activity and was not applied here."
         else
-            "A result arrived after the project or workspace changed. It is recorded in Traffic and was not applied here."
+            "A result arrived after the selected site changed. It is recorded in Activity and was not applied here."
     fun currentProject(): Project? = state.value.workspace.projects.firstOrNull { it.id == state.value.projectId }
     private fun rememberProject(id: String?) {
         workspacePreferences.edit { putString("last_project", id) }
@@ -162,19 +162,19 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
 
     fun createProject(name: String, origin: String) {
         runCatching {
-            require(name.isNotBlank() && name.length <= 100) { "Enter a project name (up to 100 characters)" }
+            require(name.isNotBlank() && name.length <= 100) { "Site name is too long" }
             require(state.value.workspace.projects.size < 20) { "Saved site limit reached (20)" }
             val scope = ScopePolicy(origin.trim())
-            require(scope.target.isHttps) { "This Android build requires an HTTPS project origin" }
+            require(scope.target.isHttps) { "Enter an HTTPS origin" }
             val project = Project(name = name.trim(), origin = scope.canonicalOrigin)
             cancelRequest()
             contextGeneration += 1
             drafts.clearProject(state.value.projectId)
             mutable.update { it.copy(workspace = it.workspace.copy(projects = it.workspace.projects + project), projectId = project.id, identity = "A",
-                draft = RequestDraft(url = project.origin + "/"), selected = null, comparison = "", message = "Project created. Only this exact scheme, host and port are in scope.") }
+                draft = RequestDraft(url = project.origin + "/"), selected = null, comparison = "", message = "Site added to API Lab.") }
             rememberProject(project.id)
             persistDurable()
-        }.onFailure { message(it.message ?: "Invalid project") }
+        }.onFailure { message(it.message ?: "Invalid site") }
     }
     fun openSite(address: String): Boolean {
         if (!state.value.ready) { message("Saved site data is opening."); return false }
@@ -251,7 +251,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         mutable.update { if (!it.ready || it.workspace.projects.none { p -> p.id == exchange.projectId }) it else it.copy(workspace = it.workspace.copy(exchanges = (listOf(exchange) + it.workspace.exchanges).take(Limits.HISTORY))) }
     }
     fun send(compare: Boolean = false) {
-        val snapshot = state.value; val project = currentProject() ?: return message("Create a project first")
+        val snapshot = state.value; val project = currentProject() ?: return message("Open a site in API Lab first")
         if (snapshot.busy) return
         val started = currentContext()
         requestJob = viewModelScope.launch {
@@ -295,7 +295,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
     }
     fun cancelRequest() { requestJob?.cancel() }
     fun importCurl(text: String) {
-        val project = currentProject() ?: return message("Create a project first")
+        val project = currentProject() ?: return message("Open a site in API Lab first")
         val context = currentContext()
         viewModelScope.launch {
             try {
@@ -312,7 +312,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
     fun importOpenApi(text: String) = importCollection { project -> ApiImports.openApi(text, project) }
     fun importHar(text: String) = importCollection { project -> ApiImports.har(text, project) }
     private fun importCollection(parse: (Project) -> List<SavedRequest>) {
-        val project = currentProject() ?: return message("Create a project first")
+        val project = currentProject() ?: return message("Open a site in API Lab first")
         val generation = workspaceGeneration
         viewModelScope.launch {
             try {
@@ -346,7 +346,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
             repeat(3) {
                 val current = state.value
                 require(current.ready && ResultAttribution.accepts(context, currentContext())) {
-                    "The active project or identity changed. Try the edit again in its original workspace."
+                    "The selected site or identity changed. Reopen the original site to finish the edit."
                 }
                 val snapshot = current.workspace
                 val candidate = withContext(Dispatchers.Default) {
@@ -354,7 +354,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
                 }
                 val latest = state.value
                 require(latest.ready && ResultAttribution.accepts(context, currentContext())) {
-                    "The active project or identity changed. Try the edit again in its original workspace."
+                    "The selected site or identity changed. Reopen the original site to finish the edit."
                 }
                 if (WorkspacePersistence.sameDurable(snapshot, latest.workspace) &&
                     mutable.compareAndSet(latest, latest.copy(
@@ -366,7 +366,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
                     return true
                 }
             }
-            message("The workspace is busy. Try saving again.")
+            message("Saved data is busy. Try saving again.")
         } catch (failure: IllegalArgumentException) {
             message(failure.message ?: "The edit could not be saved")
         }
@@ -381,7 +381,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         val project = currentProject() ?: return
         val identity = state.value.identity
         val key = DraftKey.of(project.id, Editor.ApiIdentityHeaders, identity)
-        val saved = admitDurable("Identity headers updated. Check workspace status for save confirmation.") { workspace ->
+        val saved = admitDurable("Identity headers updated. Check the save status for confirmation.") { workspace ->
             val config = IdentityConfig(project.id, identity, DraftParser.headers(text))
             workspace.copy(identityConfigs = workspace.identityConfigs.filterNot {
                 it.projectId == project.id && it.identity == identity
@@ -391,13 +391,13 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
     }
     fun clearSessions() {
         currentProject()?.let { p -> engine.sessions.clearProject(p.id); mutable.update { it.copy(workspace = it.workspace.copy(identityConfigs = it.workspace.identityConfigs.filterNot { c -> c.projectId == p.id })) }; persistDurable() }
-        message("API sessions and saved identity headers cleared. Browser profiles have separate controls.")
+        message("API sessions and saved identity headers cleared. Use Settings to manage browser data.")
     }
     suspend fun saveDraft(name: String) {
         val project = currentProject() ?: return
         val draft = state.value.draft
         val saved = SavedRequest(projectId = project.id, name = name.trim(), draft = draft)
-        admitDurable("Request saved to this project.") { workspace ->
+        admitDurable("Request saved to this site.") { workspace ->
             require(saved.name.isNotBlank() && saved.name.length <= 100) { "Use a saved request name between 1 and 100 characters." }
             require(workspace.savedRequests.size < 100) { "Collection limit is 100 requests. Remove a saved request before adding one." }
             DraftParser.validate(draft)
@@ -427,7 +427,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
             findings = it.workspace.findings.filterNot { f -> f.projectId == p.id }, savedRequests = it.workspace.savedRequests.filterNot { r -> r.projectId == p.id },
             identityConfigs = it.workspace.identityConfigs.filterNot { c -> c.projectId == p.id }),
             pendingProfileCleanup = (it.pendingProfileCleanup + cleanup.pending).distinct(),
-            message = "Project and its API evidence removed. ${cleanup.describe()}") }
+            message = "Saved site data removed. ${cleanup.describe()}") }
         rememberProject(null)
         persistDurable()
     }
@@ -439,7 +439,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
     }
     suspend fun addFinding(title: String, detail: String, evidence: Exchange? = state.value.selected): Boolean {
         val project = currentProject() ?: return false
-        return admitDurable("Observation added. Check workspace status for save confirmation.") { workspace ->
+        return admitDurable("Observation added. Check the save status for confirmation.") { workspace ->
             require(title.isNotBlank() && title.length <= 200 && detail.isNotBlank() && detail.length <= 16000) {
                 "Use a title between 1 and 200 characters and notes between 1 and 16,000 characters."
             }

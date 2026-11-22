@@ -8,7 +8,7 @@ class ScopePolicy(origin: String) {
     val canonicalOrigin: String = target.newBuilder().encodedPath("/").query(null).fragment(null).build().toString().removeSuffix("/")
     init { require(target.encodedPath == "/" && target.query == null) { "Project scope must be an origin, without a path or query" } }
     fun requireAllowed(url: String): HttpUrl = parse(url).also {
-        require(it.scheme == target.scheme && it.host == target.host && it.port == target.port) { "URL is outside the selected project origin" }
+        require(it.scheme == target.scheme && it.host == target.host && it.port == target.port) { "URL is outside the selected site origin" }
     }
     fun allows(url: String): Boolean = runCatching { requireAllowed(url); true }.getOrDefault(false)
     companion object {

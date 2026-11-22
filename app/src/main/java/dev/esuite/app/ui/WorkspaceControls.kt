@@ -69,7 +69,7 @@ fun LocalReportAction(label: String, filename: String, prepare: suspend () -> St
 fun WorkspaceControls(state: AppState, model: AppViewModel) {
     var delete by remember { mutableStateOf(false) }; var erase by remember { mutableStateOf(false) }
     Text("Saved site data", style = MaterialTheme.typography.titleMedium)
-    Text("This device holds the workspace key. Erasing app data or losing the device can make the workspace unrecoverable. Export a report to retain its summary outside ESuite.", style = MaterialTheme.typography.bodySmall)
+    Text("This device holds the encryption key. Erasing app data or losing the device can make saved records unrecoverable. Export a report to retain its summary outside ESuite.", style = MaterialTheme.typography.bodySmall)
     OutlinedButton(onClick = model::saveNow, modifier = Modifier.fillMaxWidth()) { Text("Save local data now") }
     LocalReportAction("Preview sanitized local export", "esuite-sanitized-report.json", model::exportSanitized, model::message, enabled = state.projectId != null)
     OutlinedButton(onClick = { delete = true }, enabled = state.projectId != null, modifier = Modifier.fillMaxWidth()) { Text("Remove selected site data") }

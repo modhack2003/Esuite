@@ -332,7 +332,7 @@ class DeviceBoundaryTest {
             assertTrue(state.workspace.exchanges.any { it.identity == "A" && it.status == 200 && it.response.value == "late-A-response" })
             // ... but it was never applied under identity B, and the message says so without claiming leakage.
             assertNull(state.selected)
-            assertTrue(state.message.contains("recorded in Traffic and was not applied"))
+            assertTrue(state.message.contains("recorded in Activity and was not applied"))
             assertFalse(state.message.contains("cookie", true))
         } finally { instrumentation.runOnMainSync { model.viewModelScope.cancel(); model.engine.close() }; server.shutdown() }
     }
@@ -357,7 +357,7 @@ class DeviceBoundaryTest {
             assertTrue(state.workspace.exchanges.any { it.identity == "A" && it.error != null })
             // ... and not applied under identity B.
             assertNull(state.selected)
-            assertTrue(state.message.contains("recorded in Traffic and was not applied"))
+            assertTrue(state.message.contains("recorded in Activity and was not applied"))
         } finally { instrumentation.runOnMainSync { model.viewModelScope.cancel(); model.engine.close() }; server.shutdown() }
     }
 

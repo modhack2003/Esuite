@@ -94,7 +94,11 @@ public class ProductionUiTest extends NativeUiDriver {
         assertTrue(waitText("browser_tool_heading", "Cookie names and available flags", 10000));
         assertNotNull(find(By.res("browser_output")));
         click("browser_tool_tab_storage"); assertTrue(waitText("browser_output", "Local storage", 10000));
-        click("browser_tool_tab_network"); assertTrue(waitText("browser_output", "Page /", 10000));
+        click("browser_tool_tab_network"); assertTrue(waitText("browser_output", "Navigation /", 10000));
+        click("browser_tool_tab_page"); click("browser_open_api");
+        assertTrue(waitText("api_url", "https://example.com/", 15000));
+        click("nav_browser");
+        assertTrue(waitText("browser_url", "https://example.com/", 10000));
         click("open_settings"); assertNotNull(find(By.res("settings_title")));
         click("appearance_tab_light");
         assertTrue(tag("appearance_tab_light").isSelected());
@@ -125,7 +129,7 @@ public class ProductionUiTest extends NativeUiDriver {
         click("api_tab_request"); enter("api_url", "https://outside.invalid/"); click("api_send");
         assertNotNull(find(By.text(java.util.regex.Pattern.compile("(?s).*Error · .*"))));
         // The failed send must replace the old 200 result, with no request to outside.invalid.
-        top(); assertTrue(waitText("workspace_status", "outside the selected project origin", 15000));
+        top(); assertTrue(waitText("workspace_status", "outside the selected site origin", 15000));
         click("nav_traffic"); find(By.textContains("Identity comparison · identity B · 200")).click();
         assertNotNull(device.wait(Until.findObject(By.text("Exchange detail")), 5000));
         assertNotNull(device.wait(Until.findObject(By.textContains("identity B")), 5000));

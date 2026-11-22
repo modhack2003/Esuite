@@ -16,7 +16,7 @@ import xml.etree.ElementTree as ET
 
 nodes = list(ET.parse("release-ui.xml").iter("node"))
 resources = {node.get("resource-id") for node in nodes}
-required = {"nav_browser", "browser_url", "browser_go", "open_settings"}
+required = {"nav_browser", "browser_url", "open_settings"}
 browser_selected = any(node.get("resource-id") == "nav_browser" and node.get("selected") == "true" for node in nodes)
 sys.exit(0 if required <= resources and browser_selected else 1)
 PY

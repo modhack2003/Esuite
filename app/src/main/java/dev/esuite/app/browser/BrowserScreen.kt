@@ -298,7 +298,7 @@ internal fun BrowserScreen(
                                     }
                                     val sameRequest = url == address && pageUrl == null
                                     requestLog.page(target, preserveExisting = sameRequest)
-                                    requestLog.add("Page", target)
+                                    requestLog.add("Navigation", target)
                                     loading = true
                                     pageUrl = null
                                     console = emptyList()
@@ -398,7 +398,7 @@ private fun BrowserInspector(
                 ToolPanel.Cookies -> "Cookie names and available flags"
                 ToolPanel.Storage -> "Storage keys and value lengths"
                 ToolPanel.Console -> "Recent console messages"
-                ToolPanel.Network -> "Recent same-site requests · method and path"
+                ToolPanel.Network -> "Recent same-site navigation and requests"
             }
             Text(detail, style = MaterialTheme.typography.titleSmall, modifier = Modifier.testTag("browser_tool_heading"))
             SelectionContainer {

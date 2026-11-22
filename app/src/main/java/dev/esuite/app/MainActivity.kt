@@ -332,7 +332,7 @@ private fun SavedDataState(state: AppState, settings: () -> Unit) {
             dismissButton = { TextButton(onClick = { detail = null }) { Text("Close") } })
     }
     if (confirmClear) AlertDialog(onDismissRequest = { confirmClear = false }, title = { Text("Clear site history?") },
-        text = { Text("This removes history entries for the selected site. Evidence saved with observations stays in the workspace.") },
+        text = { Text("This removes history entries for the selected site. Evidence saved with observations stays on this device.") },
         confirmButton = { TextButton(onClick = { confirmClear = false; model.clearHistory() }) { Text("Clear history") } },
         dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } })
 }
