@@ -3,6 +3,7 @@
 import hashlib
 import os
 from pathlib import Path
+import re
 import subprocess
 import urllib.request
 
@@ -21,8 +22,10 @@ def instrument(method, expected):
     Path('signed-ui-results').mkdir(exist_ok=True)
     subprocess.run(['adb', 'pull', '/sdcard/Android/data/dev.esuite.uitests/files', 'signed-ui-results/ui-evidence'], check=False, timeout=30)
     Path('signed-ui-results', method.split('.')[-1].replace('#', '-') + '.txt').write_text(output)
-    # Android's am can exit 0 even when JUnit fails. Require its completed summary.
-    if f'OK ({expected} test' not in output or 'FAILURES!!!' in output or 'INSTRUMENTATION_CODE: -1' not in output:
+    # Assumption skips count toward the fixture inventory. Android's am can exit 0 on JUnit failure.
+    statuses = re.findall(r'^INSTRUMENTATION_STATUS_CODE: (-?\d+)\s*$', output, re.MULTILINE)
+    completed = sum(code in {'0', '-3', '-4'} for code in statuses)
+    if completed != expected or any(code in {'-1', '-2'} for code in statuses) or 'FAILURES!!!' in output or 'INSTRUMENTATION_CODE: -1' not in output:
         raise RuntimeError('Signed APK UI suite failed or incomplete: ' + method)
 
 
@@ -34,10 +37,10 @@ assert len(apks) == len(harnesses) == 1
 run('adb', 'install', '-r', '-t', str(harnesses[0]))
 base = Path('previous-production.apk')
 # Immutable published baseline; verify bytes before installing. Android enforces signer continuity on -r.
-url = 'https://github.com/modhack2003/Esuite/releases/download/v1.0.1/ESuite-1.0.1.apk'
+url = 'https://github.com/modhack2003/Esuite/releases/download/v1.0.2/ESuite-1.0.2.apk'
 with urllib.request.urlopen(url, timeout=60) as response:
     data = response.read(10 * 1024 * 1024)
-assert hashlib.sha256(data).hexdigest() == 'b3ec925bb4d73f477947dc761a5c960add671c7dec53cc9c4b4ecb11587ba8d0'
+assert hashlib.sha256(data).hexdigest() == '15096289a6c282d60035e44c3ac4a1f00cfba30a73780f1961261487aff2a1b4'
 base.write_bytes(data)
 run('adb', 'uninstall', 'dev.esuite.app') if 'dev.esuite.app' in run('adb', 'shell', 'pm', 'list', 'packages', 'dev.esuite.app') else None
 run('adb', 'install', str(base))
@@ -45,5 +48,5 @@ instrument('dev.esuite.uitests.UpgradeUiTest#seedPreviousRelease', 1)
 # No uninstall or pm clear is allowed between seeding and verification.
 run('adb', 'install', '-r', str(apks[0]))
 instrument('dev.esuite.uitests.UpgradeUiTest#verifyUpgradeRetainsEncryptedWorkspace', 1)
-instrument('dev.esuite.uitests.ProductionUiTest', 3)
-print('PASS: exact production-signed APK UI and v1.0.1 same-signer encrypted-data upgrade')
+instrument('dev.esuite.uitests.ProductionUiTest', 4)
+print('PASS: exact production-signed APK UI and v1.0.2 same-signer encrypted-data upgrade')

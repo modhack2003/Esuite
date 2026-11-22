@@ -10,6 +10,10 @@ Read this file first, then `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md
 - No analytics, hosted AI, remote workers, automatic evidence uploads or external callback collectors. The design services received synthetic data only.
 - The React prototype is a synthetic design reference. Native features must be assessed from Kotlin source and tests.
 
+## 1.0.3 candidate — native usability and local reports
+
+The candidate is code 6. Browser uses adaptive tabs and viewport controls, separates cookie and page-edit drafts, and reports bounded storage previews. Traffic opens details above the list. Findings can preview a redacted report for a specific observation. The last available project is restored by opaque ID with identity A and Home as the starting screen. The optimized candidate packages the defensive local and scoped manual workflows. Verification and open release gates are recorded in the [1.0.3 plan](RELEASE_1.0.3_PLAN.md).
+
 ## Production 1.0.2/code 5 — verified takeover fixes
 
 The owner stopped Kiro and authorized takeover plus a new fixed production APK. This release incorporates the four-list/ICU/truncation follow-up and fixes the browser viewport, encrypted commit acknowledgement, real v1-to-v2 migration, save-time pruning reconciliation, off-main version-safe imports and multi-byte capture tails. The page stays outside inspector scroll; the same isolated WebView remains composed across Page/Elements/Cookies/Storage/Console. The visual gate checks actual hosted magenta/cyan fixture pixels and rejects blank white/Midnight controls; no predetermined black-screen cause is claimed.

@@ -24,7 +24,7 @@ Native type: Android system sans; monospace for messages and identifiers. Web co
 
 **Target product:** Home, Browser, Traffic, API Lab, Findings. Decoder, Comparer, Sequencer, Intruder and future Cloud tools open from the workspace toolkit. Keep a global project selector, identity indicator and capture state visible when relevant.
 
-**Current native starter:** Home, Browser, Traffic, API Lab, Tools. Findings currently exists only in the web concept. This is intentional foundation staging, not a final navigation contract.
+**Native navigation:** Home, Browser, Traffic, API Lab and Findings are primary destinations. Tools opens from Home. Narrow and large-font windows retain accessible icon labels. Short windows use a compact bar, and editor focus gives the keyboard room.
 
 ## Screen behavior
 
@@ -55,7 +55,7 @@ A future live capture must never use a decorative active dot when capture has fa
 
 The web concept includes six interactive views, traffic filtering, fixture details, transfer to an editable request, fixture identity switching, simulated response comparison, session notes and real local Base64 transforms. It performs no HTTP testing. Notes are only in component memory. A reload resets them.
 
-The native app now has Home, Browser, Traffic, API Lab, Findings and Tools. It implements compatible isolated WebView profiles, local inspection/cookies/storage/console, request metadata observation, actual HTTPS replay, independent API sessions, encrypted evidence, collections, sanitized exports, bounded tasks and offline configuration review. The INTERNET permission is present; globally cleartext HTTP remains disabled. Full interception, VPN forwarding and active scanning remain unfinished. The web concept above remains synthetic and is not a native capability test.
+The native app implements compatible isolated WebView profiles, local page inspection, request metadata observation, scoped manual HTTPS requests, independent API sessions, encrypted evidence, collections, sanitized exports and offline configuration review. The 1.0.3 optimized candidate excludes network task automation. The browser has scrollable selected tabs, a compact address control and a workspace status dialog. Traffic opens details immediately and closing them returns to the list. Findings can preview a metadata-only report for a single observation. A fresh launch opens Home with the last available project and identity A. Pending editor text stays in memory. The web concept uses synthetic data. See [the candidate plan](RELEASE_1.0.3_PLAN.md) for verification gates.
 
 ## Visual source workflow
 

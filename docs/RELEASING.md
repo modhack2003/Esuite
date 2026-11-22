@@ -50,3 +50,7 @@ After configuring secrets, run the release workflow on main or make a coherent m
 ## Readiness and remaining product scope
 
 A production build configuration does not complete all planned Burp-style capabilities. Full proxy/VPN/TLS interception, direct cloud-account audits, richer protocol tooling, physical/OEM/accessibility validation and several data-lifecycle checks remain in AGENT_HANDOFF.md. Do not erase those tasks or infer scanner parity from a release name. This release's notes explicitly describe the implemented web/API workbench subset.
+
+## 1.0.3 candidate
+
+The candidate uses version code 6. Its upgrade fixture is the immutable production 1.0.2 APK. Use the existing certificate and exact-source release gates above. See the [1.0.3 plan](RELEASE_1.0.3_PLAN.md) for candidate changes and verification status.
