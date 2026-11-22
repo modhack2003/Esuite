@@ -119,4 +119,4 @@ Evidence and exact acceptance: [Vivo 1.0.2 review](reviews/vivo-1.0.2-production
 ## 1.0.5 browser refresh
 
 - [x] Implement standalone browsing, in-app inspection, site-based saved data, and appearance and privacy settings.
-- [ ] Record native browser and signed upgrade results in the [1.0.5 notes](RELEASE_1.0.5.md).
+- [x] Record native browser and signed upgrade results in the [1.0.5 notes](RELEASE_1.0.5.md).

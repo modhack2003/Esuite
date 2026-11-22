@@ -47,20 +47,20 @@ Explore the [self-contained UI concept](docs/ui/index.html), [editable Canva con
 | Browser | Standalone HTTPS browsing, search, page outline, cookie names and flags, console, storage metadata, and request paths |
 | Local tools | Grouped text transformations, request imports and offline configuration review |
 | Imports & cloud review | cURL/raw HTTP, OpenAPI 3 JSON, textual HAR request drafts and offline AWS configuration observations |
-| Local evidence | AES-GCM project persistence, request collections, observations, sanitized report preview/export and project deletion |
+| Local evidence | AES-GCM encryption for saved site data, request collections, observations, sanitized reports and site deletion |
 | Passive observations | Inspect selected API responses for cookie/header hardening observations; no extra scan requests |
 | Web concept | Six views, searchable fixtures, request-detail transfer, simulated account comparison and in-memory notes |
 | Web decoder | Real Unicode-aware Base64 transformations, executed locally |
 | Design system | Original E monogram, vector banner, palette, navigation, flows and UI state specification |
 | Engineering foundation | Gradle wrapper with pinned distribution checksum, unit tests, CI build definition and contribution guidance |
 
-The native app now has INTERNET permission for explicit target operations. Runtime targets require HTTPS and system trust validation. HTTP is used only by local JVM integration fixtures. API redirects/retries are disabled. Project evidence, saved requests and identity headers are now encrypted locally with an Android Keystore key. API session cookie jars remain memory-only; WebView profiles use their separate platform store. No VPN or full interception service is registered.
+The native app uses its Internet permission for user-directed browsing and target requests. Runtime targets require HTTPS and system trust validation. HTTP is used by local JVM integration fixtures. API requests disable redirects and retries. Site evidence, saved requests and identity headers are encrypted locally with an Android Keystore key. API session cookie jars stay in memory. The browser uses Android WebView's app-private store.
 
 ## The toolkit we are building
 
 This table describes the full target scope; some manual capabilities are now implemented as listed above. The concept remains a visual reference, not a capability test.
 
-| Workspace | Planned capabilities |
+| Tool | Planned capabilities |
 | --- | --- |
 | **Browser DevTools** | Touch element selection, DOM/CSS editing, console, native cookie metadata, storage explorer |
 | **Proxy** | Scoped interception, request/response editing, forward/drop, match-and-replace and HTTP history |
@@ -92,19 +92,19 @@ Burp Suite is a workflow reference. ESuite is an independent Android project; it
 
 These are engineering requirements and known constraints, not currently implemented capture guarantees. The [product plan](docs/PRODUCT_PLAN.md) defines the feasibility and release gates.
 
-## Your workspace should stay yours
+## Local data and privacy
 
 The intended product has no mandatory account, analytics backend, hosted AI, automatic capture upload or remote worker. Target requests still travel to the target: local processing does not mean internet targets can be tested offline.
 
-Workspace protections include Keystore-backed authenticated encryption, bounded history, durable-data admission limits, backup exclusions and explicit sanitized exports. Interception CA management remains future work. The native workflow uses user-selected targets. Encrypted workspace storage is implemented; Android Keystore and vendor backup behavior still require physical-device verification. WebView profile storage remains a separate platform-managed store.
+ESuite protects saved site data with Keystore-backed authenticated encryption, bounded history and backup exclusions. Report exports are explicit and sanitized. Android WebView manages browser data, with a separate clear control in Settings. Android Keystore and vendor backup behavior still require physical-device verification.
 
 ## Try ESuite
 
-**1.0.4 brings a faster workspace and clearer navigation.** Switch projects from Home, move between request editing and responses in API Lab, and search observations before opening their evidence. The signed update preserved encrypted evidence when installed over 1.0.2. [Download ESuite 1.0.4](https://github.com/modhack2003/Esuite/releases/tag/v1.0.4) · [Release verification](docs/RELEASE_1.0.4.md)
+**1.0.5 opens straight to Browser.** Visit an HTTPS site or search from the address bar, then inspect the current page with Developer tools. Saved requests and observations are organized by site. Settings includes appearance, motion, privacy controls, version information and credits. [Download ESuite 1.0.5](https://github.com/modhack2003/Esuite/releases/tag/v1.0.5) · [Release verification](docs/RELEASE_1.0.5.md)
 
 ### Android builds and production delivery
 
-**Android 9–17 (API 28–37.0).** The build uses AGP 9.2.1, Gradle 9.4.1 and JDK 17. All ten emulator jobs passed, with 180 native passes and 30 WebView capability skips. The exact signed APK passed the upgrade from 1.0.2 on API 28, 35 and 37.0. Physical-device and TalkBack coverage remain open. [Release verification](docs/RELEASE_1.0.4.md)
+**Android 9–17 (API 28–37.0).** The build uses AGP 9.2.1, Gradle 9.4.1 and JDK 17. All ten emulator jobs passed, including the standalone Browser flow on every tested API. The published APK passed the upgrade from 1.0.4 and preserved encrypted evidence on API 28, 35 and 37.0. Physical-device and TalkBack coverage remain open. [Release verification](docs/RELEASE_1.0.5.md)
 
 ```bash
 git clone https://github.com/modhack2003/Esuite.git
