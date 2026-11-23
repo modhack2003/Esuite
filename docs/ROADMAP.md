@@ -126,5 +126,5 @@ Evidence and exact acceptance: [Vivo 1.0.2 review](reviews/vivo-1.0.2-production
 - [x] Dock developer and general tools alongside the live page, add drag resizing and support a keyboard shortcut.
 - [x] Implement current-page JavaScript console, element selection and editing, source list, timing, viewport, security and document semantics panels.
 - [x] Enable mobile viewport declarations and make the WebView visible once the page commits. Refresh app startup, palette, typography, and navigation.
-- [ ] Verify the browser changes across the Android matrix and the upgrade from signed 1.0.5. [Release record](RELEASE_1.0.6.md)
+- [x] Verify the browser changes across the Android matrix, the live portfolio rendering, and the upgrade from signed 1.0.5. [Release record](RELEASE_1.0.6.md)
 - [ ] Evaluate native browser-engine support for debugger breakpoints, CPU and heap profiling, and richer network inspection.

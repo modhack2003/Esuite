@@ -13,7 +13,7 @@
 
 <p align="center"><strong>Native Android</strong> &nbsp; / &nbsp; <strong>No root required</strong> &nbsp; / &nbsp; <strong>No computer during use</strong> &nbsp; / &nbsp; <strong>Local processing</strong></p>
 
-> **Available now: native web/API workbench.** API Lab now executes scoped HTTP requests with separate identity cookie jars; the native browser opens an HTTPS site or a search and inspects the current page using Android WebView. Browser Developer tools show current-page cookie, storage, console and same-origin request metadata. Offline tools include AWS JSON review, text transforms and request imports for manual review. Full proxy interception, VPN capture, active scanning and cloud account connectors remain planned. The web concept below stays synthetic. See [the current agent handoff](docs/AGENT_HANDOFF.md).
+> **Available now: native web/API workbench.** API Lab executes scoped HTTPS requests with separate identity cookie jars. Browse and inspect the current page in Android WebView with resizable Developer Tools, live element edits, JavaScript expressions and scripts, and resource and viewport diagnostics. Offline tools include AWS JSON review, text transforms and request imports for manual review. Full proxy interception, VPN capture, active scanning and cloud account connectors remain planned. See [the current agent handoff](docs/AGENT_HANDOFF.md).
 
 ## A connected workflow, built for a phone
 
@@ -44,7 +44,7 @@ Explore the [self-contained UI concept](docs/ui/index.html), [editable Canva con
 | Android app | Native Home, live Browser, Traffic, API Lab, Findings and Tools |
 | Native utilities | UTF-8 Base64 encode/decode, form URL encode/decode and SHA-256 hashing |
 | Native request editor | Real scoped HTTP, cancellation, response limits, raw HTTP import and account A/B comparison |
-| Browser | Standalone HTTPS browsing, search, page outline, cookie names and flags, console, storage metadata, and request paths |
+| Browser | Standalone HTTPS browsing and search, resizable developer dock, element selection and edits, JavaScript console, cookie and storage metadata, source list, performance, viewport, and request timing |
 | Local tools | Grouped text transformations, request imports and offline configuration review |
 | Imports & cloud review | cURL/raw HTTP, OpenAPI 3 JSON, textual HAR request drafts and offline AWS configuration observations |
 | Local evidence | AES-GCM encryption for saved site data, request collections, observations, sanitized reports and site deletion |
@@ -100,11 +100,11 @@ ESuite protects saved site data with Keystore-backed authenticated encryption, b
 
 ## Try ESuite
 
-**1.0.5 opens straight to Browser.** Visit an HTTPS site or search from the address bar, then inspect the current page with Developer tools. Saved requests and observations are organized by site. Settings includes appearance, motion, privacy controls, version information and credits. [Download ESuite 1.0.5](https://github.com/modhack2003/Esuite/releases/tag/v1.0.5) · [Release verification](docs/RELEASE_1.0.5.md)
+**1.0.6 adds resizable Browser tools.** Keep the page visible, edit elements, inspect viewport and timing data, and run JavaScript from the color-coded console. A branded launch screen, Inter typography, and a refined light and dark palette update the native UI. [Download ESuite 1.0.6](https://github.com/modhack2003/Esuite/releases/tag/v1.0.6) · [Release verification](docs/RELEASE_1.0.6.md)
 
 ### Android builds and production delivery
 
-**Android 9–17 (API 28–37.0).** The build uses AGP 9.2.1, Gradle 9.4.1 and JDK 17. All ten emulator jobs passed, including the standalone Browser flow on every tested API. The published APK passed the upgrade from 1.0.4 and preserved encrypted evidence on API 28, 35 and 37.0. Physical-device and TalkBack coverage remain open. [Release verification](docs/RELEASE_1.0.5.md)
+**Android 9–17 (API 28–37.0).** The build uses AGP 9.2.1, Gradle 9.4.1 and JDK 17. All ten emulator jobs passed, including live browsing, dock resizing and console scripting on every tested API. The published APK preserved encrypted evidence during in-place updates from 1.0.5 on APIs 28, 35 and 37.0. Physical-device and TalkBack coverage remain open. [Release verification](docs/RELEASE_1.0.6.md)
 
 ```bash
 git clone https://github.com/modhack2003/Esuite.git
