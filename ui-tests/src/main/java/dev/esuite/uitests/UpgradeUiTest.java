@@ -6,7 +6,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import static org.junit.Assert.*;
 
-/** Seed the immutable v1.0.4 baseline, then verify the update without clearing app data. */
+/** Seed the immutable v1.0.5 baseline, then verify the update without clearing app data. */
 @RunWith(AndroidJUnit4.class)
 public class UpgradeUiTest extends NativeUiDriver {
     private static final String NOTE="Synthetic upgrade evidence retained";
@@ -15,11 +15,11 @@ public class UpgradeUiTest extends NativeUiDriver {
         assertNotNull(find(By.textContains(NOTE)));
     }
     @Test public void seedPreviousRelease() throws Exception {
-        launch(); enter("project_name","Same signer upgrade fixture");
-        enter("project_origin","https://example.test"); click("create_project");
+        launch(); click("nav_api");
+        enter("site_url","https://example.test"); click("site_continue");
         click("nav_findings"); enter("finding_title","Preserve on upgrade");
         enter("finding_detail",NOTE); click("save_finding"); top();
-        assertNotNull(find(By.textContains("Workspace saved with AES-GCM")));
+        assertTrue(waitText("workspace_save_status", "Saved on this device", 15000));
         // Prove the baseline note was actually durable before installing an update.
         launch(); readObservation(); checkpoint("baseline-note-after-process-restart");
     }

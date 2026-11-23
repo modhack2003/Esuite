@@ -139,6 +139,12 @@ jobs:
             python3 tools/instrument_apk.py
             adb shell am start -W -n dev.esuite.app/.MainActivity
             adb exec-out screencap -p > optimized-native-home.png
+            if [[ '${{ matrix.api }}' == '35' ]]; then
+              # The reported URL is a live site. Record compatibility evidence separately from fixtures.
+              adb shell am instrument -w -r -e class dev.esuite.uitests.ReportedSiteUiTest \
+                dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner > native-test-results/ReportedSiteUiTest.txt || true
+              adb pull /sdcard/Android/data/dev.esuite.uitests/files native-test-results/reported-site-evidence || true
+            fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:

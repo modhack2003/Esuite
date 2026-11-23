@@ -2,8 +2,10 @@ package dev.esuite.uitests;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
+import android.graphics.Rect;
 import androidx.test.uiautomator.By;
 import androidx.test.uiautomator.BySelector;
+import androidx.test.uiautomator.Direction;
 import androidx.test.uiautomator.UiDevice;
 import androidx.test.uiautomator.UiObject2;
 import androidx.test.uiautomator.Until;
@@ -45,7 +47,9 @@ public class ProductionUiTest extends NativeUiDriver {
         click("nav_tools");
         enter("tools_input", "ESuite");
         find(By.text("Base64 encode")).click();
+        revealToolResult();
         assertTrue(waitText("tools_output", "RVN1aXRl", 5000));
+        scrollTools(false);
         click("tools_tab_review");
         assertNotNull(find(By.text("Review AWS JSON offline")));
         assertFalse(device.hasObject(By.res("task_preview")));
@@ -87,22 +91,44 @@ public class ProductionUiTest extends NativeUiDriver {
         assertFalse(device.hasObject(By.res("project_name")));
         enter("browser_url", "example.com"); click("browser_go");
         assertTrue("The real page never became visible", device.wait(Until.hasObject(By.text("Example Domain")), 45000));
+        Rect full = pageBounds();
         click("browser_tools");
+        Rect split = pageBounds();
+        assertTrue("Developer Tools must reserve part of the screen for the live page", split.height() < full.height() && split.height() > full.height() / 4);
+        Rect grip = tag("dock_resize_handle").getVisibleBounds();
+        device.swipe(grip.centerX(), grip.centerY(), grip.centerX(), grip.centerY() - full.height() / 8, 30);
+        device.waitForIdle(2000);
+        assertTrue("Dragging the splitter must resize the live page", pageBounds().height() < split.height());
         assertTrue(waitText("browser_output", "Example Domain", 10000));
-        click("browser_tool_tab_elements"); assertTrue("Document outline is missing the page body", waitText("browser_output", "BODY", 10000));
-        click("browser_tool_tab_cookies");
+        selectBrowserTool("elements"); assertTrue("Document outline is missing the page body", waitText("browser_output", "BODY", 10000));
+        selectBrowserTool("console");
+        enter("console_input", "await Promise.resolve(6 * 7)"); click("console_run");
+        assertTrue("Console expression did not resolve", device.wait(Until.hasObject(By.res("console_result").text("42")), 10000));
+        click("console_mode");
+        enter("console_input", "console.warn('fixture warning'); throw new Error('fixture error');"); click("console_run");
+        assertTrue("Script exception is missing", device.wait(Until.hasObject(By.res("console_error").textContains("fixture error")), 10000));
+        assertTrue("Console warnings need their own severity", device.wait(Until.hasObject(By.res("console_warning").text("fixture warning")), 5000));
+        checkpoint("browser-console-dock");
+        selectBrowserTool("cookies");
         assertTrue(waitText("browser_tool_heading", "Cookie names and available flags", 10000));
         assertNotNull(find(By.res("browser_output")));
-        click("browser_tool_tab_storage"); assertTrue(waitText("browser_output", "Local storage", 10000));
-        click("browser_tool_tab_network"); assertTrue(waitText("browser_output", "Navigation /", 10000));
-        click("browser_tool_tab_page"); click("browser_open_api");
+        selectBrowserTool("storage"); assertTrue(waitText("browser_output", "Local storage", 10000));
+        selectBrowserTool("network"); assertTrue(waitText("browser_output", "Navigation /", 10000));
+        selectBrowserTool("viewport");
+        assertTrue("Mobile viewport should follow the device width", device.wait(Until.hasObject(By.res("browser_output")
+                .text(java.util.regex.Pattern.compile("(?s)Layout viewport · (?:[2-5][0-9]{2}) × .*"))), 10000));
+        click("nav_tools");
+        assertNotNull(tag("tools_input"));
+        assertTrue("General tools should also leave the page visible", pageBounds().height() > full.height() / 4);
+        click("browser_tools");
+        selectBrowserTool("page"); click("browser_open_api");
         assertTrue(waitText("api_url", "https://example.com/", 15000));
         click("nav_browser");
         assertTrue(waitText("browser_url", "https://example.com/", 10000));
         click("open_settings"); assertNotNull(find(By.res("settings_title")));
         click("appearance_tab_light");
         assertTrue(tag("appearance_tab_light").isSelected());
-        assertNotNull(find(By.textContains("Version 1.0.5")));
+        assertNotNull(find(By.textContains("Version 1.0.6")));
         assertNotNull(find(By.text("Credits")));
         device.pressBack();
         click("browser_tools");
@@ -110,6 +136,36 @@ public class ProductionUiTest extends NativeUiDriver {
         click("browser_go");
         assertNotNull(find(By.textContains("Enter an HTTPS address")));
         checkpoint("browser-standalone");
+    }
+
+    private Rect pageBounds() {
+        UiObject2 page = device.findObject(By.res("browser_page"));
+        assertNotNull("The WebView disappeared", page);
+        return page.getVisibleBounds();
+    }
+
+    private void selectBrowserTool(String panel) {
+        String id = "browser_tool_tab_" + panel;
+        for (int i = 0; i < 12; i++) {
+            UiObject2 tab = device.findObject(By.res(id));
+            if (tab != null && tab.getVisibleBounds().width() >= 48) { click(id); return; }
+            tag("browser_tool_tabs").swipe(i < 6 ? Direction.RIGHT : Direction.LEFT, 0.64f);
+        }
+        throw new AssertionError("Developer Tools tab not visible: " + panel);
+    }
+
+    private void revealToolResult() {
+        for (int i = 0; i < 5 && !usable(device.findObject(By.res("tools_output"))); i++) scrollTools(true);
+    }
+
+    private void scrollTools(boolean down) {
+        UiObject2 dock = device.findObject(By.res("browser_dock"));
+        assertNotNull("Tools dock is missing", dock);
+        Rect panel = dock.getVisibleBounds();
+        int x = panel.left + panel.width() / 12;
+        int lower = panel.bottom - panel.height() / 8;
+        int upper = panel.centerY();
+        device.swipe(x, down ? lower : upper, x, down ? upper : lower, 20);
     }
 
     private void openSite(String url) {
