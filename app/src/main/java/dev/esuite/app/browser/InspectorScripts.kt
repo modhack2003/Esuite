@@ -186,7 +186,9 @@ object InspectorScripts {
 
     val fitClippedDialogs = """
         (() => {
-          const viewport = Math.min(innerHeight, document.documentElement.clientHeight);
+          const visualViewport = window.visualViewport;
+          const pageHeight = () => visualViewport && visualViewport.height > 0 ? visualViewport.height : innerHeight;
+          const viewport = pageHeight();
           if (viewport < 160) return 0;
           let fitted = 0;
           for (const dialog of Array.from(document.querySelectorAll('dialog[open],[role="dialog"]')).slice(0, 12)) {
@@ -202,7 +204,17 @@ object InspectorScripts {
             if (css.position !== 'fixed' || css.overflowY !== 'auto' || bounds.height <= 0 ||
                 !Number.isFinite(limit) || limit > intended * 0.35 || bounds.height > intended * 0.45 ||
                 dialog.scrollHeight - dialog.clientHeight < 64) continue;
-            dialog.style.maxHeight = height + 'vh';
+            const updateLimit = () => {
+              if (dialog.isConnected) {
+                dialog.style.maxHeight = Math.floor(pageHeight() * height / 100) + 'px';
+              } else {
+                window.removeEventListener('resize', updateLimit);
+                if (visualViewport) visualViewport.removeEventListener('resize', updateLimit);
+              }
+            };
+            updateLimit();
+            window.addEventListener('resize', updateLimit, {passive:true});
+            if (visualViewport) visualViewport.addEventListener('resize', updateLimit, {passive:true});
             fitted++;
           }
           return fitted;

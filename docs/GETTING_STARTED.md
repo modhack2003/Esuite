@@ -6,12 +6,14 @@ Install the production-signed APK from [GitHub Releases](https://github.com/modh
 
 1. Open ESuite to Browser. Enter an HTTPS address or type search terms for DuckDuckGo. Use Go or the keyboard action to load it.
 2. Use Back, Forward and Reload to navigate. The Reload control becomes Stop while a page is loading.
-3. Open **Developer Tools** from the toolbar or press **F12** on a hardware keyboard. Drag the divider to resize the dock. It opens below the page on phones and beside it in wider layouts. The main Tools tab uses the same dock for converters, imports, and offline review.
+3. Open **Developer Tools** from the toolbar or press **F12** on a hardware keyboard. Drag the divider to resize the dock. It opens below the page on phones and beside it in wider layouts. Use the list button in the dock header to jump to any panel. The main Tools tab uses the same dock for converters, imports, and offline review.
 4. Use **Elements** to see the document outline or pick an element in the live page. Read its HTML and computed styles, then edit inline CSS or replace the selected HTML. The changes apply to the current document.
 5. In **Console**, run an expression like `document.title` or choose Script for multiple statements. Use `return` to show a script result and `await` for Promises. **Run** or **Ctrl+Enter** executes the input. Warnings and errors carry their own colors and labels.
 6. **Network** shows recent same-origin methods, paths, and available resource timings. **Sources**, **Performance**, **Viewport**, **Security**, and **Accessibility** summarize the current page. **Cookies** lists names and available flags, while **Storage** lists keys and value lengths.
 
 The browser profile belongs to ESuite and uses Android's system certificate validation. Settings shows the installed WebView version and provides Clear browsing data.
+
+The **Page** panel and page-error screen provide **Open in system browser** for site behavior that depends on the installed browser engine.
 
 ## Review and save site activity
 

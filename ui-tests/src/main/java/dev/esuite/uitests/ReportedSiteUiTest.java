@@ -32,7 +32,7 @@ public final class ReportedSiteUiTest extends NativeUiDriver {
         enter("console_input", "(() => { const d = document.querySelector('[role=dialog]'); const p = document.createElement('div'); " +
                 "p.style.cssText = 'height:100dvh;position:fixed;visibility:hidden'; document.documentElement.appendChild(p); " +
                 "const metrics = [innerWidth,innerHeight,visualViewport.height,p.getBoundingClientRect().height," +
-                "d && getComputedStyle(d).maxHeight,d && d.getBoundingClientRect().height,d && d.scrollHeight]; p.remove();" +
+                "d && getComputedStyle(d).maxHeight,d && d.getBoundingClientRect().height,d && d.scrollHeight,d && d.style.maxHeight]; p.remove();" +
                 "return 'Viewport metrics ' + metrics.join(', '); })()");
         click("console_run");
         UiObject2 result = device.wait(Until.findObject(By.res("console_result").textContains("Viewport metrics")), 12000);

@@ -269,7 +269,7 @@ internal fun BrowserScreen(
         preparing = false
     }
     LaunchedEffect(preparing) { if (!preparing) onReady() }
-    LaunchedEffect(document, visible, loading) {
+    LaunchedEffect(document, visible, loading, inspecting, utilitiesVisible) {
         if (loading) return@LaunchedEffect
         val view = activeView() ?: return@LaunchedEffect
         // Some WebView providers mis-size a dynamic-height dialog as hydration finishes.

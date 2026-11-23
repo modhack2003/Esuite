@@ -108,14 +108,15 @@ public class ProductionUiTest extends NativeUiDriver {
         assertTrue(waitText("browser_output", "Example Domain", 10000));
         selectBrowserTool("elements"); assertTrue("Document outline is missing the page body", waitText("browser_output", "BODY", 10000));
         selectBrowserTool("console");
-        enter("console_input", "await Promise.resolve(6 * 7)"); click("console_run");
-        assertTrue("Console expression did not resolve", device.wait(Until.hasObject(By.res("console_result").text("42")), 10000));
+        enter("console_input", "await Promise.resolve(6 * 7).then(n => { if (n === 42) document.documentElement.style.background = '#237E5B'; return n; })");
+        click("console_run");
+        assertTrue("Console expression must apply the awaited result to the live page", viewPaints(pageBounds(), 35, 126, 91));
         click("console_mode");
         click("console_levels");
         enter("console_input", "console.warn('fixture warning');"); click("console_run");
-        assertTrue("The console should paint its amber warning", consolePaints(244, 198, 131));
+        assertTrue("The console should paint its amber warning", viewPaints(tag("console_messages").getVisibleBounds(), 244, 198, 131));
         enter("console_input", "throw new Error('fixture error');"); click("console_run");
-        assertTrue("The console should paint its red script exception", consolePaints(255, 180, 174));
+        assertTrue("The console should paint its red script exception", viewPaints(tag("console_messages").getVisibleBounds(), 255, 180, 174));
         checkpoint("browser-console-dock");
         selectBrowserTool("cookies");
         assertTrue(waitText("browser_tool_heading", "Cookie names and available flags", 10000));
@@ -159,8 +160,7 @@ public class ProductionUiTest extends NativeUiDriver {
         device.waitForIdle(2000);
     }
 
-    private boolean consolePaints(int red, int green, int blue) {
-        Rect bounds = tag("console_messages").getVisibleBounds();
+    private boolean viewPaints(Rect bounds, int red, int green, int blue) {
         long deadline = SystemClock.uptimeMillis() + 12000;
         while (SystemClock.uptimeMillis() < deadline) {
             Bitmap screenshot = InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();
