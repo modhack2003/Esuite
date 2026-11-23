@@ -52,7 +52,7 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel) {
         groupName = it.name
     }
     OutlinedTextField(input, { model.drafts.set(inputKey, it); resetOutput() }, label = { Text("Input") },
-        minLines = 2, maxLines = 6, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(),
+        minLines = 1, maxLines = 6, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(),
         modifier = Modifier.fillMaxWidth().testTag("tools_input"))
     when (group) {
         ToolGroup.Encode -> {

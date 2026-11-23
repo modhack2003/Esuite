@@ -84,6 +84,19 @@ def suite(component, name, minimum, test_class=None):
         ET.SubElement(case, 'failure', message='Runner crashed or test inventory incomplete').text = result.stdout
 
 
+def probe_reported_site():
+    """Keep external-site compatibility evidence separate from the release fixtures."""
+    report = out / 'ReportedSiteUiTest.txt'
+    try:
+        result = subprocess.run([
+            'adb', 'shell', 'am', 'instrument', '-w', '-r', '-e', 'class', 'dev.esuite.uitests.ReportedSiteUiTest',
+            'dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner',
+        ], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=120)
+        report.write_text(result.stdout)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        report.write_text(f'Live-site check could not complete: {error}\n')
+
+
 try:
     if os.environ.get('GITHUB_ACTIONS') != 'true' or command('adb', 'shell', 'getprop', 'ro.kernel.qemu').strip() != '1':
         raise RuntimeError('Refusing destructive fixture setup outside a disposable Actions emulator')
@@ -96,6 +109,8 @@ try:
     command('adb', 'install', unique('**/app/build/outputs/apk/ci/app-release-ci.apk'))
     command('adb', 'install', '-r', '-t', unique('**/ui-tests/build/outputs/apk/debug/ui-tests-debug.apk'))
     suite('dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner', 'OptimizedUi', 4, 'dev.esuite.uitests.ProductionUiTest')
+    if os.environ.get('ESUITE_REPORTED_SITE') == 'true':
+        probe_reported_site()
     subprocess.run(['adb', 'pull', '/sdcard/Android/data/dev.esuite.uitests/files', str(out / 'ui-evidence')], check=False, timeout=30)
 except Exception as error:
     case = ET.SubElement(root, 'testcase', classname='Instrumentation', name='setupAndExecution')

@@ -45,14 +45,19 @@ public class ProductionUiTest extends NativeUiDriver {
         assertNotNull(device.wait(Until.findObject(By.textContains("esuite-observation")), 5000));
         device.pressBack(); device.pressBack();
         click("nav_tools");
-        revealUtilityControl("tools_input", true);
+        growDock(device.getDisplayHeight() / 10);
+        revealUtilityControl(By.res("tools_input"), true);
         enter("tools_input", "ESuite");
-        find(By.text("Base64 encode")).click();
-        revealUtilityControl("tools_output", true);
+        BySelector encode = By.text("Base64 encode");
+        revealUtilityControl(encode, true);
+        find(encode).click();
+        revealUtilityControl(By.res("tools_output"), true);
         assertTrue(waitText("tools_output", "RVN1aXRl", 5000));
-        revealUtilityControl("tools_tab_review", false);
+        revealUtilityControl(By.res("tools_tab_review"), false);
         click("tools_tab_review");
-        assertNotNull(find(By.text("Review AWS JSON offline")));
+        BySelector review = By.text("Review AWS JSON offline");
+        revealUtilityControl(review, true);
+        assertNotNull(find(review));
         assertFalse(device.hasObject(By.res("task_preview")));
     }
     /**
@@ -96,18 +101,21 @@ public class ProductionUiTest extends NativeUiDriver {
         click("browser_tools");
         Rect split = pageBounds();
         assertTrue("Developer Tools must reserve part of the screen for the live page", split.height() < full.height() && split.height() > full.height() / 4);
-        Rect grip = tag("dock_resize_handle").getVisibleBounds();
-        device.swipe(grip.centerX(), grip.centerY(), grip.centerX(), grip.centerY() - full.height() / 8, 30);
-        device.waitForIdle(2000);
+        growDock(full.height() / 6);
         assertTrue("Dragging the splitter must resize the live page", pageBounds().height() < split.height());
         assertTrue(waitText("browser_output", "Example Domain", 10000));
         selectBrowserTool("elements"); assertTrue("Document outline is missing the page body", waitText("browser_output", "BODY", 10000));
         selectBrowserTool("console");
         enter("console_input", "await Promise.resolve(6 * 7)"); click("console_run");
         assertTrue("Console expression did not resolve", device.wait(Until.hasObject(By.res("console_result").text("42")), 10000));
+        click("console_clear");
+        assertTrue(device.wait(Until.hasObject(By.text("No console messages yet.")), 5000));
         click("console_mode");
+        assertTrue(waitText("console_mode", "Script", 6000));
         enter("console_input", "console.warn('fixture warning'); throw new Error('fixture error');"); click("console_run");
-        assertTrue("Script exception is missing", device.wait(Until.hasObject(By.res("console_error").textContains("fixture error")), 10000));
+        assertTrue("Script exception is missing", device.wait(Until.hasObject(By.res("console_messages")
+                .descContains("Latest error: Error: fixture error")), 15000));
+        click("console_levels");
         BySelector warning = By.res("console_warning").text("fixture warning");
         if (!device.hasObject(warning)) tag("console_messages").swipe(Direction.DOWN, 0.65f);
         assertTrue("Console warnings need their own severity", device.wait(Until.hasObject(warning), 5000));
@@ -148,6 +156,12 @@ public class ProductionUiTest extends NativeUiDriver {
         return page.getVisibleBounds();
     }
 
+    private void growDock(int distance) {
+        Rect grip = tag("dock_resize_handle").getVisibleBounds();
+        device.swipe(grip.centerX(), grip.centerY(), grip.centerX(), grip.centerY() - distance, 30);
+        device.waitForIdle(2000);
+    }
+
     private void selectBrowserTool(String panel) {
         String id = "browser_tool_tab_" + panel;
         for (int i = 0; i < 12; i++) {
@@ -158,8 +172,9 @@ public class ProductionUiTest extends NativeUiDriver {
         throw new AssertionError("Developer Tools tab not visible: " + panel);
     }
 
-    private void revealUtilityControl(String id, boolean down) {
-        for (int i = 0; i < 5 && !usable(device.findObject(By.res(id))); i++) scrollTools(down);
+    private void revealUtilityControl(BySelector selector, boolean down) {
+        for (int i = 0; i < 4 && !usable(device.findObject(selector)); i++) scrollTools(down);
+        for (int i = 0; i < 4 && !usable(device.findObject(selector)); i++) scrollTools(!down);
     }
 
     private void scrollTools(boolean down) {

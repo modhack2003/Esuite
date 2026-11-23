@@ -14,6 +14,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.esuite.app.ui.TechnicalKeyboard
 import dev.esuite.app.ui.technicalTextStyle
@@ -112,14 +116,18 @@ internal fun ConsolePanel(
             TextButton(onClick = { onScript(!script) }, enabled = !running, modifier = Modifier.testTag("console_mode")) {
                 Text(if (script) "Script ▾" else "Expression ▾")
             }
-            TextButton(onClick = { issuesOnly = !issuesOnly }, modifier = Modifier.weight(1f)) {
+            TextButton(onClick = { issuesOnly = !issuesOnly }, modifier = Modifier.weight(1f).testTag("console_levels")) {
                 Text(if (issuesOnly) "Issues only" else "All levels", maxLines = 1)
             }
-            TextButton(onClick = clear, enabled = entries.isNotEmpty()) { Text("Clear") }
+            TextButton(onClick = clear, enabled = entries.isNotEmpty(), modifier = Modifier.testTag("console_clear")) { Text("Clear") }
         }
         HorizontalDivider(color = colors.outlineVariant)
         SelectionContainer(Modifier.weight(1f).fillMaxWidth()) {
-            LazyColumn(state = list, modifier = Modifier.fillMaxSize().testTag("console_messages")) {
+            LazyColumn(state = list, modifier = Modifier.fillMaxSize().testTag("console_messages").semantics {
+                val latest = rows.lastOrNull { it.level == ConsoleLevel.Result || it.level == ConsoleLevel.Error } ?: rows.lastOrNull()
+                if (latest != null) contentDescription = "Console messages. Latest ${latest.level.label.lowercase()}: ${latest.text.take(200)}"
+                if (latest?.level == ConsoleLevel.Result || latest?.level == ConsoleLevel.Error) liveRegion = LiveRegionMode.Polite
+            }) {
                 if (rows.isEmpty()) item {
                     Text(if (issuesOnly) "No warnings or errors." else if (ready) "No console messages yet." else "Load an HTTPS page to use the console.",
                         Modifier.padding(horizontal = 12.dp, vertical = 8.dp), color = colors.onSurfaceVariant,
