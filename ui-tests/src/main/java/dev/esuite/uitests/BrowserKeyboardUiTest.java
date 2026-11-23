@@ -6,6 +6,7 @@ import androidx.test.uiautomator.UiObject2;
 import androidx.test.uiautomator.Until;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import java.util.List;
 
 import static org.junit.Assert.*;
 
@@ -53,15 +54,15 @@ public final class BrowserKeyboardUiTest extends NativeUiDriver {
             device.executeShellCommand("ime enable " + IME);
             String selected = device.executeShellCommand("ime set " + IME);
             assertTrue(selected, selected.contains("selected"));
-            enterInPage("Page text", "text", false);
-            enterInPage("Page password", "password", false);
+            enterInPage(0, "text", false);
+            enterInPage(1, "password", false);
             click("browser_tools");
             click("browser_panel_picker");
             click("browser_panel_choice_page");
-            enterInPage("Page notes", "notes", false);
+            enterInPage(2, "notes", false);
             assertNotNull("Back closed the dock instead of the keyboard", device.findObject(By.res("browser_dock")));
             click("browser_close_dock");
-            enterInPage("Page editable", "editable", true);
+            enterInPage(3, "editable", true);
             checkpoint("website-ime");
         } finally {
             if (!previousIme.isBlank() && !previousIme.equals("null")) device.executeShellCommand("ime set " + previousIme);
@@ -71,13 +72,16 @@ public final class BrowserKeyboardUiTest extends NativeUiDriver {
         }
     }
 
-    private void enterInPage(String label, String field, boolean paste) {
-        UiObject2 input = device.wait(Until.findObject(By.desc(label)), 3_000);
-        if (input == null) input = device.wait(Until.findObject(By.text(label)), 5_000);
-        assertNotNull("Website editor is missing: " + label, input);
-        input.click();
+    private void enterInPage(int position, String field, boolean paste) {
+        // Chromium exposes placeholders as accessibility hints, which UiAutomator cannot query.
+        UiObject2 webPage = device.wait(Until.findObject(By.clazz("android.webkit.WebView")
+                .hasDescendant(By.clazz("android.widget.EditText"))), 8_000);
+        assertNotNull("Website form is missing", webPage);
+        List<UiObject2> fields = webPage.findObjects(By.clazz("android.widget.EditText"));
+        assertTrue("Website editor is missing: " + field, fields.size() > position);
+        fields.get(position).click();
         UiObject2 key = device.wait(Until.findObject(By.text(paste ? "Paste fixture text" : "Type fixture text")), 8_000);
-        assertNotNull("Tapping " + label + " did not open the software keyboard", key);
+        assertNotNull("Tapping the website " + field + " field did not open the software keyboard", key);
         key.click();
         device.pressBack();
         assertTrue("Keyboard stayed open", device.wait(Until.gone(By.text("Type fixture text")), 5_000));
