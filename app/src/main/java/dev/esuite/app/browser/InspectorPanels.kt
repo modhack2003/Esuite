@@ -157,7 +157,10 @@ internal fun ElementsPanel(tree: DomTree?, detail: DomDetails?, ready: Boolean, 
 }
 
 private enum class NetworkView(val label: String) { Requests("Requests"), Waterfall("Waterfall") }
-private enum class NetworkFilter(val label: String) { All("All"), Documents("Documents"), Errors("Errors") }
+private enum class NetworkFilter(val label: String, val timingOnly: Boolean = false) {
+    All("All"), Documents("Documents"), Errors("Errors"), Fetch("Fetch / XHR", timingOnly = true), Scripts("Scripts", timingOnly = true)
+}
+private enum class TimingOrder(val label: String) { Start("Start time"), Slowest("Slowest first"), Largest("Largest first") }
 
 @Composable
 internal fun NetworkPanel(requests: List<BrowserRequestEvent>, timings: List<ResourceTiming>, ready: Boolean,
@@ -166,6 +169,7 @@ internal fun NetworkPanel(requests: List<BrowserRequestEvent>, timings: List<Res
     var query by remember { mutableStateOf("") }
     var mode by remember { mutableStateOf(NetworkView.Requests) }
     var filter by remember { mutableStateOf(NetworkFilter.All) }
+    var order by remember { mutableStateOf(TimingOrder.Start) }
     var showFilters by remember { mutableStateOf(false) }
     var frozen by remember { mutableStateOf<Pair<List<BrowserRequestEvent>, List<ResourceTiming>>?>(null) }
     var detail by remember { mutableStateOf<List<InspectionProperty>?>(null) }
@@ -179,7 +183,12 @@ internal fun NetworkPanel(requests: List<BrowserRequestEvent>, timings: List<Res
     LaunchedEffect(mode, showFilters) { list.scrollToItem(0) }
     Column(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            NetworkView.entries.forEach { option -> FilterChip(mode == option, { mode = option }, { Text(option.label) }) }
+            NetworkView.entries.forEach { option ->
+                FilterChip(mode == option, {
+                    mode = option
+                    if (mode == NetworkView.Requests && filter.timingOnly) filter = NetworkFilter.All
+                }, { Text(option.label) })
+            }
             TextButton(onClick = { showFilters = !showFilters }, modifier = Modifier.testTag("network_filters")) {
                 Text(if (showFilters) "Done" else "Filters")
             }
@@ -188,7 +197,12 @@ internal fun NetworkPanel(requests: List<BrowserRequestEvent>, timings: List<Res
             if (showFilters) item {
                 InspectionSearch(query, { query = it }, "Filter by path, type, or status", "network_search")
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    NetworkFilter.entries.forEach { option -> FilterChip(filter == option, { filter = option }, { Text(option.label) }) }
+                    val filters = NetworkFilter.entries.filter { mode == NetworkView.Waterfall || !it.timingOnly }
+                    filters.forEach { option -> FilterChip(filter == option, { filter = option }, { Text(option.label) }) }
+                }
+                if (mode == NetworkView.Waterfall) Row(Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TimingOrder.entries.forEach { option -> FilterChip(order == option, { order = option }, { Text(option.label) }) }
                 }
                 Row(Modifier.horizontalScroll(rememberScrollState())) {
                     TextButton(onClick = { frozen = if (frozen == null) requests to timings else null }) { Text(if (frozen == null) "Freeze view" else "Resume view") }
@@ -201,6 +215,7 @@ internal fun NetworkPanel(requests: List<BrowserRequestEvent>, timings: List<Res
                         NetworkFilter.All -> true
                         NetworkFilter.Documents -> event.mainFrame
                         NetworkFilter.Errors -> event.kind == RequestEventKind.HttpError || event.kind == RequestEventKind.LoadError
+                        NetworkFilter.Fetch, NetworkFilter.Scripts -> false
                     }
                 }
                 item { InspectionMessage("Same-origin WebView events · ${filtered.size} shown${if (frozen != null) " · Frozen" else ""}") }
@@ -222,11 +237,18 @@ internal fun NetworkPanel(requests: List<BrowserRequestEvent>, timings: List<Res
                         NetworkFilter.All -> true
                         NetworkFilter.Documents -> resource.kind == "document"
                         NetworkFilter.Errors -> (resource.status ?: 0) >= 400
+                        NetworkFilter.Fetch -> resource.kind == "fetch" || resource.kind == "xmlhttprequest"
+                        NetworkFilter.Scripts -> resource.kind == "script"
                     }
+                }
+                val ordered = when (order) {
+                    TimingOrder.Start -> filtered.sortedBy { it.start ?: Double.POSITIVE_INFINITY }
+                    TimingOrder.Slowest -> filtered.sortedByDescending { it.duration ?: -1.0 }
+                    TimingOrder.Largest -> filtered.sortedByDescending { it.transfer ?: -1L }
                 }
                 item { InspectionMessage("Same-origin timing · ${filtered.size} shown · ${duration(end)} scale${if (frozen != null) " · Frozen" else ""}") }
                 if (filtered.isEmpty()) item { InspectionMessage("No matching resource timings") }
-                items(filtered) { resource ->
+                items(ordered) { resource ->
                     ListItem(headlineContent = { Text(resource.path, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         supportingContent = {
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

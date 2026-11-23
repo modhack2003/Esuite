@@ -6,7 +6,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import static org.junit.Assert.*;
 
-/** Seed the immutable v1.0.5 baseline, then verify the update without clearing app data. */
+/** Seed the immutable v1.0.6 baseline, then verify the update without clearing app data. */
 @RunWith(AndroidJUnit4.class)
 public class UpgradeUiTest extends NativeUiDriver {
     private static final String NOTE="Synthetic upgrade evidence retained";

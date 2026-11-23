@@ -69,11 +69,7 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel) {
         Column(Modifier.fillMaxWidth().weight(1f).testTag("tools_content").verticalScroll(contentScroll)
             .padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (group == ToolGroup.Checks) {
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ResponseCheck.entries.forEach { item ->
-                        FilterChip(template == item, { resetOutput(); template = item }, { Text(item.label) })
-                    }
-                }
+                ResponseCheckOptions(template) { resetOutput(); template = it }
                 Text(template.summary, style = MaterialTheme.typography.bodySmall, color = Muted)
             }
             OutlinedTextField(input, { model.drafts.set(inputKey, it); resetOutput() }, label = { Text(if (group == ToolGroup.Checks) "Response headers" else "Input") },
@@ -118,15 +114,7 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel) {
                             runTool({ ResponseChecks.run(chosen, latest.responseHeaders) }) { checkResults = it }
                         }) { Text("Check latest response") }
                     }
-                    checkResults.forEach { item ->
-                        ListItem(
-                            headlineContent = { Text(item.name) },
-                            supportingContent = { Text(item.detail, Modifier.testTag("response_check_detail")) },
-                            trailingContent = { Text(item.status.label, style = MaterialTheme.typography.labelMedium,
-                                color = if (item.status == CheckStatus.Review) Amber else Muted) },
-                        )
-                        HorizontalDivider()
-                    }
+                    ResponseCheckResults(checkResults)
                 }
             }
             if (working) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -136,6 +124,28 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel) {
             }
             DraftNotice()
         }
+    }
+}
+
+@Composable
+internal fun ResponseCheckOptions(selected: ResponseCheck, choose: (ResponseCheck) -> Unit) {
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        ResponseCheck.entries.forEach { check ->
+            FilterChip(selected == check, { choose(check) }, { Text(check.label) })
+        }
+    }
+}
+
+@Composable
+internal fun ResponseCheckResults(results: List<CheckItem>) {
+    results.forEach { item ->
+        ListItem(
+            headlineContent = { Text(item.name) },
+            supportingContent = { Text(item.detail, Modifier.testTag("response_check_detail")) },
+            trailingContent = { Text(item.status.label, style = MaterialTheme.typography.labelMedium,
+                color = if (item.status == CheckStatus.Review) Amber else Muted) },
+        )
+        HorizontalDivider()
     }
 }
 

@@ -139,7 +139,7 @@ public class ProductionUiTest extends NativeUiDriver {
         click("open_settings"); assertNotNull(find(By.res("settings_title")));
         click("appearance_tab_light");
         assertTrue(tag("appearance_tab_light").isSelected());
-        assertNotNull(find(By.textContains("Version 1.0.6")));
+        assertNotNull(find(By.textContains("Version 1.0.7")));
         assertNotNull(find(By.text("Credits")));
         device.pressBack();
         click("browser_tools");
@@ -219,6 +219,10 @@ public class ProductionUiTest extends NativeUiDriver {
         launch(); openSite("https://example.com");
         click("api_send"); top();
         assertTrue("HTTPS API request did not complete", waitText("workspace_status", "HTTP 200", 45000));
+        click("api_review_response");
+        assertTrue("The response review should open from API Lab", device.wait(Until.hasObject(By.text("Response checks")), 8000));
+        assertTrue("The captured response should produce a header review", device.wait(Until.hasObject(By.text("strict-transport-security")), 8000));
+        device.pressBack();
         click("api_tab_request"); click("api_compare"); top();
         assertTrue("A/B comparison did not finish", waitText("workspace_status", "Separate session jars used", 90000));
         click("api_tab_collection"); enter("api_saved_name", "Synthetic GET"); click("api_save_draft");

@@ -37,10 +37,10 @@ assert len(apks) == len(harnesses) == 1
 run('adb', 'install', '-r', '-t', str(harnesses[0]))
 base = Path('previous-production.apk')
 # Immutable published baseline; verify bytes before installing. Android enforces signer continuity on -r.
-url = 'https://github.com/modhack2003/Esuite/releases/download/v1.0.5/ESuite-1.0.5.apk'
+url = 'https://github.com/modhack2003/Esuite/releases/download/v1.0.6/ESuite-1.0.6.apk'
 with urllib.request.urlopen(url, timeout=60) as response:
     data = response.read(10 * 1024 * 1024)
-assert hashlib.sha256(data).hexdigest() == '092fb8a15b60fd34d9cc6762c0d070cf8f4313712de112ca5477ac61a9de05e4'
+assert hashlib.sha256(data).hexdigest() == 'bdbc125d391b07f226f49b55c1f17071b34c715a0fe3527c86d5b4c4b0c55f92'
 base.write_bytes(data)
 run('adb', 'uninstall', 'dev.esuite.app') if 'dev.esuite.app' in run('adb', 'shell', 'pm', 'list', 'packages', 'dev.esuite.app') else None
 run('adb', 'install', str(base))
@@ -49,4 +49,4 @@ instrument('dev.esuite.uitests.UpgradeUiTest#seedPreviousRelease', 1)
 run('adb', 'install', '-r', str(apks[0]))
 instrument('dev.esuite.uitests.UpgradeUiTest#verifyUpgradeRetainsEncryptedWorkspace', 1)
 instrument('dev.esuite.uitests.ProductionUiTest', 4)
-print('PASS: exact production-signed APK UI and v1.0.5 same-signer encrypted-data upgrade')
+print('PASS: exact production-signed APK UI and v1.0.6 same-signer encrypted-data upgrade')
