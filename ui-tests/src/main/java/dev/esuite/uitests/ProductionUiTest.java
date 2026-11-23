@@ -252,11 +252,11 @@ public class ProductionUiTest extends NativeUiDriver {
         assertNotNull(find(By.text(java.util.regex.Pattern.compile("(?s).*Error · .*"))));
         // The failed send must replace the old 200 result, with no request to outside.invalid.
         top(); assertTrue(waitText("workspace_status", "outside the selected site origin", 15000));
-        click("nav_traffic"); find(By.textContains("Identity comparison · identity B · 200")).click();
+        click("nav_traffic"); find(By.textContains("Identity comparison · Identity B · HTTP 200")).click();
         assertNotNull(device.wait(Until.findObject(By.text("Exchange detail")), 5000));
-        assertNotNull(device.wait(Until.findObject(By.textContains("identity B")), 5000));
+        assertNotNull(device.wait(Until.findObject(By.text("Identity B")), 5000));
         device.pressBack();
-        assertNotNull(find(By.textContains("Identity comparison · identity B · 200")));
+        assertNotNull(find(By.textContains("Identity comparison · Identity B · HTTP 200")));
     }
 
 }

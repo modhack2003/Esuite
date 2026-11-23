@@ -47,11 +47,13 @@ internal fun CommandPalette(close: () -> Unit, choose: (AssessmentCommand) -> Un
     var query by remember { mutableStateOf("") }
     WorkflowDialog("Commands", close, "activity_command_palette") {
         val matching = AssessmentCommand.entries.filter { "${it.shortcut} ${it.label}".contains(query.trim(), ignoreCase = true) }
-        OutlinedTextField(query, { query = it.take(80) }, label = { Text("Find a command") }, singleLine = true,
-            keyboardOptions = TechnicalKeyboard.copy(imeAction = ImeAction.Go),
-            keyboardActions = KeyboardActions(onGo = { matching.singleOrNull()?.let(choose) }),
-            modifier = Modifier.fillMaxWidth().testTag("command_search"))
-        LazyColumn(Modifier.weight(1f)) {
+        LazyColumn(Modifier.weight(1f).testTag("command_list")) {
+            item {
+                OutlinedTextField(query, { query = it.take(80) }, label = { Text("Find a command") }, singleLine = true,
+                    keyboardOptions = TechnicalKeyboard.copy(imeAction = ImeAction.Go),
+                    keyboardActions = KeyboardActions(onGo = { matching.singleOrNull()?.let(choose) }),
+                    modifier = Modifier.fillMaxWidth().testTag("command_search"))
+            }
             if (matching.isEmpty()) item { Text("No commands match.") }
             items(matching) { command ->
                 TextButton(onClick = { choose(command) }, modifier = Modifier.fillMaxWidth().testTag("command_${command.name.lowercase()}")) {

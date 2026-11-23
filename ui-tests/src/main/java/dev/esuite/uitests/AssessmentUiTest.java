@@ -55,7 +55,7 @@ public class AssessmentUiTest extends NativeUiDriver {
         click("finding_editor_toggle");
         assertTrue(device.wait(Until.hasObject(By.text("Evidence attached")), 10000));
         click("finding_item");
-        assertTrue(device.wait(Until.hasObject(By.res("finding_evidence_0")), 10000));
+        assertTrue(device.wait(Until.hasObject(By.textContains("Show retained evidence")), 10000));
     }
 
     private void verifyAdaptiveReview() throws Exception {
