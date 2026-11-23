@@ -40,7 +40,7 @@ public class AssessmentUiTest extends NativeUiDriver {
         activityControl(By.res("activity_select_review")).click();
         click("activity_review_selected");
         assertTrue(device.wait(Until.hasObject(By.res("review_summary")), 10000));
-        reviewAction().click();
+        reviewAction(false).click();
         assertTrue(device.wait(Until.hasObject(By.textContains("Rule headers.strict-transport-security")), 8000));
         click("review_finding_confirm");
         assertTrue(waitText("review_finding_state", "Saved on this device.", 18000));
@@ -72,13 +72,16 @@ public class AssessmentUiTest extends NativeUiDriver {
             click("command_review");
             click("pick_exchange");
             assertTrue(device.wait(Until.hasObject(By.res("review_summary")), 10000));
-            reviewAction().click();
+            reviewAction(true).click();
             UiObject2 confirm = device.wait(Until.findObject(By.res("review_finding_confirm")), 8000);
             assertNotNull("Finding action should remain visible at 150% text in landscape", confirm);
             assertTrue(confirm.getVisibleBounds().height() >= 24);
             checkpoint("assessment-landscape-large-text");
             device.pressBack();
             device.pressBack();
+        } catch (AssertionError failure) {
+            checkpoint("assessment-landscape-failure");
+            throw failure;
         } finally {
             device.setOrientationNatural();
             device.unfreezeRotation();
@@ -89,16 +92,21 @@ public class AssessmentUiTest extends NativeUiDriver {
         click("nav_traffic");
     }
 
-    private UiObject2 reviewAction() {
+    private UiObject2 reviewAction(boolean compact) {
         UiObject2 results = device.wait(Until.findObject(By.res("review_results")), 7000);
         assertNotNull("The review result list is missing", results);
-        for (int attempt = 0; attempt < 5; attempt++) {
-            UiObject2 action = device.wait(Until.findObject(By.res("review_save_finding")), 1000);
-            if (action != null && results.getVisibleBounds().contains(action.getVisibleBounds())
-                    && action.getVisibleBounds().height() >= 30) return action;
-            results.scroll(Direction.DOWN, 0.60f);
+        for (int attempt = 0; attempt < 14; attempt++) {
+            android.graphics.Rect viewport = results.getVisibleBounds();
+            for (UiObject2 action : device.findObjects(By.res("review_save_finding"))) {
+                android.graphics.Rect bounds = action.getVisibleBounds();
+                if (viewport.contains(bounds.centerX(), bounds.centerY()) && bounds.height() >= (compact ? 20 : 30)) {
+                    return action;
+                }
+            }
+            results.scroll(Direction.DOWN, 0.45f);
+            device.waitForIdle(500);
         }
-        throw new AssertionError("Save as finding action is missing");
+        throw new AssertionError("Save as finding action is missing from the review viewport " + results.getVisibleBounds());
     }
 
     private UiObject2 activityControl(BySelector selector) {

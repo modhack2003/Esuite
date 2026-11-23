@@ -156,12 +156,15 @@ internal fun ResponseReviewDialog(launch: ReviewLaunch, model: AppViewModel, clo
                     Text(exchangeLabel(result.exchange), style = MaterialTheme.typography.titleSmall)
                     Text("${observedAt(result.exchange.timestamp)} · ${result.exchange.source}", style = MaterialTheme.typography.bodySmall)
                 }
-                items(result.items.size, key = { index -> "${result.exchange.id}:$index" }) { index ->
-                    val check = result.items[index]
-                    ResponseCheckResults(listOf(check))
+                result.items.forEachIndexed { index, check ->
+                    item(key = "${result.exchange.id}:rule:$index") {
+                        ResponseCheckResults(listOf(check))
+                    }
                     if (check.status != CheckStatus.Unavailable && result.exchange.hasReviewableResponse()) {
-                        TextButton(onClick = { finding = FindingSeed(launch.site, launch.context, result.exchange, check) },
-                            modifier = Modifier.testTag("review_save_finding")) { Text("Save as finding") }
+                        item(key = "${result.exchange.id}:action:$index") {
+                            TextButton(onClick = { finding = FindingSeed(launch.site, launch.context, result.exchange, check) },
+                                modifier = Modifier.testTag("review_save_finding")) { Text("Save as finding") }
+                        }
                     }
                 }
             }
