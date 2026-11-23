@@ -18,6 +18,9 @@ import dev.esuite.app.storage.WorkspaceStore
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
@@ -36,6 +39,38 @@ import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(AndroidJUnit4::class)
 class DeviceBoundaryTest {
+    @Test fun staleReviewContextCannotAttachOrSaveAnotherIdentity() = runBlocking {
+        val site = Project(id = UUID.randomUUID().toString(), name = "Review fixture", origin = "https://example.test")
+        val exchange = Exchange(projectId = site.id, identity = "A", request = RequestDraft(url = site.origin + "/"),
+            status = 200, responseHeaders = listOf(Header("Strict-Transport-Security", "max-age=0")))
+        val store = object : WorkspaceStore {
+            override fun load() = Workspace(projects = listOf(site), exchanges = listOf(exchange))
+            override fun save(workspace: Workspace) = workspace
+            override fun erase() = Unit
+        }
+        val application = ApplicationProvider.getApplicationContext<android.app.Application>()
+        val model = withContext(Dispatchers.Main) { AppViewModel(application, store) }
+        try {
+            awaitState(model) { it.ready }
+            withContext(Dispatchers.Main) {
+                val original = model.currentContext()
+                model.identity("B")
+                assertFalse(model.addFinding("Stale review", "This must fail", exchange, original))
+                assertTrue(model.state.value.workspace.findings.isEmpty())
+                model.identity("A")
+                assertFalse(model.addFinding("Stale review", "Returning to A does not restore the old context", exchange, original))
+                val current = model.currentContext()
+                assertTrue(model.addFinding("Observed HSTS", "Captured evidence", exchange, current, "review-fixture"))
+                assertFalse(model.addFinding("Duplicate", "Same save identifier", exchange, current, "review-fixture"))
+                model.clearHistory()
+                assertTrue(model.state.value.workspace.exchanges.isEmpty())
+                assertEquals(exchange.id, model.state.value.workspace.findings.single().evidence.single().id)
+            }
+        } finally {
+            withContext(Dispatchers.Main) { model.viewModelScope.cancel(); model.engine.close() }
+        }
+    }
+
     @Test fun keyLossDuringAnOpenSessionCannotReplaceExistingVault() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val vault = WorkspaceVault(context)

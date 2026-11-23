@@ -1,6 +1,8 @@
 package dev.esuite.app.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -30,7 +32,7 @@ internal enum class AssessmentCommand(val shortcut: String, val label: String) {
 @Composable
 private fun WorkflowDialog(title: String, close: () -> Unit, tag: String, content: @Composable ColumnScope.() -> Unit) {
     Dialog(onDismissRequest = close, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxWidth(.96f).widthIn(max = 720.dp).fillMaxHeight(.92f)
+        Surface(Modifier.widthIn(max = 720.dp).fillMaxWidth(.96f).fillMaxHeight(.92f)
             .semantics { testTagsAsResourceId = true }.testTag(tag), shape = MaterialTheme.shapes.large) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(title, style = MaterialTheme.typography.titleLarge)
@@ -44,9 +46,11 @@ private fun WorkflowDialog(title: String, close: () -> Unit, tag: String, conten
 internal fun CommandPalette(close: () -> Unit, choose: (AssessmentCommand) -> Unit) {
     var query by remember { mutableStateOf("") }
     WorkflowDialog("Commands", close, "activity_command_palette") {
-        OutlinedTextField(query, { query = it.take(80) }, label = { Text("Find a command") }, singleLine = true,
-            keyboardOptions = TechnicalKeyboard, modifier = Modifier.fillMaxWidth().testTag("command_search"))
         val matching = AssessmentCommand.entries.filter { "${it.shortcut} ${it.label}".contains(query.trim(), ignoreCase = true) }
+        OutlinedTextField(query, { query = it.take(80) }, label = { Text("Find a command") }, singleLine = true,
+            keyboardOptions = TechnicalKeyboard.copy(imeAction = ImeAction.Go),
+            keyboardActions = KeyboardActions(onGo = { matching.singleOrNull()?.let(choose) }),
+            modifier = Modifier.fillMaxWidth().testTag("command_search"))
         LazyColumn(Modifier.weight(1f)) {
             if (matching.isEmpty()) item { Text("No commands match.") }
             items(matching) { command ->
