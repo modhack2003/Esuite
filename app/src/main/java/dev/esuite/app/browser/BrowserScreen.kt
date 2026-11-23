@@ -607,8 +607,7 @@ internal fun BrowserScreen(
             if (utilitiesVisible) Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLow)) {
                 DockHeader("Tools", "", closeUtilities)
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)) { utilities() }
+                utilities()
             } else BrowserInspector(panel, output, pageUrl?.takeIf { error == null }, { panel = it }, { readPanel(panel) },
                 ::toggleInspector, onOpenApi, ::openInSystemBrowser,
                 elements = { key(document) {

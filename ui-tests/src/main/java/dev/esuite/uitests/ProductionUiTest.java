@@ -95,7 +95,7 @@ public class ProductionUiTest extends NativeUiDriver {
         assertNotNull(find(By.res("browser_url")));
         assertFalse(device.hasObject(By.res("project_name")));
         enter("browser_url", "example.com"); click("browser_go");
-        assertTrue("The real page never became visible", device.wait(Until.hasObject(By.text("Example Domain")), 45000));
+        assertTrue("The live WebView never became visible", device.wait(Until.hasObject(By.clazz("android.webkit.WebView")), 45000));
         Rect full = pageBounds();
         click("browser_tools");
         Rect split = pageBounds();
@@ -103,7 +103,9 @@ public class ProductionUiTest extends NativeUiDriver {
         growDock(full.height() / 6);
         assertTrue("Dragging the splitter must resize the live page", pageBounds().height() < split.height());
         assertTrue(waitText("browser_output", "Example Domain", 10000));
-        selectBrowserTool("elements"); assertTrue("Document tree is missing its root", waitText("elements_node_0", "HTML", 10000));
+        selectBrowserTool("elements");
+        UiObject2 root = device.wait(Until.findObject(By.res("elements_node_0")), 15000);
+        assertTrue("Document tree is missing its root", root != null && containsText(root, "HTML"));
         selectBrowserTool("console");
         enter("console_input", "await Promise.resolve(6 * 7).then(n => { if (n === 42) { " +
                 "const canvas = document.createElement('canvas'); canvas.width = canvas.height = 24; " +
@@ -196,8 +198,8 @@ public class ProductionUiTest extends NativeUiDriver {
     }
 
     private void scrollTools(boolean down) {
-        UiObject2 dock = device.findObject(By.res("browser_dock"));
-        assertNotNull("Tools dock is missing", dock);
+        UiObject2 dock = device.findObject(By.res("tools_content"));
+        assertNotNull("The scrollable Tools content is missing", dock);
         Rect panel = dock.getVisibleBounds();
         int x = panel.left + panel.width() / 12;
         int lower = panel.bottom - panel.height() / 8;

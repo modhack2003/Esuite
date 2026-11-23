@@ -6,6 +6,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -51,11 +52,13 @@ internal fun ElementsPanel(tree: DomTree?, detail: DomDetails?, ready: Boolean, 
     onEdit: (html: Boolean, text: String) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
+    var finding by remember { mutableStateOf(false) }
     var collapsed by remember(tree) { mutableStateOf(emptySet<Int>()) }
     var browsing by remember { mutableStateOf(true) }
     var view by remember { mutableStateOf(ElementView.Markup) }
     var editing by remember { mutableStateOf<Boolean?>(null) }
     var editor by remember { mutableStateOf("") }
+    val list = rememberLazyListState()
     val visibleRows = remember(tree, collapsed, query) {
         val childrenHidden = HashSet<Int>()
         tree?.rows.orEmpty().filter { row ->
@@ -68,71 +71,75 @@ internal fun ElementsPanel(tree: DomTree?, detail: DomDetails?, ready: Boolean, 
         return
     }
     LaunchedEffect(detail) { if (detail != null) browsing = false }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
-        item {
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                if (!browsing) TextButton(onClick = { browsing = true }) { Text("Tree") }
-                TextButton(onClick = { onPick() }) { Text("Pick element") }
-                TextButton(onClick = { browsing = false; onRead() }) { Text("Read selection") }
-                if (!browsing && detail != null) TextButton(onClick = onReveal) { Text("Show on page") }
+    LaunchedEffect(browsing, view, query) { list.scrollToItem(0) }
+    Column(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            if (!browsing) TextButton(onClick = { browsing = true }) { Text("Tree") }
+            TextButton(onClick = { onPick() }) { Text("Pick element") }
+            TextButton(onClick = { browsing = false; onRead() }) { Text("Read selection") }
+            if (!browsing && detail != null) TextButton(onClick = onReveal) { Text("Show on page") }
+            if (browsing) TextButton(onClick = { finding = !finding; if (!finding) query = "" }) {
+                Text(if (finding) "Done" else "Find")
             }
         }
-        if (notice.isNotBlank()) item { InspectionMessage(notice) }
-        if (browsing) {
-            item { InspectionSearch(query, { query = it }, "Find tag, ID, or class", "elements_search") }
-            if (visibleRows.isEmpty()) item { InspectionMessage(if (tree == null) "Reading the document…" else "No matching elements") }
-            items(visibleRows, key = DomNode::id) { node ->
-                val expand = if (node.id in collapsed) "Expand" else "Collapse"
-                ListItem(
-                    headlineContent = { Text(node.description, style = technicalTextStyle(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    modifier = Modifier.padding(start = (node.depth.coerceIn(0, 9) * 9).dp).testTag("elements_node_${node.id}")
-                        .clickable(onClickLabel = "Inspect element") { onSelect(node.id); browsing = false },
-                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                    trailingContent = { if (node.children > 0 && query.isBlank()) {
-                        IconButton(onClick = { collapsed = if (node.id in collapsed) collapsed - node.id else collapsed + node.id }) {
-                            Icon(if (node.id in collapsed) Icons.AutoMirrored.Outlined.KeyboardArrowRight else Icons.Outlined.KeyboardArrowDown,
-                                contentDescription = "$expand ${node.tag}")
+        if (notice.isNotBlank()) InspectionMessage(notice)
+        if (browsing && finding) InspectionSearch(query, { query = it }, "Find tag, ID, or class", "elements_search")
+        LazyColumn(Modifier.fillMaxWidth().weight(1f), state = list, contentPadding = PaddingValues(vertical = 4.dp)) {
+            if (browsing) {
+                if (visibleRows.isEmpty()) item { InspectionMessage(if (tree == null) "Reading the document…" else "No matching elements") }
+                items(visibleRows, key = DomNode::id) { node ->
+                    val expand = if (node.id in collapsed) "Expand" else "Collapse"
+                    ListItem(
+                        headlineContent = { Text(node.description, style = technicalTextStyle(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        modifier = Modifier.padding(start = (node.depth.coerceIn(0, 9) * 9).dp).testTag("elements_node_${node.id}")
+                            .clickable(onClickLabel = "Inspect element") { onSelect(node.id); browsing = false },
+                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                        trailingContent = { if (node.children > 0 && query.isBlank()) {
+                            IconButton(onClick = { collapsed = if (node.id in collapsed) collapsed - node.id else collapsed + node.id }) {
+                                Icon(if (node.id in collapsed) Icons.AutoMirrored.Outlined.KeyboardArrowRight else Icons.Outlined.KeyboardArrowDown,
+                                    contentDescription = "$expand ${node.tag}")
+                            }
+                        } },
+                    )
+                    HorizontalDivider()
+                }
+                if (tree?.limited == true) item { InspectionMessage("Showing the first 160 elements in document order.") }
+            } else if (detail != null) {
+                item {
+                    Text(detail.tag, Modifier.padding(8.dp), style = MaterialTheme.typography.titleSmall)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        ElementView.entries.forEach { option -> FilterChip(view == option, { view = option }, { Text(option.label) }) }
+                    }
+                }
+                when (view) {
+                    ElementView.Markup -> {
+                        item {
+                            TextButton(onClick = { editor = ""; editing = true }) { Text("Replace HTML") }
+                            if (detail.htmlTruncated) InspectionMessage("Showing ${detail.htmlLimit} of ${detail.htmlCharacters} characters.")
+                            SelectionContainer { Text(detail.html, Modifier.padding(8.dp), style = technicalTextStyle()) }
                         }
-                    } },
-                )
-                HorizontalDivider()
-            }
-            if (tree?.limited == true) item { InspectionMessage("Showing the first 160 elements in document order.") }
-        } else if (detail != null) {
-            item {
-                Text(detail.tag, Modifier.padding(8.dp), style = MaterialTheme.typography.titleSmall)
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ElementView.entries.forEach { option -> FilterChip(view == option, { view = option }, { Text(option.label) }) }
-                }
-            }
-            when (view) {
-                ElementView.Markup -> {
-                    item {
-                        TextButton(onClick = { editor = ""; editing = true }) { Text("Replace HTML") }
-                        if (detail.htmlTruncated) InspectionMessage("Showing ${detail.htmlLimit} of ${detail.htmlCharacters} characters.")
-                        SelectionContainer { Text(detail.html, Modifier.padding(8.dp), style = technicalTextStyle()) }
+                        item { InspectionMessage("Attributes") }
+                        items(detail.attributes) { InspectionValue(it.name, it.value) }
                     }
-                    item { InspectionMessage("Attributes") }
-                    items(detail.attributes) { InspectionValue(it.name, it.value) }
-                }
-                ElementView.Styles -> {
-                    item { TextButton(onClick = { editor = detail.css; editing = false }) { Text("Edit inline CSS") } }
-                    item { InspectionMessage("Computed properties") }
-                    items(detail.computed) { InspectionValue(it.name, it.value) }
-                    if (detail.rules.isNotEmpty()) item { InspectionMessage("Matched rules from readable stylesheets") }
-                    items(detail.rules) { InspectionValue(it.name, it.value) }
-                }
-                ElementView.Layout -> {
-                    item {
-                        InspectionValue("Viewport position (x, y)", detail.bounds.take(2).joinToString(", ") + " CSS px")
-                        InspectionValue("Box size", detail.bounds.drop(2).joinToString(" × ") + " CSS px")
-                        InspectionValue("Scrollable size", detail.scroll.take(2).joinToString(" × ") + " CSS px")
-                        InspectionValue("Client size", detail.scroll.drop(2).joinToString(" × ") + " CSS px")
+                    ElementView.Styles -> {
+                        item { TextButton(onClick = { editor = detail.css; editing = false }) { Text("Edit inline CSS") } }
+                        item { InspectionMessage("Computed properties") }
+                        items(detail.computed) { InspectionValue(it.name, it.value) }
+                        if (detail.rules.isNotEmpty()) item { InspectionMessage("Matched rules from readable stylesheets") }
+                        items(detail.rules) { InspectionValue(it.name, it.value) }
                     }
-                    items(detail.layout) { InspectionValue(it.name, it.value) }
+                    ElementView.Layout -> {
+                        item {
+                            InspectionValue("Viewport position (x, y)", detail.bounds.take(2).joinToString(", ") + " CSS px")
+                            InspectionValue("Box size", detail.bounds.drop(2).joinToString(" × ") + " CSS px")
+                            InspectionValue("Scrollable size", detail.scroll.take(2).joinToString(" × ") + " CSS px")
+                            InspectionValue("Client size", detail.scroll.drop(2).joinToString(" × ") + " CSS px")
+                        }
+                        items(detail.layout) { InspectionValue(it.name, it.value) }
+                    }
                 }
-            }
-        } else item { InspectionMessage("Select an element in the tree or pick one on the page.") }
+            } else item { InspectionMessage("Select an element in the tree or pick one on the page.") }
+        }
     }
     editing?.let { html ->
         val excess = editor.length > 8_192
@@ -162,21 +169,23 @@ internal fun NetworkPanel(requests: List<BrowserRequestEvent>, timings: List<Res
     var showFilters by remember { mutableStateOf(false) }
     var frozen by remember { mutableStateOf<Pair<List<BrowserRequestEvent>, List<ResourceTiming>>?>(null) }
     var detail by remember { mutableStateOf<List<InspectionProperty>?>(null) }
+    val list = rememberLazyListState()
     val (events, resources) = frozen ?: (requests to timings)
     val end = remember(resources) { resources.maxOfOrNull { (it.start ?: 0.0) + (it.duration ?: 0.0) }?.coerceAtLeast(1.0) ?: 1.0 }
     if (!ready) {
         InspectionMessage("Load an HTTPS page to see its network activity.")
         return
     }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
-        item {
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                NetworkView.entries.forEach { option -> FilterChip(mode == option, { mode = option }, { Text(option.label) }) }
-                TextButton(onClick = { showFilters = !showFilters }, modifier = Modifier.testTag("network_filters")) {
-                    Text(if (showFilters) "Done" else "Filters")
-                }
+    LaunchedEffect(mode, showFilters) { list.scrollToItem(0) }
+    Column(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            NetworkView.entries.forEach { option -> FilterChip(mode == option, { mode = option }, { Text(option.label) }) }
+            TextButton(onClick = { showFilters = !showFilters }, modifier = Modifier.testTag("network_filters")) {
+                Text(if (showFilters) "Done" else "Filters")
             }
-            if (showFilters) {
+        }
+        LazyColumn(Modifier.fillMaxWidth().weight(1f), state = list, contentPadding = PaddingValues(vertical = 4.dp)) {
+            if (showFilters) item {
                 InspectionSearch(query, { query = it }, "Filter by path, type, or status", "network_search")
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     NetworkFilter.entries.forEach { option -> FilterChip(filter == option, { filter = option }, { Text(option.label) }) }
@@ -186,55 +195,55 @@ internal fun NetworkPanel(requests: List<BrowserRequestEvent>, timings: List<Res
                     if (mode == NetworkView.Requests) TextButton(onClick = { frozen = null; clearRequests() }) { Text("Clear requests") }
                 }
             }
-        }
-        if (mode == NetworkView.Requests) {
-            val filtered = events.filter { event ->
-                "${event.kind.label} ${event.method} ${event.path} ${event.code.orEmptyLabel()}".contains(query.trim(), true) && when (filter) {
-                    NetworkFilter.All -> true
-                    NetworkFilter.Documents -> event.mainFrame
-                    NetworkFilter.Errors -> event.kind == RequestEventKind.HttpError || event.kind == RequestEventKind.LoadError
+            if (mode == NetworkView.Requests) {
+                val filtered = events.filter { event ->
+                    "${event.kind.label} ${event.method} ${event.path} ${event.code.orEmptyLabel()}".contains(query.trim(), true) && when (filter) {
+                        NetworkFilter.All -> true
+                        NetworkFilter.Documents -> event.mainFrame
+                        NetworkFilter.Errors -> event.kind == RequestEventKind.HttpError || event.kind == RequestEventKind.LoadError
+                    }
                 }
-            }
-            item { InspectionMessage("Same-origin WebView events · ${filtered.size} shown${if (frozen != null) " · Frozen" else ""}") }
-            if (filtered.isEmpty()) item { InspectionMessage("No matching events") }
-            items(filtered, key = BrowserRequestEvent::id) { event ->
-                val label = if (event.kind == RequestEventKind.Navigation) "Navigation ${event.path}" else "${event.method} ${event.path}"
-                ListItem(headlineContent = { Text(label, Modifier.testTag("network_event"), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    supportingContent = { Text(listOfNotNull(event.kind.label, event.code?.toString()).joinToString(" · ")) },
-                    trailingContent = { TextButton(onClick = { detail = listOf(
-                        InspectionProperty("Path", event.path), InspectionProperty("Method", event.method.ifBlank { "Unavailable" }),
-                        InspectionProperty("Callback", event.kind.label), InspectionProperty("Frame", if (event.mainFrame) "Main" else "Subresource"),
-                        InspectionProperty("Observed status or error code", event.code?.toString() ?: "Unavailable"),
-                    ) }) { Text("Details") } })
-                HorizontalDivider()
-            }
-        } else {
-            val filtered = resources.filter { resource ->
-                "${resource.path} ${resource.kind} ${resource.status.orEmptyLabel()}".contains(query.trim(), true) && when (filter) {
-                    NetworkFilter.All -> true
-                    NetworkFilter.Documents -> resource.kind == "document"
-                    NetworkFilter.Errors -> (resource.status ?: 0) >= 400
+                item { InspectionMessage("Same-origin WebView events · ${filtered.size} shown${if (frozen != null) " · Frozen" else ""}") }
+                if (filtered.isEmpty()) item { InspectionMessage("No matching events") }
+                items(filtered, key = BrowserRequestEvent::id) { event ->
+                    val label = if (event.kind == RequestEventKind.Navigation) "Navigation ${event.path}" else "${event.method} ${event.path}"
+                    ListItem(headlineContent = { Text(label, Modifier.testTag("network_event"), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        supportingContent = { Text(listOfNotNull(event.kind.label, event.code?.toString()).joinToString(" · ")) },
+                        trailingContent = { TextButton(onClick = { detail = listOf(
+                            InspectionProperty("Path", event.path), InspectionProperty("Method", event.method.ifBlank { "Unavailable" }),
+                            InspectionProperty("Callback", event.kind.label), InspectionProperty("Frame", if (event.mainFrame) "Main" else "Subresource"),
+                            InspectionProperty("Observed status or error code", event.code?.toString() ?: "Unavailable"),
+                        ) }) { Text("Details") } })
+                    HorizontalDivider()
                 }
-            }
-            item { InspectionMessage("Same-origin timing · ${filtered.size} shown · ${duration(end)} scale${if (frozen != null) " · Frozen" else ""}") }
-            if (filtered.isEmpty()) item { InspectionMessage("No matching resource timings") }
-            items(filtered) { resource ->
-                ListItem(headlineContent = { Text(resource.path, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    supportingContent = {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(listOfNotNull(resource.kind, resource.status?.let { "HTTP $it" }, duration(resource.duration)).joinToString(" · "))
-                            WaterfallBar(resource, end)
-                        }
-                    }, trailingContent = { TextButton(onClick = { detail = listOf(
-                        InspectionProperty("Path", resource.path), InspectionProperty("Type", resource.kind),
-                        InspectionProperty("Status", resource.status?.toString() ?: "Unavailable"),
-                        InspectionProperty("Protocol", resource.protocol.ifBlank { "Unavailable" }),
-                        InspectionProperty("Transfer size", resource.transfer?.let { "$it B" } ?: "Unavailable"),
-                        InspectionProperty("Start", duration(resource.start)), InspectionProperty("Duration", duration(resource.duration)),
-                        InspectionProperty("DNS", duration(resource.dns)), InspectionProperty("Connect", duration(resource.connect)),
-                        InspectionProperty("Waiting for response", duration(resource.wait)), InspectionProperty("Download", duration(resource.download)),
-                    ) }) { Text("Details") } })
-                HorizontalDivider()
+            } else {
+                val filtered = resources.filter { resource ->
+                    "${resource.path} ${resource.kind} ${resource.status.orEmptyLabel()}".contains(query.trim(), true) && when (filter) {
+                        NetworkFilter.All -> true
+                        NetworkFilter.Documents -> resource.kind == "document"
+                        NetworkFilter.Errors -> (resource.status ?: 0) >= 400
+                    }
+                }
+                item { InspectionMessage("Same-origin timing · ${filtered.size} shown · ${duration(end)} scale${if (frozen != null) " · Frozen" else ""}") }
+                if (filtered.isEmpty()) item { InspectionMessage("No matching resource timings") }
+                items(filtered) { resource ->
+                    ListItem(headlineContent = { Text(resource.path, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        supportingContent = {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(listOfNotNull(resource.kind, resource.status?.let { "HTTP $it" }, duration(resource.duration)).joinToString(" · "))
+                                WaterfallBar(resource, end)
+                            }
+                        }, trailingContent = { TextButton(onClick = { detail = listOf(
+                            InspectionProperty("Path", resource.path), InspectionProperty("Type", resource.kind),
+                            InspectionProperty("Status", resource.status?.toString() ?: "Unavailable"),
+                            InspectionProperty("Protocol", resource.protocol.ifBlank { "Unavailable" }),
+                            InspectionProperty("Transfer size", resource.transfer?.let { "$it B" } ?: "Unavailable"),
+                            InspectionProperty("Start", duration(resource.start)), InspectionProperty("Duration", duration(resource.duration)),
+                            InspectionProperty("DNS", duration(resource.dns)), InspectionProperty("Connect", duration(resource.connect)),
+                            InspectionProperty("Waiting for response", duration(resource.wait)), InspectionProperty("Download", duration(resource.download)),
+                        ) }) { Text("Details") } })
+                    HorizontalDivider()
+                }
             }
         }
     }
