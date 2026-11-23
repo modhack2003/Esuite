@@ -35,10 +35,10 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -92,6 +92,7 @@ internal fun BrowserScreen(
     onReady: () -> Unit,
     onShortcut: ((() -> Unit)?) -> Unit,
     onSettings: () -> Unit,
+    onCommands: () -> Unit,
     onDataCleared: (Boolean) -> Unit,
     onOpenApi: (String) -> Unit,
     onOpenActivity: (BrowserLogSnapshot) -> Unit,
@@ -115,7 +116,7 @@ internal fun BrowserScreen(
         }.getOrNull()
     }
     val destroyed = remember(browser) { AtomicBoolean(false) }
-    var address by rememberSaveable { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
     var addressEdited by remember { mutableStateOf(false) }
     var pageUrl by remember { mutableStateOf<String?>(null) }
     var pageTitle by remember { mutableStateOf("") }
@@ -484,7 +485,7 @@ internal fun BrowserScreen(
                         browser.reload()
                     }
                 },
-                tools = ::toggleInspector, settings = onSettings,
+                tools = ::toggleInspector, commands = onCommands, settings = onSettings,
             )
             if (loading) LinearProgressIndicator(progress = { progress.coerceIn(0, 100) / 100f }, modifier = Modifier.fillMaxWidth())
             linkNotice?.let {
@@ -719,18 +720,20 @@ internal fun BrowserScreen(
                         onRecord = { recordingNetwork = it; requestLog.setRecording(it) }, onPreserve = requestLog::setPreserve,
                         onOpenActivity = { requestLog.snapshot()?.let(onOpenActivity) })
                 }) {
-                ConsolePanel(console, consoleDraft, { consoleDraft = it }, scriptMode, { scriptMode = it },
-                    activeView() != null, running != null, run = {
-                        val origin = pageUrl?.let(BrowserAddress::https)?.let(BrowserAddress::origin)
-                        if (activeView() != null && origin != null && running == null &&
-                            consoleDraft.isNotBlank() && consoleDraft.length <= ConsoleJavaScript.INPUT_LIMIT) {
-                            keyboard?.hide()
-                            focus.clearFocus()
-                            addConsole(ConsoleLevel.Command, consoleDraft)
-                            running = ConsoleRun(document, origin, "__esuite_" + UUID.randomUUID(), consoleDraft, scriptMode)
-                            consoleDraft = ""
-                        }
-                    }, clear = { console = emptyList() })
+                key(document) {
+                    ConsolePanel(console, consoleDraft, { consoleDraft = it }, scriptMode, { scriptMode = it },
+                        activeView() != null, running != null, run = {
+                            val origin = pageUrl?.let(BrowserAddress::https)?.let(BrowserAddress::origin)
+                            if (activeView() != null && origin != null && running == null &&
+                                consoleDraft.isNotBlank() && consoleDraft.length <= ConsoleJavaScript.INPUT_LIMIT) {
+                                keyboard?.hide()
+                                focus.clearFocus()
+                                addConsole(ConsoleLevel.Command, consoleDraft)
+                                running = ConsoleRun(document, origin, "__esuite_" + UUID.randomUUID(), consoleDraft, scriptMode)
+                                consoleDraft = ""
+                            }
+                        }, clear = { console = emptyList() })
+                }
             }
         })
     }
@@ -766,7 +769,8 @@ private fun BrowserToolbar(
     address: String, edit: (String) -> Unit, go: () -> Unit, submitEnabled: Boolean,
     canGoBack: Boolean, canGoForward: Boolean, loading: Boolean, loaded: Boolean,
     inspecting: Boolean, toolsEnabled: Boolean,
-    back: () -> Unit, forward: () -> Unit, reload: () -> Unit, tools: () -> Unit, settings: () -> Unit,
+    back: () -> Unit, forward: () -> Unit, reload: () -> Unit, tools: () -> Unit,
+    commands: () -> Unit, settings: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
     val addressField: @Composable (Modifier) -> Unit = { modifier ->
@@ -810,13 +814,16 @@ private fun BrowserToolbar(
                 Icon(painterResource(R.drawable.ic_terminal), null)
             }
         }
+        IconButton(onClick = commands, modifier = Modifier.testTag("open_app_commands")) {
+            Icon(Icons.Outlined.Search, contentDescription = "App commands")
+        }
         IconButton(onClick = settings, modifier = Modifier.testTag("open_settings")) {
             Icon(Icons.Outlined.Settings, contentDescription = "Settings")
         }
     }
     BoxWithConstraints(Modifier.fillMaxWidth().background(colors.surface)) {
         val wide = maxWidth >= 560.dp
-        val toolsLabel = maxWidth >= 315.dp && LocalDensity.current.fontScale <= 1.2f
+        val toolsLabel = maxWidth >= 420.dp && LocalDensity.current.fontScale <= 1.2f
         Column {
             if (wide) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {

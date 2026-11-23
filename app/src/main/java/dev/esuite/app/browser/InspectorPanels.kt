@@ -53,7 +53,7 @@ private enum class DetailsTab(val label: String) { General("General"), Timing("T
 internal fun NetworkPanel(state: BrowserNetworkState, ready: Boolean, clearRequests: () -> Unit,
     onRecord: (Boolean) -> Unit, onPreserve: (Boolean) -> Unit, onOpenActivity: () -> Unit,
 ) {
-    var query by rememberSaveable { mutableStateOf("") }
+    var query by remember { mutableStateOf("") }
     var resourceType by rememberSaveable { mutableStateOf(ResourceType.All) }
     var status by rememberSaveable { mutableStateOf(StatusFilter.All) }
     var order by rememberSaveable { mutableStateOf(NetworkOrder.Start) }

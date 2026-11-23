@@ -3,6 +3,16 @@ package dev.esuite.app.core
 import kotlinx.serialization.json.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
+internal enum class ImportFormat(val label: String) {
+    Curl("cURL"), OpenApi("OpenAPI"), Har("HAR");
+
+    fun drafts(input: String, project: Project): List<SavedRequest> = when (this) {
+        Curl -> listOf(SavedRequest(projectId = project.id, name = "cURL draft", draft = ApiImports.curl(input, project.origin)))
+        OpenApi -> ApiImports.openApi(input, project)
+        Har -> ApiImports.har(input, project)
+    }
+}
+
 object ApiImports {
     const val COLLECTION_BYTES = 2 * 1024 * 1024
 

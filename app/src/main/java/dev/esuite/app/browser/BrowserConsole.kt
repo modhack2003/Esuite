@@ -7,6 +7,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,6 +22,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.esuite.app.ui.TechnicalKeyboard
+import dev.esuite.app.ui.observedAt
 import dev.esuite.app.ui.technicalTextStyle
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -37,7 +40,28 @@ internal enum class ConsoleLevel(val label: String) {
     }
 }
 
-internal data class ConsoleEntry(val id: Long, val level: ConsoleLevel, val text: String, val source: String = "")
+internal data class ConsoleEntry(
+    val id: Long,
+    val level: ConsoleLevel,
+    val text: String,
+    val source: String = "",
+    val time: Long = System.currentTimeMillis(),
+)
+
+internal data class ConsoleGroup(val entries: List<ConsoleEntry>) {
+    val entry: ConsoleEntry get() = entries.first()
+    val newestId: Long get() = entries.last().id
+}
+
+internal fun groupConsoleEntries(entries: List<ConsoleEntry>): List<ConsoleGroup> = buildList {
+    for (entry in entries) {
+        val previous = lastOrNull()
+        if (previous != null && previous.entry.level == entry.level && previous.entry.text == entry.text && previous.entry.source == entry.source &&
+            entry.level != ConsoleLevel.Command && entry.level != ConsoleLevel.Result) {
+            this[lastIndex] = ConsoleGroup(previous.entries + entry)
+        } else add(ConsoleGroup(listOf(entry)))
+    }
+}
 
 /** Runs an explicit command in the active document. Results are transient and never bridged to native APIs. */
 internal object ConsoleJavaScript {
@@ -57,13 +81,17 @@ internal object ConsoleJavaScript {
                 let text;
                 try {
                   if (typeof value === 'string') text = value;
-                  else if (value instanceof Error) text = String(value);
+                  else if (value instanceof Error) text = value.stack || String(value);
                   else if (typeof value === 'object' && value !== null) {
                     text = JSON.stringify(value, null, 2);
                     if (text === undefined) text = String(value);
                   } else text = String(value);
                 } catch (_) { text = Object.prototype.toString.call(value); }
-                box.value = kind + (text.length > $OUTPUT_LIMIT ? text.slice(0, $OUTPUT_LIMIT) + '…' : text);
+                if (text.length > $OUTPUT_LIMIT) {
+                  const end = text.charCodeAt($OUTPUT_LIMIT - 1);
+                  text = text.slice(0, end >= 0xd800 && end <= 0xdbff ? $OUTPUT_LIMIT - 1 : $OUTPUT_LIMIT) + '…';
+                }
+                box.value = kind + text;
               };
               try {
                 const value = (async function() {
@@ -103,13 +131,28 @@ internal fun ConsolePanel(
 ) {
     val colors = MaterialTheme.colorScheme
     var issuesOnly by remember { mutableStateOf(false) }
-    val rows = if (issuesOnly) entries.filter { it.level == ConsoleLevel.Warning || it.level == ConsoleLevel.Error } else entries
+    var menu by remember { mutableStateOf(false) }
+    var showSearch by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    var paused by remember { mutableStateOf<List<ConsoleEntry>?>(null) }
+    var groupRepeats by remember { mutableStateOf(true) }
+    var timestamps by remember { mutableStateOf(false) }
+    var inputOverflow by remember { mutableStateOf(false) }
+    val visibleEntries = paused ?: entries
+    val rows = remember(visibleEntries, issuesOnly, query, groupRepeats) {
+        val search = query.trim()
+        val filtered = visibleEntries.filter {
+            (!issuesOnly || it.level == ConsoleLevel.Warning || it.level == ConsoleLevel.Error) &&
+                (it.text.contains(search, ignoreCase = true) || it.source.contains(search, ignoreCase = true))
+        }
+        if (groupRepeats) groupConsoleEntries(filtered) else filtered.map { ConsoleGroup(listOf(it)) }
+    }
     val list = rememberLazyListState()
-    var lastSeen by remember { mutableLongStateOf(-1L) }
-    LaunchedEffect(rows.lastOrNull()?.id, issuesOnly) {
+    var previousCount by remember { mutableIntStateOf(0) }
+    LaunchedEffect(rows.lastOrNull()?.newestId, issuesOnly, query, groupRepeats) {
         val lastVisible = list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-        if (rows.isNotEmpty() && (lastSeen == -1L || lastVisible >= rows.lastIndex - 2)) list.scrollToItem(rows.lastIndex)
-        lastSeen = rows.lastOrNull()?.id ?: -1L
+        if (rows.isNotEmpty() && (previousCount == 0 || lastVisible >= previousCount - 2)) list.scrollToItem(rows.lastIndex)
+        previousCount = rows.size
     }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -119,21 +162,61 @@ internal fun ConsolePanel(
             TextButton(onClick = { issuesOnly = !issuesOnly }, modifier = Modifier.weight(1f).testTag("console_levels")) {
                 Text(if (issuesOnly) "Issues only" else "All levels", maxLines = 1)
             }
-            TextButton(onClick = clear, enabled = entries.isNotEmpty(), modifier = Modifier.testTag("console_clear")) { Text("Clear") }
+            Box {
+                IconButton(onClick = { menu = true }, modifier = Modifier.testTag("console_options")) {
+                    Icon(Icons.Outlined.MoreVert, contentDescription = "Console options")
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text(if (showSearch) "Hide search" else "Find messages") }, onClick = {
+                        showSearch = !showSearch
+                        if (!showSearch) query = ""
+                        menu = false
+                    })
+                    DropdownMenuItem(text = { Text(if (paused == null) "Pause display" else "Resume display") }, onClick = {
+                        paused = if (paused == null) entries else null
+                        menu = false
+                    })
+                    DropdownMenuItem(text = { Text(if (groupRepeats) "Ungroup repeated messages" else "Group repeated messages") }, onClick = {
+                        groupRepeats = !groupRepeats
+                        menu = false
+                    })
+                    DropdownMenuItem(text = { Text(if (timestamps) "Hide timestamps" else "Show timestamps") }, onClick = {
+                        timestamps = !timestamps
+                        menu = false
+                    })
+                    DropdownMenuItem(text = { Text("Clear messages") }, enabled = entries.isNotEmpty() || visibleEntries.isNotEmpty(),
+                        modifier = Modifier.testTag("console_clear"), onClick = {
+                            paused = paused?.let { emptyList() }
+                            menu = false
+                            clear()
+                        })
+                }
+            }
+        }
+        if (showSearch) InspectionSearch(query, { query = it }, "Find console messages", "console_search")
+        if (paused != null) {
+            Text("Display paused", Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+                style = MaterialTheme.typography.labelSmall, color = colors.tertiary)
         }
         HorizontalDivider(color = colors.outlineVariant)
         SelectionContainer(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(state = list, modifier = Modifier.fillMaxSize().testTag("console_messages").semantics {
-                val latest = rows.lastOrNull { it.level == ConsoleLevel.Result || it.level == ConsoleLevel.Error } ?: rows.lastOrNull()
+                val latest = (rows.lastOrNull { it.entry.level == ConsoleLevel.Result || it.entry.level == ConsoleLevel.Error }
+                    ?: rows.lastOrNull())?.entry
                 if (latest != null) contentDescription = "Console messages. Latest ${latest.level.label.lowercase()}: ${latest.text.take(200)}"
                 if (latest?.level == ConsoleLevel.Result || latest?.level == ConsoleLevel.Error) liveRegion = LiveRegionMode.Polite
             }) {
                 if (rows.isEmpty()) item {
-                    Text(if (issuesOnly) "No warnings or errors." else if (ready) "No console messages yet." else "Load an HTTPS page to use the console.",
+                    Text(when {
+                        query.isNotBlank() -> "No messages match."
+                        issuesOnly -> "No warnings or errors."
+                        ready -> "No console messages yet."
+                        else -> "Load an HTTPS page to use the console."
+                    },
                         Modifier.padding(horizontal = 12.dp, vertical = 8.dp), color = colors.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall)
                 }
-                items(rows, key = ConsoleEntry::id) { entry -> ConsoleLine(entry) }
+                items(rows, key = { it.entry.id }) { group -> ConsoleLine(group, timestamps) }
             }
         }
         HorizontalDivider(color = colors.outlineVariant)
@@ -142,14 +225,16 @@ internal fun ConsolePanel(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            val tooLong = draft.length > ConsoleJavaScript.INPUT_LIMIT
-            val canRun = ready && !running && !tooLong && draft.isNotBlank()
+            val canRun = ready && !running && !inputOverflow && draft.isNotBlank()
             OutlinedTextField(
                 value = draft,
-                onValueChange = { onDraft(it.take(ConsoleJavaScript.INPUT_LIMIT + 1)) },
+                onValueChange = {
+                    inputOverflow = it.length > ConsoleJavaScript.INPUT_LIMIT
+                    if (!inputOverflow) onDraft(it)
+                },
                 enabled = ready && !running,
-                isError = tooLong,
-                supportingText = if (tooLong) ({ Text("Limit: ${ConsoleJavaScript.INPUT_LIMIT} characters") }) else null,
+                isError = inputOverflow,
+                supportingText = if (inputOverflow) ({ Text("Limit: ${ConsoleJavaScript.INPUT_LIMIT} characters") }) else null,
                 placeholder = { Text(if (script) "JavaScript statements" else "JavaScript expression", maxLines = 1) },
                 keyboardOptions = TechnicalKeyboard,
                 textStyle = technicalTextStyle(),
@@ -171,7 +256,9 @@ internal fun ConsolePanel(
 }
 
 @Composable
-private fun ConsoleLine(entry: ConsoleEntry) {
+private fun ConsoleLine(group: ConsoleGroup, timestamps: Boolean) {
+    val entry = group.entry
+    var expanded by remember(entry.id) { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
     val accent = when (entry.level) {
         ConsoleLevel.Error -> colors.error
@@ -185,10 +272,21 @@ private fun ConsoleLine(entry: ConsoleEntry) {
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Text(listOf(entry.level.label, entry.source).filter(String::isNotEmpty).joinToString(" · "),
+        val timestamp = if (timestamps) observedAt(entry.time) else ""
+        Text(listOf(entry.level.label, entry.source, timestamp).filter(String::isNotEmpty).joinToString(" · "),
             color = accent, style = MaterialTheme.typography.labelSmall)
         Text(entry.text, color = if (highlighted) accent else colors.onSurface, style = technicalTextStyle(),
             modifier = Modifier.testTag("console_${entry.level.name.lowercase()}"))
+        if (group.entries.size > 1) {
+            TextButton(onClick = { expanded = !expanded }) {
+                Text(if (expanded) "Hide occurrences" else "${group.entries.size} occurrences")
+            }
+            if (expanded) {
+                group.entries.forEach { occurrence ->
+                    Text(observedAt(occurrence.time), style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
     }
     HorizontalDivider(color = colors.outlineVariant)
 }

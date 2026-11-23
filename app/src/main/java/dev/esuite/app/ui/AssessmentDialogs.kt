@@ -30,7 +30,7 @@ internal enum class AssessmentCommand(val shortcut: String, val label: String) {
 
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
-private fun WorkflowDialog(title: String, close: () -> Unit, tag: String, content: @Composable ColumnScope.() -> Unit) {
+internal fun WorkflowDialog(title: String, close: () -> Unit, tag: String, content: @Composable ColumnScope.() -> Unit) {
     Dialog(onDismissRequest = close, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.widthIn(max = 720.dp).fillMaxWidth(.96f).fillMaxHeight(.92f)
             .semantics { testTagsAsResourceId = true }.testTag(tag), shape = MaterialTheme.shapes.large) {
@@ -44,9 +44,31 @@ private fun WorkflowDialog(title: String, close: () -> Unit, tag: String, conten
 
 @Composable
 internal fun CommandPalette(close: () -> Unit, choose: (AssessmentCommand) -> Unit) {
+    SearchCommands(
+        items = AssessmentCommand.entries,
+        id = { it.name.lowercase() },
+        label = { "${it.shortcut}  ·  ${it.label}" },
+        search = { "${it.shortcut} ${it.label}" },
+        dialogTag = "activity_command_palette",
+        close = close,
+        choose = choose,
+    )
+}
+
+@Composable
+internal fun <T> SearchCommands(
+    items: List<T>,
+    id: (T) -> String,
+    label: (T) -> String,
+    search: (T) -> String,
+    dialogTag: String,
+    close: () -> Unit,
+    choose: (T) -> Unit,
+) {
     var query by remember { mutableStateOf("") }
-    WorkflowDialog("Commands", close, "activity_command_palette") {
-        val matching = AssessmentCommand.entries.filter { "${it.shortcut} ${it.label}".contains(query.trim(), ignoreCase = true) }
+    val terms = query.trim().split(Regex("\\s+"))
+    val matching = items.filter { command -> terms.all { search(command).contains(it, ignoreCase = true) } }
+    WorkflowDialog("Commands", close, dialogTag) {
         LazyColumn(Modifier.weight(1f).testTag("command_list")) {
             item {
                 OutlinedTextField(query, { query = it.take(80) }, label = { Text("Find a command") }, singleLine = true,
@@ -55,9 +77,9 @@ internal fun CommandPalette(close: () -> Unit, choose: (AssessmentCommand) -> Un
                     modifier = Modifier.fillMaxWidth().testTag("command_search"))
             }
             if (matching.isEmpty()) item { Text("No commands match.") }
-            items(matching) { command ->
-                TextButton(onClick = { choose(command) }, modifier = Modifier.fillMaxWidth().testTag("command_${command.name.lowercase()}")) {
-                    Text("${command.shortcut}  ·  ${command.label}", Modifier.fillMaxWidth())
+            items(matching, key = id) { command ->
+                TextButton(onClick = { choose(command) }, modifier = Modifier.fillMaxWidth().testTag("command_${id(command)}")) {
+                    Text(label(command), Modifier.fillMaxWidth())
                 }
             }
         }

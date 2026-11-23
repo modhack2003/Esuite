@@ -23,7 +23,7 @@ jobs:
         run: python3 tools/pin_android_tools.py
       - uses: gradle/actions/setup-gradle@v4
       - name: Unit tests, lint and debug APK
-        run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease :ui-tests:assembleDebug --no-daemon
+        run: ./gradlew :app:testDebugUnitTest :app:testReleaseUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease :ui-tests:assembleDebug --no-daemon
       - name: Verify production publication guards with disposable fixture signer
         run: python3 tools/test_release_guards.py
       - uses: actions/upload-artifact@v4

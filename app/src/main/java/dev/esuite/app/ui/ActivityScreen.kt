@@ -49,7 +49,7 @@ internal fun ActivityScreen(
     }
     val responses = remember(rows) { rows.mapNotNull(ActivityRecord::exchange).filter(Exchange::hasReviewableResponse) }
     var view by rememberSaveable { mutableStateOf(ActivityView.History) }
-    var search by rememberSaveable { mutableStateOf("") }
+    var search by remember { mutableStateOf("") }
     var method by rememberSaveable { mutableStateOf<String?>(null) }
     var source by rememberSaveable { mutableStateOf<ObservationSource?>(null) }
     var status by rememberSaveable { mutableStateOf(ActivityStatus.All) }

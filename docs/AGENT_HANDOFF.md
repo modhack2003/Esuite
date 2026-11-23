@@ -16,6 +16,10 @@ The release branch starts with the 13 defects reproduced in the 1.0.9 stress aud
 
 The audit ran 1,220 additional cases against 1.0.9 and observed 925 passes and 295 failing variants across the 13 defects. The development branch has JVM regression cases and Chromium inspector scenarios for the fixes, plus an independent Android raw import test. The full 1.1.0 feature and quality catalog, candidate Android matrix, same-signer upgrade from 1.0.9, and physical-device checks are release gates.
 
+The first follow-up adds adaptive primary navigation and tab restoration, a Browser command palette, searchable settings and local diagnostics, high-contrast appearance, Console search and grouping, and additional offline converters. Imports now open a local review before loading a cURL draft or saving selected OpenAPI and HAR records. Export and browser data isolation still use the existing app boundaries.
+
+The first branch matrix passed nine Android configurations. API 34 opened the fixture IME and failed to observe text committed to the WebView. The follow-up waits for DOM acknowledgment before dismissing the IME and keeps the acknowledgment visible at small viewport sizes. Run the complete matrix on the follow-up source to verify the correction. [First development matrix](https://github.com/modhack2003/Esuite/actions/runs/45270585786)
+
 ## 1.0.9 Activity and passive review
 
 Activity combines stored HTTP exchanges with an explicitly imported, in-memory Browser Network snapshot. Source labels preserve the distinction between callbacks, timings and captured responses. Site Map uses complete observed paths and exact site scope. Quick response review shares one rule engine with API Lab, Tools and Findings. Review results can attach the selected exchange as immutable encrypted evidence. The device harness covers Browser handoff, Site Map, review, finding save and evidence retention after history clearing. The upgrade baseline is the published 1.0.8 APK.

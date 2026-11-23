@@ -100,6 +100,42 @@ public class ProductionUiTest extends NativeUiDriver {
         assertTrue(waitText("api_headers", "X-Label: kept", 5000));
     }
 
+    @Test public void browserCommandsCanFindSettingsAndReturnToTheBrowser() throws Exception {
+        launch();
+        click("open_app_commands");
+        enter("command_search", "VERSION");
+        click("command_app_settings");
+        enter("settings_search", "license");
+        assertTrue(waitText("settings_version", "Version", 5000));
+        assertFalse(device.hasObject(By.res("settings_clear_browser")));
+        device.pressBack();
+        assertNotNull(tag("browser_url"));
+    }
+
+    @Test public void curlPreviewRequiresConfirmationBeforeReplacingTheRequest() throws Exception {
+        launch();
+        openSite("https://example.test");
+        click("nav_tools");
+        growDock(device.getDisplayHeight() / 9);
+        click("tools_tab_import");
+        enter("tools_input", "curl --data 'first=one' --data 'second=two' https://example.test/staged");
+        revealUtilityControl(By.text("Import cURL"), true).click();
+        assertNotNull(device.wait(Until.findObject(By.res("tools_import_preview")), 5000));
+        find(By.text("Cancel")).click();
+        click("nav_api");
+        assertTrue(waitText("api_url", "https://example.test/", 5000));
+        assertFalse(device.hasObject(By.res("api_url").textContains("/staged")));
+
+        click("nav_tools");
+        revealUtilityControl(By.text("Import cURL"), true).click();
+        click("tools_apply_import");
+        revealUtilityControl(By.res("tools_output"), true);
+        assertTrue(waitText("tools_output", "Draft loaded in API Lab", 5000));
+        click("nav_api");
+        assertTrue(waitText("api_url", "https://example.test/staged", 5000));
+        assertTrue(waitText("api_body", "first=one&second=two", 5000));
+    }
+
     @Test public void browserOpensWithoutASavedSiteAndInspectsTheCurrentPage() throws Exception {
         launch();
         assertNotNull(find(By.res("browser_url")));

@@ -317,47 +317,40 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         }
     }
     fun cancelRequest() { requestJob?.cancel() }
-    fun importCurl(text: String) {
-        val project = currentProject() ?: return message("Open a site in API Lab first")
-        val context = currentContext()
-        viewModelScope.launch {
-            try {
-                val imported = withContext(Dispatchers.Default) { ApiImports.curl(text, project.origin) }
-                if (ResultAttribution.accepts(context, currentContext())) {
-                    replaceDraft(imported)
-                    message("cURL imported. Review it in API Lab.")
-                }
-            } catch (failure: IllegalArgumentException) {
-                if (ResultAttribution.accepts(context, currentContext())) message(failure.message ?: "Check the imported cURL")
+
+    internal suspend fun prepareImport(format: ImportFormat, input: String, project: Project): List<SavedRequest> =
+        importer.parse { format.drafts(input, project) }
+
+    internal suspend fun applyImport(format: ImportFormat, started: RequestContext, requests: List<SavedRequest>): String {
+        fun requireCurrentSite(): Project {
+            require(state.value.ready && ResultAttribution.accepts(started, currentContext())) {
+                "Site or identity changed. Preview the import again."
+            }
+            return requireNotNull(currentProject()) { "Open a site in API Lab first." }
+        }
+        val project = requireCurrentSite()
+        require(requests.isNotEmpty()) { "Select at least one draft." }
+        if (format == ImportFormat.Curl) {
+            val imported = requests.single()
+            require(imported.projectId == project.id)
+            ScopePolicy(project.origin).requireAllowed(imported.draft.url)
+            replaceDraft(imported.draft)
+            return "Draft loaded in API Lab. Review before sending."
+        }
+        repeat(3) {
+            currentCoroutineContext().ensureActive()
+            val prepared = importer.prepare(state.value.workspace, project, requests)
+            currentCoroutineContext().ensureActive()
+            requireCurrentSite()
+            val current = state.value
+            val next = prepared.apply(current.workspace)
+            if (next != null && mutable.compareAndSet(current, current.copy(workspace = next))) {
+                return if (saveWorkspace()) {
+                    "Saved ${requests.size} drafts. Open the API Lab collection to review them."
+                } else "Drafts were added in memory. Use Save local data now to retry."
             }
         }
-    }
-    fun importOpenApi(text: String) = importCollection { project -> ApiImports.openApi(text, project) }
-    fun importHar(text: String) = importCollection { project -> ApiImports.har(text, project) }
-    private fun importCollection(parse: (Project) -> List<SavedRequest>) {
-        val project = currentProject() ?: return message("Open a site in API Lab first")
-        val generation = workspaceGeneration
-        viewModelScope.launch {
-            try {
-                val requests = importer.parse { parse(project) }
-                repeat(3) {
-                    ensureActive()
-                    require(generation == workspaceGeneration && state.value.projectId == project.id && state.value.ready) { "Workspace or project changed; import discarded" }
-                    val prepared = importer.prepare(state.value.workspace, project, requests)
-                    ensureActive()
-                    require(generation == workspaceGeneration && state.value.projectId == project.id && state.value.ready) { "Workspace or project changed; import discarded" }
-                    val current = state.value
-                    val next = prepared.apply(current.workspace)
-                    if (next != null && mutable.compareAndSet(current, current.copy(workspace = next,
-                            message = "Imported ${requests.size} in-scope drafts; no requests were executed. Review before sending."))) {
-                        persistDurable()
-                        return@launch
-                    }
-                }
-                message("Workspace changed repeatedly; import not applied. Retry when edits settle.")
-            } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { message(e.message ?: "Import failed") }
-        }
+        error("Saved data changed during the import. Preview the file again.")
     }
     /**
      * Validate an immutable candidate off the UI thread and merge only its durable changes.

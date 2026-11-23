@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
@@ -36,6 +37,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import dev.esuite.app.ui.technicalTextStyle
 import kotlin.math.roundToInt
@@ -83,8 +85,10 @@ internal fun BrowserDock(
         val extent = if (side) constraints.maxWidth else constraints.maxHeight
         val available = (extent - handlePixels).coerceAtLeast(0)
         val dockExtent = (available * fraction).roundToInt()
+        val reverse = side && LocalLayoutDirection.current == LayoutDirection.Rtl
         val resizeState = rememberDraggableState { delta ->
-            if (available > 0) resize((if (side) widthFraction else heightFraction) - delta / available)
+            val relativeDelta = if (reverse) -delta else delta
+            if (available > 0) resize((if (side) widthFraction else heightFraction) - relativeDelta / available)
         }
         Layout(content = {
             Box(Modifier.clipToBounds(), propagateMinConstraints = true) { page() }
@@ -102,10 +106,10 @@ internal fun BrowserDock(
             val handle = children.getOrNull(1)?.measure(if (side) Constraints.fixed(handleSize, height) else Constraints.fixed(width, handleSize))
             val panel = children.getOrNull(2)?.measure(if (side) Constraints.fixed(dockExtent, height) else Constraints.fixed(width, dockExtent))
             layout(width, height) {
-                pagePlaceable.place(0, 0)
+                pagePlaceable.placeRelative(0, 0)
                 if (side) {
-                    handle?.place(pageExtent, 0)
-                    panel?.place(pageExtent + handleSize, 0)
+                    handle?.placeRelative(pageExtent, 0)
+                    panel?.placeRelative(pageExtent + handleSize, 0)
                 } else {
                     handle?.place(0, pageExtent)
                     panel?.place(0, pageExtent + handleSize)

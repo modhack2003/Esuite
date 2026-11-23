@@ -32,7 +32,7 @@ public final class BrowserKeyboardUiTest extends NativeUiDriver {
                   '<textarea aria-label="Page notes" placeholder="Page notes" data-field="notes" rows="1"></textarea>' +
                   '<div aria-label="Page editable" contenteditable="true" data-field="editable" ' +
                   'style="min-height:24px;border:1px solid">Page editable</div>' +
-                  '<p id="typed" style="margin:0"></p></main>';
+                  '<p id="typed" style="position:fixed;top:0;right:0;margin:0;pointer-events:none"></p></main>';
                 document.body.addEventListener('input', event => {
                   const field = event.target;
                   const value = typeof field.value === 'string' ? field.value : field.textContent;
@@ -84,10 +84,10 @@ public final class BrowserKeyboardUiTest extends NativeUiDriver {
         UiObject2 key = device.wait(Until.findObject(By.text(paste ? "Paste fixture text" : "Type fixture text")), 8_000);
         assertNotNull("Tapping the website " + field + " field did not open the software keyboard", key);
         key.click();
-        device.pressBack();
-        assertTrue("Keyboard stayed open", device.wait(Until.gone(By.text("Type fixture text")), 5_000));
         assertTrue("The DOM did not receive committed text for " + field,
                 device.wait(Until.hasObject(By.text("Received " + field)), 8_000));
+        device.pressBack();
+        assertTrue("Keyboard stayed open", device.wait(Until.gone(By.text("Type fixture text")), 5_000));
     }
 
     private UiObject2 findWebForm() {

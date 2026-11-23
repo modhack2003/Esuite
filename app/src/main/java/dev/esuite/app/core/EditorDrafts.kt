@@ -110,7 +110,7 @@ class EditorDrafts {
     }
 }
 
-private fun String.atCharacterBoundary(limit: Int): String {
+internal fun String.atCharacterBoundary(limit: Int): String {
     if (length <= limit) return this
     val splitPair = this[limit - 1].isHighSurrogate() && this[limit].isLowSurrogate()
     return substring(0, if (splitPair) limit - 1 else limit)

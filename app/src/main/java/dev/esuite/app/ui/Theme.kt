@@ -18,7 +18,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.esuite.app.R
 
-internal enum class Appearance(val label: String) { System("System"), Light("Light"), Dark("Dark") }
+internal enum class Appearance(val label: String) {
+    System("System"), Light("Light"), Dark("Dark"), HighContrast("High contrast"),
+}
 
 private val darkScheme = darkColorScheme(
     primary = Color(0xFFACC3FF), onPrimary = Color(0xFF072753),
@@ -46,6 +48,17 @@ private val lightScheme = lightColorScheme(
     surfaceContainerLow = Color(0xFFF8FAFD), surfaceContainer = Color(0xFFEDF1F7),
     surfaceContainerHigh = Color(0xFFE6ECF5), surfaceContainerHighest = Color(0xFFDCE5F1),
     outline = Color(0xFF6C798C), outlineVariant = Color(0xFFC8D1DF),
+)
+
+private val highContrastScheme = darkScheme.copy(
+    primary = Color(0xFFC8D9FF),
+    onSurface = Color.White,
+    onSurfaceVariant = Color(0xFFE0E6F1),
+    background = Color(0xFF090B0E),
+    onBackground = Color.White,
+    surface = Color(0xFF11151B),
+    outline = Color(0xFFC2CBDA),
+    outlineVariant = Color(0xFF8190A5),
 )
 
 @OptIn(ExperimentalTextApi::class)
@@ -86,12 +99,17 @@ val Muted: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
 @Composable
 internal fun isDark(appearance: Appearance): Boolean = when (appearance) {
     Appearance.System -> isSystemInDarkTheme()
-    Appearance.Dark -> true
+    Appearance.Dark, Appearance.HighContrast -> true
     Appearance.Light -> false
 }
 
 @Composable
 internal fun ESuiteTheme(appearance: Appearance, content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (isDark(appearance)) darkScheme else lightScheme,
+    val scheme = when {
+        appearance == Appearance.HighContrast -> highContrastScheme
+        isDark(appearance) -> darkScheme
+        else -> lightScheme
+    }
+    MaterialTheme(colorScheme = scheme,
         typography = typography, shapes = shapes, content = content)
 }

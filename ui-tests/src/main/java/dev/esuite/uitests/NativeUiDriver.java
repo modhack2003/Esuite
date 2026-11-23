@@ -48,7 +48,8 @@ public abstract class NativeUiDriver {
             if(id!=null && id.startsWith("nav_")) return true;
             UiObject2 home=device.findObject(By.res("nav_home"));
             if (home == null) home=device.findObject(By.res("nav_browser"));
-            int bottom=home==null?device.getDisplayHeight():home.getVisibleBounds().top;
+            boolean rail = device.hasObject(By.res("primary_navigation_rail"));
+            int bottom=home==null || rail ? device.getDisplayHeight() : home.getVisibleBounds().top;
             if (id != null && id.startsWith("identity_")) {
                 UiObject2 row = device.findObject(By.res("browser_identity_row"));
                 if (row != null) return row.getVisibleBounds().contains(bounds) && bounds.height() >= 24 && bounds.bottom < bottom - 3;
@@ -57,7 +58,13 @@ public abstract class NativeUiDriver {
             return bounds.top>device.getDisplayHeight()/24 && bounds.bottom<bottom-3;
         } catch(androidx.test.uiautomator.StaleObjectException ignored) { return false; }
     }
-    protected int scrollX() { return Math.max(2, device.getDisplayWidth()/100); }
+    protected int scrollX() {
+        UiObject2 rail = device.findObject(By.res("primary_navigation_rail"));
+        int margin = Math.max(2, device.getDisplayWidth()/100);
+        if (rail == null) return margin;
+        android.graphics.Rect bounds = rail.getVisibleBounds();
+        return bounds.centerX() < device.getDisplayWidth()/2 ? bounds.right + margin : margin;
+    }
     protected UiObject2 find(BySelector selector) {
         UiObject2 visible = device.wait(Until.findObject(selector), 700);
         if (usable(visible)) return visible;
