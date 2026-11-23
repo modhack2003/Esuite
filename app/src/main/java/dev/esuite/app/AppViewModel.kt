@@ -224,6 +224,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         } else state.value.workspace.projects.firstOrNull { it.id == siteId && it.origin == log.origin } ?: return false
         selectProject(site.id)
         importedBrowser.value = BrowserActivity(site.id, log)
+        message("Browser observations opened in Activity.")
         return true
     }
 

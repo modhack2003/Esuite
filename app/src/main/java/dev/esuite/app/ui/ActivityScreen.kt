@@ -124,7 +124,7 @@ internal fun ActivityScreen(
                                 modifier = Modifier.fillMaxWidth().testTag("activity_endpoint")) {
                                 Column(Modifier.padding(12.dp)) {
                                     Text("${key.method ?: "Unknown method"} ${key.path}", style = technicalTextStyle())
-                                    Text("${records.size} observations")
+                                    Text(if (records.size == 1) "1 observation" else "${records.size} observations")
                                 }
                             }
                         }

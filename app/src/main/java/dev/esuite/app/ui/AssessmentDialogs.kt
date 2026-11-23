@@ -178,6 +178,7 @@ internal fun SaveFindingDialog(seed: FindingSeed, model: AppViewModel, close: ()
     var notes by remember(seed) { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
     var admitted by remember { mutableStateOf(false) }
+    var committed by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     val id = remember(seed) { UUID.randomUUID().toString() }
     val scope = rememberCoroutineScope()
@@ -203,7 +204,7 @@ internal fun SaveFindingDialog(seed: FindingSeed, model: AppViewModel, close: ()
         if (message.isNotBlank()) Text(message, modifier = Modifier.testTag("review_finding_state"))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             TextButton(onClick = dismiss, enabled = !saving, modifier = Modifier.testTag("review_finding_close")) { Text(if (admitted) "Close" else "Cancel") }
-            Button(enabled = !saving && title.isNotBlank() && (seed.item != null || notes.isNotBlank()) && message != "Saved on this device.",
+            if (!committed) Button(enabled = !saving && title.isNotBlank() && (seed.item != null || notes.isNotBlank()),
                 modifier = Modifier.testTag("review_finding_confirm"), onClick = {
                     saving = true
                     val check = seed.item
@@ -212,9 +213,11 @@ internal fun SaveFindingDialog(seed: FindingSeed, model: AppViewModel, close: ()
                     scope.launch {
                         try {
                             if (!admitted) admitted = model.addFinding(title, detail, seed.exchange, seed.context, id)
+                            committed = admitted && model.saveWorkspace() &&
+                                model.state.value.persistedWorkspace?.findings?.any { it.id == id } == true
                             message = when {
                                 !admitted -> model.state.value.message
-                                model.saveWorkspace() && model.state.value.persistedWorkspace?.findings?.any { it.id == id } == true -> "Saved on this device."
+                                committed -> "Saved on this device."
                                 else -> "Finding is in memory. Retry the encrypted save."
                             }
                         } finally { saving = false }
