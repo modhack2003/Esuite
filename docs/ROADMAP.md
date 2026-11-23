@@ -149,4 +149,4 @@ Evidence and exact acceptance: [Vivo 1.0.2 review](reviews/vivo-1.0.2-production
 - [x] Add explicit Browser handoff, source-aware Activity and a Site Map grouped by complete observed paths.
 - [x] Share passive review rules and attach explicit encrypted evidence from the selected exchange.
 - [x] Add typed commands for Site Map, response review and finding creation.
-- [ ] Verify the optimized Android matrix, signed upgrades and the published APK. [Release evidence](AGENT_HANDOFF.md#109-activity-and-passive-review)
+- [x] Verify the optimized Android matrix, signed upgrades and the published APK. [Release evidence](AGENT_HANDOFF.md#109-activity-and-passive-review)

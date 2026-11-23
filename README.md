@@ -48,7 +48,7 @@ Explore the [self-contained UI concept](docs/ui/index.html), [editable Canva con
 | Local tools | Grouped text transformations, request imports and offline configuration review |
 | Imports & cloud review | cURL/raw HTTP, OpenAPI 3 JSON, textual HAR request drafts and offline AWS configuration observations |
 | Local evidence | AES-GCM encryption for saved site data, request collections, observations, sanitized reports and site deletion |
-| Passive observations | Inspect selected API responses for cookie/header hardening observations; no extra scan requests |
+| Activity and passive review | Group Browser observations and stored exchanges by site, review captured responses locally, and save findings with explicit evidence |
 | Web concept | Six views, searchable fixtures, request-detail transfer, simulated account comparison and in-memory notes |
 | Web decoder | Real Unicode-aware Base64 transformations, executed locally |
 | Design system | Original E monogram, vector banner, palette, navigation, flows and UI state specification |
@@ -100,11 +100,11 @@ ESuite protects saved site data with Keystore-backed authenticated encryption, b
 
 ## Try ESuite
 
-**1.0.8 fixes keyboard input on websites.** Type in page forms with Developer Tools open, expand and edit syntax-colored HTML, and record, filter, and preserve same-origin Network observations. [Download ESuite 1.0.8](https://github.com/modhack2003/Esuite/releases/tag/v1.0.8) · [Release verification](docs/AGENT_HANDOFF.md#108-browser-input-and-inspection)
+**1.0.9 connects observed traffic to findings.** Open a Browser Network snapshot in Activity, group complete paths in Site Map, and review up to 20 captured responses locally. Save a result with explicit encrypted evidence, or open the workflow through `/map`, `/review`, and `/finding`. [Download ESuite 1.0.9](https://github.com/modhack2003/Esuite/releases/tag/v1.0.9) · [Release verification](docs/AGENT_HANDOFF.md#109-activity-and-passive-review)
 
 ### Android builds and production delivery
 
-**Android 9–17 (API 28–37.0).** The build uses AGP 9.2.1, Gradle 9.4.1 and JDK 17. All ten emulator configurations passed, including real Android keyboard input in website forms. The published APK preserved encrypted evidence during in-place updates from 1.0.7 on APIs 28, 35 and 37.0. Physical-device and TalkBack coverage remain open. [Release verification](docs/AGENT_HANDOFF.md#108-browser-input-and-inspection)
+**Android 9–17 (API 28–37.0).** The build uses AGP 9.2.1, Gradle 9.4.1 and JDK 17. All ten emulator configurations passed the assessment flow and the Browser keyboard regression check. The published APK retained saved sites, requests, and findings during in-place updates from 1.0.8 on APIs 28, 35 and 37.0. Physical-device and TalkBack coverage remain open. [Release verification](docs/AGENT_HANDOFF.md#109-activity-and-passive-review)
 
 ```bash
 git clone https://github.com/modhack2003/Esuite.git
