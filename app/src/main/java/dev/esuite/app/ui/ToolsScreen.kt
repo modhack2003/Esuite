@@ -1,6 +1,8 @@
 package dev.esuite.app.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -17,7 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private enum class ToolGroup(val label: String) {
-    Encode("Encode"), Import("Import"), Review("Review")
+    Encode("Encode"), Import("Import"), Review("Review"), Checks("Checks")
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -31,27 +33,42 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel) {
     var groupName by rememberSaveable { mutableStateOf(ToolGroup.Encode.name) }
     val group = ToolGroup.valueOf(groupName)
     var output by remember(inputKey) { mutableStateOf("") }
+    var checkResults by remember(inputKey) { mutableStateOf(emptyList<CheckItem>()) }
+    var template by rememberSaveable { mutableStateOf(ResponseCheck.Headers) }
     var working by remember(inputKey) { mutableStateOf(false) }
 
     fun resetOutput() {
         worker?.cancel()
         working = false
         output = ""
+        checkResults = emptyList()
     }
-    fun transform(action: (String) -> String) {
+    fun <T> runTool(action: () -> T, done: (T) -> Unit) {
         resetOutput()
         working = true
         worker = scope.launch {
-            output = withContext(Dispatchers.Default) { runCatching { action(input) }.getOrElse { it.message ?: "Check your input" } }
+            withContext(Dispatchers.Default) { runCatching(action) }
+                .onSuccess(done).onFailure { output = it.message ?: "Check your input" }
             working = false
         }
     }
+    fun transform(action: (String) -> String) = runTool({ action(input) }) { output = it }
+
+    LaunchedEffect(inputKey) { resetOutput() }
 
     WorkspaceTabs(ToolGroup.entries, group, "tools", { it.label }) {
         resetOutput()
         groupName = it.name
     }
-    OutlinedTextField(input, { model.drafts.set(inputKey, it); resetOutput() }, label = { Text("Input") },
+    if (group == ToolGroup.Checks) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ResponseCheck.entries.forEach { item ->
+                FilterChip(template == item, { resetOutput(); template = item }, { Text(item.label) })
+            }
+        }
+        Text(template.summary, style = MaterialTheme.typography.bodySmall, color = Muted)
+    }
+    OutlinedTextField(input, { model.drafts.set(inputKey, it); resetOutput() }, label = { Text(if (group == ToolGroup.Checks) "Response headers" else "Input") },
         minLines = 1, maxLines = 6, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(),
         modifier = Modifier.fillMaxWidth().testTag("tools_input"))
     when (group) {
@@ -79,6 +96,28 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel) {
                 ToolButton("Decode JWT claims", input) { transform(TokenTools::jwtClaims) }
                 ToolButton("Token sample statistics", input) { transform { TokenTools.sample(it.lines().filter(String::isNotBlank)) } }
                 ToolButton("Review AWS JSON offline", input) { transform(CloudConfigReview::review) }
+            }
+        }
+        ToolGroup.Checks -> {
+            val latest = state.workspace.exchanges.firstOrNull { it.projectId == state.projectId && it.status != null }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(enabled = input.isNotBlank() && !working, modifier = Modifier.testTag("run_response_check"), onClick = {
+                    val chosen = template
+                    runTool({ ResponseChecks.run(chosen, input) }) { checkResults = it }
+                }) { Text("Check pasted headers") }
+                if (latest != null) OutlinedButton(enabled = !working, onClick = {
+                    val chosen = template
+                    runTool({ ResponseChecks.run(chosen, latest.responseHeaders) }) { checkResults = it }
+                }) { Text("Check latest response") }
+            }
+            checkResults.forEach { item ->
+                ListItem(
+                    headlineContent = { Text(item.name) },
+                    supportingContent = { Text(item.detail, Modifier.testTag("response_check_detail")) },
+                    trailingContent = { Text(item.status.label, style = MaterialTheme.typography.labelMedium,
+                        color = if (item.status == CheckStatus.Review) Amber else Muted) },
+                )
+                HorizontalDivider()
             }
         }
     }
