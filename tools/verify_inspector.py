@@ -34,6 +34,23 @@ with sync_playwright() as p:
     assert "Secure context · Yes" in page.evaluate(scripts["securitySummary"])
     semantics = page.evaluate(scripts["accessibilitySummary"])
     assert "H1 · Fixture heading" in semantics and "Landmarks · 1 shown" in semantics
+    # Exercise the WebView fallback with a fixture that reproduces a collapsed dynamic-height dialog.
+    page.evaluate("""() => {
+        const style = document.createElement('style');
+        style.textContent = '[role=dialog] {position:fixed;top:12px;width:240px;max-height:0;overflow-y:auto;padding:40px 0}';
+        document.head.appendChild(style);
+        const dialog = document.createElement('div');
+        dialog.setAttribute('role', 'dialog');
+        dialog.className = 'max-h-[90dvh]';
+        dialog.innerHTML = '<p style="height:260px">A clipped dialog</p><button>Continue</button>';
+        document.body.appendChild(dialog);
+    }""")
+    dialog = page.get_by_role('dialog')
+    assert dialog.bounding_box()['height'] < 100
+    assert page.evaluate(scripts["fitClippedDialogs"]) == 1
+    assert dialog.bounding_box()['height'] > 240
+    assert page.evaluate(scripts["fitClippedDialogs"]) == 0
+    dialog.evaluate('element => element.remove()')
     metadata = page.evaluate(scripts["storageMetadata"])
     assert "test · 5 characters" in metadata and "session · 3 characters" in metadata
     assert "value" not in metadata and "one" not in metadata

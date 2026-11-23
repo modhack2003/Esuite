@@ -269,6 +269,16 @@ internal fun BrowserScreen(
         preparing = false
     }
     LaunchedEffect(preparing) { if (!preparing) onReady() }
+    LaunchedEffect(document, visible, loading) {
+        if (loading) return@LaunchedEffect
+        val view = activeView() ?: return@LaunchedEffect
+        // Some WebView providers mis-size a dynamic-height dialog as hydration finishes.
+        for (pause in listOf(0L, 300L, 900L, 1_800L)) {
+            delay(pause)
+            if (destroyed.get() || activeView() !== view) break
+            view.evaluateJavascript(InspectorScripts.fitClippedDialogs, null)
+        }
+    }
     LaunchedEffect(browser) {
         val url = interruptedPage
         if (browser != null && !rendererGone && url != null) {

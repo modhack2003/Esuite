@@ -8,7 +8,6 @@ import android.graphics.Rect;
 import android.os.SystemClock;
 import androidx.test.uiautomator.By;
 import androidx.test.uiautomator.BySelector;
-import androidx.test.uiautomator.Direction;
 import androidx.test.uiautomator.UiDevice;
 import androidx.test.uiautomator.UiObject2;
 import androidx.test.uiautomator.Until;
@@ -187,13 +186,8 @@ public class ProductionUiTest extends NativeUiDriver {
     }
 
     private void selectBrowserTool(String panel) {
-        String id = "browser_tool_tab_" + panel;
-        for (int i = 0; i < 12; i++) {
-            UiObject2 tab = device.findObject(By.res(id));
-            if (tab != null && tab.getVisibleBounds().width() >= 48) { click(id); return; }
-            tag("browser_tool_tabs").swipe(i < 6 ? Direction.RIGHT : Direction.LEFT, 0.64f);
-        }
-        throw new AssertionError("Developer Tools tab not visible: " + panel);
+        click("browser_panel_picker");
+        click("browser_panel_choice_" + panel);
     }
 
     private void revealUtilityControl(BySelector selector, boolean down) {

@@ -1,5 +1,6 @@
 package dev.esuite.uitests;
 
+import android.graphics.Rect;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.uiautomator.By;
 import androidx.test.uiautomator.UiObject2;
@@ -25,6 +26,8 @@ public final class ReportedSiteUiTest extends NativeUiDriver {
 
     private void recordViewport() throws Exception {
         click("browser_tools");
+        Rect grip = tag("dock_resize_handle").getVisibleBounds();
+        device.swipe(grip.centerX(), grip.centerY(), grip.centerX(), grip.centerY() - device.getDisplayHeight() / 7, 30);
         click("browser_tool_tab_console");
         enter("console_input", "(() => { const d = document.querySelector('[role=dialog]'); const p = document.createElement('div'); " +
                 "p.style.cssText = 'height:100dvh;position:fixed;visibility:hidden'; document.documentElement.appendChild(p); " +

@@ -184,6 +184,31 @@ object InspectorScripts {
         })()
     """.trimIndent()
 
+    val fitClippedDialogs = """
+        (() => {
+          const viewport = Math.min(innerHeight, document.documentElement.clientHeight);
+          if (viewport < 160) return 0;
+          let fitted = 0;
+          for (const dialog of Array.from(document.querySelectorAll('dialog[open],[role="dialog"]')).slice(0, 12)) {
+            const declared = /^([0-9.]+)dvh$/i.exec(dialog.style.maxHeight) ||
+              Array.from(dialog.classList).map(name => /^max-h-\[([0-9.]+)dvh\]$/.exec(name)).find(Boolean);
+            if (!declared) continue;
+            const height = Number(declared[1]);
+            if (height < 40 || height > 100) continue;
+            const css = getComputedStyle(dialog);
+            const limit = parseFloat(css.maxHeight);
+            const intended = viewport * height / 100;
+            const bounds = dialog.getBoundingClientRect();
+            if (css.position !== 'fixed' || css.overflowY !== 'auto' || bounds.height <= 0 ||
+                !Number.isFinite(limit) || limit > intended * 0.35 || bounds.height > intended * 0.45 ||
+                dialog.scrollHeight - dialog.clientHeight < 64) continue;
+            dialog.style.maxHeight = height + 'vh';
+            fitted++;
+          }
+          return fitted;
+        })()
+    """.trimIndent()
+
     val securitySummary = """
         (() => [
           'Origin · ' + location.origin,

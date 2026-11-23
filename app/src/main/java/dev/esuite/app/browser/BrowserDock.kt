@@ -6,12 +6,15 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.*
@@ -130,7 +133,7 @@ private fun DockHandle(
 }
 
 @Composable
-internal fun DockHeader(title: String, context: String, close: () -> Unit, refresh: (() -> Unit)? = null) {
+internal fun DockHeader(title: String, context: String, close: () -> Unit, refresh: (() -> Unit)? = null, tools: (() -> Unit)? = null) {
     val colors = MaterialTheme.colorScheme
     Row(
         Modifier.fillMaxWidth().background(colors.surfaceContainer).padding(start = 12.dp, end = 2.dp),
@@ -143,6 +146,9 @@ internal fun DockHeader(title: String, context: String, close: () -> Unit, refre
         }
         if (refresh != null) IconButton(onClick = refresh, modifier = Modifier.testTag("browser_refresh_inspection")) {
             Icon(Icons.Outlined.Refresh, contentDescription = "Refresh inspection")
+        }
+        if (tools != null) IconButton(onClick = tools, modifier = Modifier.testTag("browser_panel_picker")) {
+            Icon(Icons.AutoMirrored.Outlined.List, contentDescription = "Choose a Developer Tools panel")
         }
         IconButton(onClick = close, modifier = Modifier.testTag("browser_close_dock")) {
             Icon(Icons.Outlined.Close, contentDescription = "Close tools panel")
@@ -169,22 +175,33 @@ internal fun BrowserInspector(
     val colors = MaterialTheme.colorScheme
     var editingHtml by remember { mutableStateOf<Boolean?>(null) }
     var code by remember { mutableStateOf("") }
+    var showPanels by remember { mutableStateOf(false) }
     LaunchedEffect(currentUrl, panel) { editingHtml = null }
     BoxWithConstraints(Modifier.fillMaxSize().background(colors.surfaceContainerLow)) {
         val compactConsole = panel == BrowserTool.Console && maxHeight < 205.dp && WindowInsets.ime.getBottom(LocalDensity.current) > 0
         Column(Modifier.fillMaxSize()) {
             if (!compactConsole) {
                 DockHeader("Developer Tools", currentUrl?.let(BrowserAddress::https)?.let(BrowserAddress::origin).orEmpty(),
-                    close, refresh.takeIf { panel != BrowserTool.Console && currentUrl != null })
+                    close, refresh.takeIf { panel != BrowserTool.Console && currentUrl != null && !showPanels },
+                    tools = { showPanels = !showPanels })
+            }
+            if (showPanels) {
+                PanelChooser(panel) { tool -> choose(tool); showPanels = false }
+                return@Column
+            }
+            if (!compactConsole) {
                 Row(
                     Modifier.fillMaxWidth().background(colors.surfaceContainer).testTag("browser_tool_tabs")
                         .horizontalScroll(rememberScrollState()).selectableGroup(),
                 ) {
                     BrowserTool.entries.forEach { tool ->
                         val active = tool == panel
+                        val bringIntoView = remember { BringIntoViewRequester() }
+                        LaunchedEffect(active) { if (active) { withFrameNanos { }; bringIntoView.bringIntoView() } }
                         Column(
                             Modifier.widthIn(min = 48.dp).heightIn(min = 48.dp)
                                 .testTag("browser_tool_tab_${tool.name.lowercase()}")
+                                .bringIntoViewRequester(bringIntoView)
                                 .selectable(active, role = Role.Tab, onClick = { choose(tool) }),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
@@ -240,5 +257,32 @@ internal fun BrowserInspector(
             confirmButton = { TextButton(onClick = { edit(html, code); editingHtml = null }) { Text("Apply") } },
             dismissButton = { TextButton(onClick = { editingHtml = null }) { Text("Cancel") } },
         )
+    }
+}
+
+@Composable
+private fun PanelChooser(selected: BrowserTool, choose: (BrowserTool) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val columnCount = if (maxWidth >= 310.dp) 3 else 2
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 6.dp)
+            .selectableGroup()) {
+            BrowserTool.entries.chunked(columnCount).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    row.forEach { tool ->
+                        val active = selected == tool
+                        Box(Modifier.weight(1f).heightIn(min = 48.dp)
+                            .background(if (active) colors.primaryContainer else colors.surfaceContainerLow, MaterialTheme.shapes.small)
+                            .testTag("browser_panel_choice_${tool.name.lowercase()}")
+                            .selectable(active, role = Role.Tab, onClick = { choose(tool) }), contentAlignment = Alignment.Center) {
+                            Text(tool.label, style = MaterialTheme.typography.labelLarge,
+                                color = if (active) colors.onPrimaryContainer else colors.onSurfaceVariant,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    repeat(columnCount - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
     }
 }
