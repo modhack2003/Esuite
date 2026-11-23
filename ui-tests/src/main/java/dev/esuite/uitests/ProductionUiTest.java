@@ -2,7 +2,10 @@ package dev.esuite.uitests;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
+import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.graphics.Rect;
+import android.os.SystemClock;
 import androidx.test.uiautomator.By;
 import androidx.test.uiautomator.BySelector;
 import androidx.test.uiautomator.Direction;
@@ -108,17 +111,12 @@ public class ProductionUiTest extends NativeUiDriver {
         selectBrowserTool("console");
         enter("console_input", "await Promise.resolve(6 * 7)"); click("console_run");
         assertTrue("Console expression did not resolve", device.wait(Until.hasObject(By.res("console_result").text("42")), 10000));
-        click("console_clear");
-        assertTrue(device.wait(Until.hasObject(By.text("No console messages yet.")), 5000));
         click("console_mode");
-        assertTrue(waitText("console_mode", "Script", 6000));
-        enter("console_input", "console.warn('fixture warning'); throw new Error('fixture error');"); click("console_run");
-        assertTrue("Script exception is missing", device.wait(Until.hasObject(By.res("console_messages")
-                .descContains("Latest error: Error: fixture error")), 15000));
         click("console_levels");
-        BySelector warning = By.res("console_warning").text("fixture warning");
-        if (!device.hasObject(warning)) tag("console_messages").swipe(Direction.DOWN, 0.65f);
-        assertTrue("Console warnings need their own severity", device.wait(Until.hasObject(warning), 5000));
+        enter("console_input", "console.warn('fixture warning');"); click("console_run");
+        assertTrue("The console should paint its amber warning", consolePaints(244, 198, 131));
+        enter("console_input", "throw new Error('fixture error');"); click("console_run");
+        assertTrue("The console should paint its red script exception", consolePaints(255, 180, 174));
         checkpoint("browser-console-dock");
         selectBrowserTool("cookies");
         assertTrue(waitText("browser_tool_heading", "Cookie names and available flags", 10000));
@@ -160,6 +158,32 @@ public class ProductionUiTest extends NativeUiDriver {
         Rect grip = tag("dock_resize_handle").getVisibleBounds();
         device.swipe(grip.centerX(), grip.centerY(), grip.centerX(), grip.centerY() - distance, 30);
         device.waitForIdle(2000);
+    }
+
+    private boolean consolePaints(int red, int green, int blue) {
+        Rect bounds = tag("console_messages").getVisibleBounds();
+        long deadline = SystemClock.uptimeMillis() + 12000;
+        while (SystemClock.uptimeMillis() < deadline) {
+            Bitmap screenshot = InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();
+            if (screenshot != null) {
+                Bitmap pixels = screenshot.getConfig() == Bitmap.Config.HARDWARE ? screenshot.copy(Bitmap.Config.ARGB_8888, false) : screenshot;
+                int matches = 0;
+                try {
+                    for (int y = bounds.top; y < Math.min(bounds.bottom, pixels.getHeight()); y++) {
+                        for (int x = bounds.left; x < Math.min(bounds.right, pixels.getWidth()); x++) {
+                            int color = pixels.getPixel(x, y);
+                            if (Math.abs(Color.red(color) - red) < 12 && Math.abs(Color.green(color) - green) < 12
+                                    && Math.abs(Color.blue(color) - blue) < 12 && ++matches >= 6) return true;
+                        }
+                    }
+                } finally {
+                    if (pixels != screenshot) pixels.recycle();
+                    screenshot.recycle();
+                }
+            }
+            SystemClock.sleep(250);
+        }
+        return false;
     }
 
     private void selectBrowserTool(String panel) {

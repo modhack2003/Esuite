@@ -163,6 +163,7 @@ internal fun BrowserInspector(
     report: () -> Unit,
     edit: (html: Boolean, code: String) -> Unit,
     openApi: (String) -> Unit,
+    openExternally: (String) -> Unit,
     console: @Composable () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -202,9 +203,6 @@ internal fun BrowserInspector(
                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(panel.summary, style = MaterialTheme.typography.labelLarge, modifier = Modifier.testTag("browser_tool_heading"))
                     if (currentUrl != null) when (panel) {
-                        BrowserTool.Page -> TextButton(onClick = { openApi(currentUrl) }, modifier = Modifier.testTag("browser_open_api")) {
-                            Text("Open in API Lab")
-                        }
                         BrowserTool.Elements -> Row(Modifier.horizontalScroll(rememberScrollState())) {
                             TextButton(onClick = pick) { Text("Pick element") }
                             TextButton(onClick = selection) { Text("Read selection") }
@@ -217,6 +215,14 @@ internal fun BrowserInspector(
                     SelectionContainer {
                         Text(output.ifBlank { if (currentUrl == null) "Load an HTTPS page to inspect it." else "Reading page…" },
                             Modifier.fillMaxWidth().testTag("browser_output"), style = technicalTextStyle())
+                    }
+                    if (panel == BrowserTool.Page && currentUrl != null) {
+                        Row(Modifier.horizontalScroll(rememberScrollState())) {
+                            TextButton(onClick = { openApi(currentUrl) }, modifier = Modifier.testTag("browser_open_api")) {
+                                Text("Open in API Lab")
+                            }
+                            TextButton(onClick = { openExternally(currentUrl) }) { Text("Open in system browser") }
+                        }
                     }
                 }
             }

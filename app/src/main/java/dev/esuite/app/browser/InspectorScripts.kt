@@ -164,11 +164,20 @@ object InspectorScripts {
         (() => {
           const viewport = window.visualViewport;
           const declaration = document.querySelector('meta[name="viewport"]');
+          let dynamicHeight = 'Unsupported';
+          if (CSS.supports('height', '100dvh')) {
+            const measure = document.createElement('div');
+            measure.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;height:100dvh';
+            document.documentElement.appendChild(measure);
+            dynamicHeight = Math.round(measure.getBoundingClientRect().height) + ' CSS px';
+            measure.remove();
+          }
           return [
             'Layout viewport · ' + innerWidth + ' × ' + innerHeight + ' CSS px',
             viewport ? 'Visual viewport · ' + Math.round(viewport.width) + ' × ' + Math.round(viewport.height) + ' CSS px' : 'Visual viewport unavailable',
             'Device pixel ratio · ' + devicePixelRatio,
             'Page width · ' + document.documentElement.scrollWidth + ' CSS px',
+            'Dynamic viewport height · ' + dynamicHeight,
             'Viewport declaration · ' + (declaration ? declaration.content.slice(0, 240) : 'None'),
             'Document language · ' + (document.documentElement.lang.slice(0, 24) || 'Unspecified')
           ].join('\n');

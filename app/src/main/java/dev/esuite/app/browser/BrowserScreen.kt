@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -56,6 +57,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.webkit.CookieManagerCompat
 import androidx.webkit.WebViewFeature
@@ -91,6 +94,7 @@ internal fun BrowserScreen(
     val context = LocalContext.current
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
+    val links = LocalUriHandler.current
     val requestLog = remember { BrowserRequestLog() }
     var generation by remember { mutableIntStateOf(0) }
     var preparing by remember { mutableStateOf(true) }
@@ -177,6 +181,11 @@ internal fun BrowserScreen(
     fun goBack() {
         addressEdited = false
         browser?.goBack()
+    }
+
+    fun openInSystemBrowser(url: String) {
+        val target = BrowserAddress.https(url) ?: return
+        runCatching { links.openUri(target.toString()) }.onFailure { linkNotice = "No system browser is available." }
     }
 
     fun markVisible(view: WebView, url: String) {
@@ -379,6 +388,10 @@ internal fun BrowserScreen(
                     browser.apply {
                         clipToOutline = true
                         outlineProvider = ViewOutlineProvider.BOUNDS
+                        // Compose already subtracts the system bars and keyboard from the WebView bounds.
+                        ViewCompat.setOnApplyWindowInsetsListener(this) { view, _ ->
+                            ViewCompat.onApplyWindowInsets(view, WindowInsetsCompat.CONSUMED)
+                        }
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
                         settings.useWideViewPort = true
@@ -500,7 +513,9 @@ internal fun BrowserScreen(
                 },
                 update = { view ->
                     val showPage = visible && pageUrl != null && error == null
-                    view.visibility = if (showPage) View.VISIBLE else View.INVISIBLE
+                    view.visibility = if (visible) View.VISIBLE else View.INVISIBLE
+                    view.isEnabled = showPage
+                    view.isFocusable = showPage
                     view.importantForAccessibility = if (showPage) View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
                     else View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
                 },
@@ -513,6 +528,9 @@ internal fun BrowserScreen(
                     browser == null -> BrowserNotice("Browser unavailable", "Install or update Android System WebView.") {}
                     error != null -> BrowserNotice("Page couldn’t open", error.orEmpty()) {
                         Button(onClick = ::openAddress, enabled = address.isNotBlank()) { Text("Try again") }
+                        BrowserAddress.https(address)?.let { target ->
+                            TextButton(onClick = { openInSystemBrowser(target.toString()) }) { Text("Open in system browser") }
+                        }
                     }
                     pageUrl == null && !loading -> BrowserNotice("Browse and inspect", "Enter an HTTPS address or search with DuckDuckGo.", brand = true) {}
                 }
@@ -529,7 +547,7 @@ internal fun BrowserScreen(
                 { readPanel(BrowserTool.Elements) }, { html, code ->
                     val script = if (html) InspectorScripts.html else InspectorScripts.css
                     evaluateInspection(script.replace("__ESUITE_VALUE__", JsonPrimitive(code).toString()))
-                }, onOpenApi) {
+                }, onOpenApi, ::openInSystemBrowser) {
                 ConsolePanel(console, consoleDraft, { consoleDraft = it }, scriptMode, { scriptMode = it },
                     activeView() != null, running != null, run = {
                         val origin = pageUrl?.let(BrowserAddress::https)?.let(BrowserAddress::origin)
@@ -649,7 +667,7 @@ private fun BrowserToolbar(
 
 @Composable
 private fun BrowserNotice(title: String, message: String, brand: Boolean = false, action: @Composable () -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState()).padding(22.dp),
         verticalArrangement = Arrangement.spacedBy(9.dp, Alignment.CenterVertically)) {
         if (brand) Icon(painterResource(R.drawable.esuite_splash_mark), null, Modifier.size(62.dp), tint = Color.Unspecified)
         Text(title, style = MaterialTheme.typography.headlineMedium)
