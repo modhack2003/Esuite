@@ -2,7 +2,6 @@ package dev.esuite.app
 
 import android.os.Bundle
 import android.view.KeyEvent
-import android.webkit.WebView
 import androidx.activity.compose.BackHandler
 import android.content.Context
 import androidx.activity.ComponentActivity
@@ -81,7 +80,6 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
-        WebView.setWebContentsDebuggingEnabled(false)
         val preferences = getSharedPreferences("appearance", Context.MODE_PRIVATE)
         setContent {
             var appearance by remember {

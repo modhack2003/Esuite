@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.net.http.SslError
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
 import android.webkit.RenderProcessGoneDetail
@@ -42,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
@@ -92,7 +94,12 @@ internal fun BrowserScreen(
     val requestLog = remember { BrowserRequestLog() }
     var generation by remember { mutableIntStateOf(0) }
     var preparing by remember { mutableStateOf(true) }
-    val browser = remember(context, generation, preparing) { if (preparing) null else runCatching { WebView(context) }.getOrNull() }
+    val browser = remember(context, generation, preparing) {
+        if (preparing) null else runCatching {
+            WebView.setWebContentsDebuggingEnabled(false)
+            WebView(context)
+        }.getOrNull()
+    }
     val destroyed = remember(browser) { AtomicBoolean(false) }
     var address by rememberSaveable { mutableStateOf("") }
     var addressEdited by remember { mutableStateOf(false) }
@@ -105,6 +112,7 @@ internal fun BrowserScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var linkNotice by remember { mutableStateOf<String?>(null) }
     var rendererGone by remember { mutableStateOf(false) }
+    var interruptedPage by remember { mutableStateOf<String?>(null) }
     var canGoBack by remember { mutableStateOf(false) }
     var canGoForward by remember { mutableStateOf(false) }
     var clearing by remember { mutableStateOf(false) }
@@ -164,6 +172,11 @@ internal fun BrowserScreen(
             return
         }
         beginNavigation(view, target.toString())
+    }
+
+    fun goBack() {
+        addressEdited = false
+        browser?.goBack()
     }
 
     fun markVisible(view: WebView, url: String) {
@@ -247,6 +260,13 @@ internal fun BrowserScreen(
         preparing = false
     }
     LaunchedEffect(preparing) { if (!preparing) onReady() }
+    LaunchedEffect(browser) {
+        val url = interruptedPage
+        if (browser != null && !rendererGone && url != null) {
+            interruptedPage = null
+            beginNavigation(browser, url)
+        }
+    }
     LaunchedEffect(visible, inspecting, utilitiesVisible, panel, pageUrl, pageTitle, loading) {
         if (visible && inspecting && !utilitiesVisible) readPanel(panel)
     }
@@ -302,6 +322,7 @@ internal fun BrowserScreen(
             resetDocument()
             address = ""
             loadTarget = null
+            interruptedPage = null
             awaitingStart = false
             error = null
             loading = false
@@ -315,7 +336,7 @@ internal fun BrowserScreen(
         when {
             utilitiesVisible -> closeUtilities()
             inspecting -> { inspecting = false; focus.clearFocus() }
-            else -> browser?.goBack()
+            else -> goBack()
         }
     }
 
@@ -326,7 +347,7 @@ internal fun BrowserScreen(
                 browser != null && !rendererGone && !clearing && address.isNotBlank(),
                 canGoBack, canGoForward, loading, pageUrl != null,
                 inspecting && !utilitiesVisible, browser != null && !rendererGone,
-                back = { browser?.goBack() }, forward = { browser?.goForward() },
+                back = ::goBack, forward = { addressEdited = false; browser?.goForward() },
                 reload = {
                     if (loading) {
                         browser?.stopLoading()
@@ -334,6 +355,7 @@ internal fun BrowserScreen(
                         if (pageUrl == null) error = "Loading was stopped."
                         browser?.let(::updateHistory)
                     } else if (browser != null) {
+                        addressEdited = false
                         loadTarget = pageUrl
                         awaitingStart = true
                         loading = true
@@ -355,6 +377,8 @@ internal fun BrowserScreen(
                 modifier = Modifier.fillMaxSize().testTag("browser_page").clipToBounds(),
                 factory = {
                     browser.apply {
+                        clipToOutline = true
+                        outlineProvider = ViewOutlineProvider.BOUNDS
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
                         settings.useWideViewPort = true
@@ -461,6 +485,7 @@ internal fun BrowserScreen(
                             override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
                                 (view.parent as? ViewGroup)?.removeView(view)
                                 if (destroyed.compareAndSet(false, true)) view.destroy()
+                                interruptedPage = pageUrl ?: loadTarget
                                 resetDocument()
                                 rendererGone = true
                                 clearing = false
@@ -497,8 +522,8 @@ internal fun BrowserScreen(
             if (utilitiesVisible) Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLow)) {
                 DockHeader("Tools", "", closeUtilities)
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)) { utilities() }
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) { utilities() }
             } else BrowserInspector(panel, output, pageUrl?.takeIf { error == null }, { panel = it }, { readPanel(panel) },
                 ::toggleInspector, { evaluateInspection(InspectorScripts.select) }, { evaluateInspection(InspectorScripts.selection) },
                 { readPanel(BrowserTool.Elements) }, { html, code ->
@@ -508,7 +533,8 @@ internal fun BrowserScreen(
                 ConsolePanel(console, consoleDraft, { consoleDraft = it }, scriptMode, { scriptMode = it },
                     activeView() != null, running != null, run = {
                         val origin = pageUrl?.let(BrowserAddress::https)?.let(BrowserAddress::origin)
-                        if (activeView() != null && origin != null && running == null && consoleDraft.isNotBlank()) {
+                        if (activeView() != null && origin != null && running == null &&
+                            consoleDraft.isNotBlank() && consoleDraft.length <= ConsoleJavaScript.INPUT_LIMIT) {
                             keyboard?.hide()
                             focus.clearFocus()
                             addConsole(ConsoleLevel.Command, consoleDraft)
@@ -600,7 +626,7 @@ private fun BrowserToolbar(
     }
     BoxWithConstraints(Modifier.fillMaxWidth().background(colors.surface)) {
         val wide = maxWidth >= 560.dp
-        val toolsLabel = maxWidth >= 330.dp
+        val toolsLabel = maxWidth >= 315.dp && LocalDensity.current.fontScale <= 1.2f
         Column {
             if (wide) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {

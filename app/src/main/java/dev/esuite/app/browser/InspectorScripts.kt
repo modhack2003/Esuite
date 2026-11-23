@@ -29,7 +29,7 @@ object InspectorScripts {
     val selection = """
         (() => { const e=window.__esuiteElement; if(!e || !e.isConnected) return 'No selected element'; const s=getComputedStyle(e);
           return JSON.stringify({htmlTruncated:e.outerHTML.length>16000,htmlCharacters:e.outerHTML.length,htmlLimit:16000,
-            tag:e.tagName,html:e.outerHTML.slice(0,16000),css:e.style.cssText,
+            tag:e.tagName,html:e.outerHTML.slice(0,16000),css:e.style.cssText.slice(0,4000),
             computed:{display:s.display,color:s.color,background:s.backgroundColor,font:s.font,position:s.position}},null,2);
         })()
     """.trimIndent()
@@ -42,7 +42,7 @@ object InspectorScripts {
           const fragment=range.createContextualFragment(__ESUITE_VALUE__);
           const replacement=fragment.firstElementChild;
           e.replaceWith(fragment); window.__esuiteElement=replacement;
-          window.__esuiteOutline=replacement?.style.outline || '';
+          window.__esuiteOutline=replacement ? replacement.style.outline : '';
           if(replacement) replacement.style.outline='2px solid #5BE0D6';
           return 'HTML updated locally';
         })()

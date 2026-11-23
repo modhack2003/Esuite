@@ -134,11 +134,14 @@ internal fun ConsolePanel(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            val canRun = ready && !running && draft.isNotBlank()
+            val tooLong = draft.length > ConsoleJavaScript.INPUT_LIMIT
+            val canRun = ready && !running && !tooLong && draft.isNotBlank()
             OutlinedTextField(
                 value = draft,
-                onValueChange = { onDraft(it.take(ConsoleJavaScript.INPUT_LIMIT)) },
+                onValueChange = { onDraft(it.take(ConsoleJavaScript.INPUT_LIMIT + 1)) },
                 enabled = ready && !running,
+                isError = tooLong,
+                supportingText = if (tooLong) ({ Text("Limit: ${ConsoleJavaScript.INPUT_LIMIT} characters") }) else null,
                 placeholder = { Text(if (script) "JavaScript statements" else "JavaScript expression", maxLines = 1) },
                 keyboardOptions = TechnicalKeyboard,
                 textStyle = technicalTextStyle(),

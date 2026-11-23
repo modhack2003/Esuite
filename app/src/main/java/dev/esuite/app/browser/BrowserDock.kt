@@ -56,7 +56,7 @@ internal fun BrowserDock(
     page: @Composable () -> Unit,
     dock: @Composable () -> Unit,
 ) {
-    var heightFraction by rememberSaveable { mutableFloatStateOf(0.47f) }
+    var heightFraction by rememberSaveable { mutableFloatStateOf(0.53f) }
     var widthFraction by rememberSaveable { mutableFloatStateOf(0.43f) }
     BoxWithConstraints(Modifier.fillMaxSize().clipToBounds()) {
         val side = maxWidth >= 720.dp || (maxWidth >= 480.dp && maxHeight < 400.dp)

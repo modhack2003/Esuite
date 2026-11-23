@@ -45,11 +45,12 @@ public class ProductionUiTest extends NativeUiDriver {
         assertNotNull(device.wait(Until.findObject(By.textContains("esuite-observation")), 5000));
         device.pressBack(); device.pressBack();
         click("nav_tools");
+        revealUtilityControl("tools_input", true);
         enter("tools_input", "ESuite");
         find(By.text("Base64 encode")).click();
-        revealToolResult();
+        revealUtilityControl("tools_output", true);
         assertTrue(waitText("tools_output", "RVN1aXRl", 5000));
-        scrollTools(false);
+        revealUtilityControl("tools_tab_review", false);
         click("tools_tab_review");
         assertNotNull(find(By.text("Review AWS JSON offline")));
         assertFalse(device.hasObject(By.res("task_preview")));
@@ -107,7 +108,9 @@ public class ProductionUiTest extends NativeUiDriver {
         click("console_mode");
         enter("console_input", "console.warn('fixture warning'); throw new Error('fixture error');"); click("console_run");
         assertTrue("Script exception is missing", device.wait(Until.hasObject(By.res("console_error").textContains("fixture error")), 10000));
-        assertTrue("Console warnings need their own severity", device.wait(Until.hasObject(By.res("console_warning").text("fixture warning")), 5000));
+        BySelector warning = By.res("console_warning").text("fixture warning");
+        if (!device.hasObject(warning)) tag("console_messages").swipe(Direction.DOWN, 0.65f);
+        assertTrue("Console warnings need their own severity", device.wait(Until.hasObject(warning), 5000));
         checkpoint("browser-console-dock");
         selectBrowserTool("cookies");
         assertTrue(waitText("browser_tool_heading", "Cookie names and available flags", 10000));
@@ -140,6 +143,7 @@ public class ProductionUiTest extends NativeUiDriver {
 
     private Rect pageBounds() {
         UiObject2 page = device.findObject(By.res("browser_page"));
+        if (page == null) page = device.findObject(By.clazz("android.webkit.WebView"));
         assertNotNull("The WebView disappeared", page);
         return page.getVisibleBounds();
     }
@@ -154,8 +158,8 @@ public class ProductionUiTest extends NativeUiDriver {
         throw new AssertionError("Developer Tools tab not visible: " + panel);
     }
 
-    private void revealToolResult() {
-        for (int i = 0; i < 5 && !usable(device.findObject(By.res("tools_output"))); i++) scrollTools(true);
+    private void revealUtilityControl(String id, boolean down) {
+        for (int i = 0; i < 5 && !usable(device.findObject(By.res(id))); i++) scrollTools(down);
     }
 
     private void scrollTools(boolean down) {
