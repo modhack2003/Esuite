@@ -112,7 +112,7 @@ internal fun NetworkPanel(state: BrowserNetworkState, ready: Boolean, clearReque
                         NetworkOrder.entries.forEach { option ->
                             FilterChip(order == option, { order = option }, { Text(option.label) })
                         }
-                        if (wide) FilterChip(showWaterfall, { showWaterfall = !showWaterfall }, { Text("Waterfall") })
+                        FilterChip(showWaterfall, { showWaterfall = !showWaterfall }, { Text("Waterfall") })
                     }
                 }
                 item {
@@ -155,6 +155,7 @@ internal fun NetworkPanel(state: BrowserNetworkState, ready: Boolean, clearReque
                         Text(row.path, style = technicalTextStyle(), maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(listOf(facts, metrics).filter(String::isNotEmpty).joinToString(" · "), style = MaterialTheme.typography.bodySmall,
                             color = if (row.failed) colors.error else colors.onSurfaceVariant)
+                        if (showWaterfall) row.timing?.let { WaterfallBar(it, end) }
                     }
                     HorizontalDivider(color = colors.outlineVariant)
                 }
