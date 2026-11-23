@@ -19,13 +19,15 @@ public final class BrowserAdaptiveUiTest extends NativeUiDriver {
             device.executeShellCommand("settings put system font_scale 1.5");
             device.setOrientationNatural();
             launch();
+            assertTrue("The browser did not adopt the enlarged text setting", device.wait(Until.hasObject(
+                    By.pkg("dev.esuite.app").desc("Browser")), 10_000));
             enter("browser_url", "https://example.com/");
             click("browser_go");
             assertNotNull(device.wait(Until.findObject(By.clazz("android.webkit.WebView")), 45_000));
             click("browser_tools");
             assertNotNull(tag("browser_panel_picker"));
             Rect portraitPage = pageBounds();
-            Rect portraitDock = tag("browser_dock").getVisibleBounds();
+            Rect portraitDock = dockBounds();
             assertTrue("Portrait page and dock should stack", portraitPage.bottom <= portraitDock.top);
             checkpoint("browser-portrait-large-text");
 
@@ -36,7 +38,7 @@ public final class BrowserAdaptiveUiTest extends NativeUiDriver {
             assertTrue("Emulator did not enter landscape", device.getDisplayWidth() > device.getDisplayHeight());
             assertTrue(waitText("browser_url", "https://example.com/", 10_000));
             Rect landscapePage = pageBounds();
-            Rect landscapeDock = tag("browser_dock").getVisibleBounds();
+            Rect landscapeDock = dockBounds();
             assertTrue("Landscape page and inspector should be side by side", landscapePage.right <= landscapeDock.left);
             assertTrue("The page needs a usable viewport", landscapePage.width() >= 100 && landscapePage.height() >= 75);
             click("browser_panel_picker");
@@ -59,5 +61,11 @@ public final class BrowserAdaptiveUiTest extends NativeUiDriver {
         if (page == null) page = device.findObject(By.clazz("android.webkit.WebView"));
         assertNotNull("The page disappeared", page);
         return page.getVisibleBounds();
+    }
+
+    private Rect dockBounds() {
+        UiObject2 dock = device.wait(Until.findObject(By.res("browser_dock")), 8_000);
+        assertNotNull("The inspector dock disappeared", dock);
+        return dock.getVisibleBounds();
     }
 }
