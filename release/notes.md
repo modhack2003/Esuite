@@ -1,7 +1,6 @@
-# ESuite 1.0.7
+# ESuite 1.0.8
 
-- Elements adds a searchable, expandable DOM tree, tap-to-pick selection, and separate Markup, Styles and Layout views. Edit HTML or inline CSS and reveal the selected element on the live page.
-- Network shows same-origin request events, resource timing details and a waterfall. Filter by type or status, sort by start time, duration or transfer size, and freeze the view for review.
-- Tools and API Lab add passive response checks for security headers, cookie flags, cache policy and CORS. Review pasted headers or an existing response on-device without sending another request.
-- Key controls stay visible as content scrolls in compact docks. The browser remains visible while you use Developer Tools.
-- The release includes the browser controls, launch screen, Inter typography and viewport repair introduced in 1.0.6. Desktop breakpoints, CPU and heap profiling, and full network capture require desktop DevTools.
+- Website form fields receive the Android keyboard while you browse and while Developer Tools are open. The page gets more space while you type.
+- Elements presents editable HTML as an indented, syntax-colored tree with collapsible tags, comments and text nodes. Search reveals matching markup in context, and Edit as HTML starts with the current markup.
+- Network brings same-origin observations into one list with record, clear and preserve controls, resource and status filters, timing details, and a waterfall on wider layouts. WebView callbacks and measured resource timings show their source in request details.
+- Desktop tools remain necessary for complete raw HTTP capture, throttling and cache emulation.

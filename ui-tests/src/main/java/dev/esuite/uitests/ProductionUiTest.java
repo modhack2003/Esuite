@@ -103,7 +103,12 @@ public class ProductionUiTest extends NativeUiDriver {
         assertTrue(waitText("browser_output", "Example Domain", 10000));
         selectBrowserTool("elements");
         UiObject2 root = device.wait(Until.findObject(By.res("elements_node_0")), 15000);
-        assertTrue("Document tree is missing its root", root != null && containsText(root, "HTML"));
+        assertTrue("Document tree is missing its root", root != null && containsText(root, "<html"));
+        assertNotNull(device.wait(Until.findObject(By.desc("Collapse html")), 5000));
+        click("elements_toggle_0");
+        assertNotNull(device.wait(Until.findObject(By.desc("Expand html")), 5000));
+        click("elements_toggle_0");
+        assertNotNull(device.wait(Until.findObject(By.desc("Collapse html")), 5000));
         selectBrowserTool("console");
         enter("console_input", "await Promise.resolve(6 * 7).then(n => { const mobile = innerWidth >= 200 && innerWidth < 600; if (n === 42 && mobile) { " +
                 "const canvas = document.createElement('canvas'); canvas.width = canvas.height = 24; " +
@@ -125,6 +130,13 @@ public class ProductionUiTest extends NativeUiDriver {
         assertNotNull(find(By.res("browser_output")));
         selectBrowserTool("storage"); assertTrue(waitText("browser_output", "Local storage", 10000));
         selectBrowserTool("network"); assertTrue("Network did not show a request row", device.wait(Until.hasObject(By.res("network_event")), 10000));
+        click("network_record");
+        assertTrue(waitText("network_record", "Record", 5000));
+        click("network_clear");
+        assertTrue(device.wait(Until.gone(By.res("network_event")), 5000));
+        click("network_preserve");
+        assertTrue(tag("network_preserve").isSelected());
+        click("network_record");
         selectBrowserTool("viewport");
         assertTrue("Viewport panel did not open", device.wait(Until.hasObject(By.res("browser_tool_heading")
                 .text("Responsive page measurements")), 10000));
@@ -139,7 +151,7 @@ public class ProductionUiTest extends NativeUiDriver {
         click("open_settings"); assertNotNull(find(By.res("settings_title")));
         click("appearance_tab_light");
         assertTrue(tag("appearance_tab_light").isSelected());
-        assertNotNull(find(By.textContains("Version 1.0.7")));
+        assertNotNull(find(By.textContains("Version 1.0.8")));
         assertNotNull(find(By.text("Credits")));
         device.pressBack();
         click("browser_tools");

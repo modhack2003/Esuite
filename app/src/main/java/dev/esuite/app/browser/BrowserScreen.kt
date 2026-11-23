@@ -3,6 +3,7 @@ package dev.esuite.app.browser
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.net.http.SslError
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
@@ -68,15 +69,19 @@ import java.io.ByteArrayInputStream
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 
 private data class ConsoleRun(val document: Int, val origin: String, val token: String, val input: String, val script: Boolean)
 
-@SuppressLint("SetJavaScriptEnabled")
+@SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 @Composable
 internal fun BrowserScreen(
     visible: Boolean,
@@ -94,8 +99,12 @@ internal fun BrowserScreen(
     val context = LocalContext.current
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val links = LocalUriHandler.current
     val requestLog = remember { BrowserRequestLog() }
+    val coroutineScope = rememberCoroutineScope()
+    var recordingNetwork by remember { mutableStateOf(true) }
+    var browserStarted by remember { mutableStateOf(false) }
     var generation by remember { mutableIntStateOf(0) }
     var preparing by remember { mutableStateOf(true) }
     val browser = remember(context, generation, preparing) {
@@ -125,9 +134,12 @@ internal fun BrowserScreen(
     var output by remember { mutableStateOf("") }
     var domTree by remember { mutableStateOf<DomTree?>(null) }
     var domDetails by remember { mutableStateOf<DomDetails?>(null) }
+    var domExpansion by remember { mutableStateOf(emptyMap<Int, Int>()) }
+    var domQuery by remember { mutableStateOf("") }
+    var domReveal by remember { mutableIntStateOf(0) }
+    var domKeepSelected by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
     var elementNotice by remember { mutableStateOf("") }
-    var timings by remember { mutableStateOf(emptyList<ResourceTiming>()) }
     var document by remember { mutableIntStateOf(0) }
     var inspection by remember { mutableIntStateOf(0) }
     var console by remember { mutableStateOf(emptyList<ConsoleEntry>()) }
@@ -151,9 +163,11 @@ internal fun BrowserScreen(
         output = ""
         domTree = null
         domDetails = null
+        domExpansion = emptyMap()
+        domQuery = ""
+        domKeepSelected = false
         picking = false
         elementNotice = ""
-        timings = emptyList()
         linkNotice = null
     }
 
@@ -227,19 +241,43 @@ internal fun BrowserScreen(
         }
     }
 
-    fun readElement() = evaluateInspection(InspectorScripts.selection) { result ->
-        domDetails = runCatching { Json.decodeFromString<DomDetails?>(result.orEmpty()) }.getOrNull()
-        elementNotice = if (domDetails == null) "Select an element on the page or in the tree." else ""
+    fun readTree(reveal: Boolean = false, after: (() -> Unit)? = null) {
+        val options = DomTreeOptions(domExpansion, domQuery, domKeepSelected || reveal)
+        evaluateInspection(InspectorScripts.elementTree.replace("__ESUITE_TREE_OPTIONS__", Json.encodeToString(options))) { result ->
+            val tree = runCatching { Json.decodeFromString<DomTree>(result.orEmpty()) }.getOrNull()
+            if (tree == null) elementNotice = "The document tree is unavailable. Refresh to try again."
+            else {
+                domTree = tree
+                if (reveal) {
+                    domKeepSelected = true
+                    domReveal++
+                }
+            }
+            after?.invoke()
+        }
     }
 
-    fun readTree(after: (() -> Unit)? = null) = evaluateInspection(InspectorScripts.elementTree) { result ->
-        domTree = runCatching { Json.decodeFromString<DomTree>(result.orEmpty()) }.getOrNull()
-        if (domTree == null) elementNotice = "The document tree is unavailable. Refresh to try again."
-        after?.invoke()
+    fun readElement(reveal: Boolean = false) {
+        activeView()?.evaluateJavascript(InspectorScripts.highlightSelection, null)
+        evaluateInspection(InspectorScripts.selection) { result ->
+            domDetails = runCatching { Json.decodeFromString<DomDetails?>(result.orEmpty()) }.getOrNull()
+            elementNotice = ""
+            readTree(reveal)
+        }
     }
 
-    fun readTimings() = evaluateInspection(InspectorScripts.networkTiming) { result ->
-        timings = runCatching { Json.decodeFromString<List<ResourceTiming>>(result.orEmpty()) }.getOrDefault(emptyList())
+    fun readTimings() {
+        val token = requestLog.token() ?: return
+        val scope = pageUrl?.let(BrowserAddress::https)?.let(BrowserAddress::origin) ?: return
+        val view = activeView() ?: return
+        val currentDocument = document
+        coroutineScope.launch {
+            val result = view.javascript(InspectorScripts.networkTiming) ?: return@launch
+            val batch = withContext(Dispatchers.Default) {
+                runCatching { Json.decodeFromString<TimingBatch>(result) }.getOrNull()
+            }
+            if (batch != null && currentDocument == document && activeView() === view) requestLog.addTimings(token, scope, batch)
+        }
     }
 
     fun readPanel(selection: BrowserTool) {
@@ -260,7 +298,7 @@ internal fun BrowserScreen(
                 }
                 rows.joinToString("\n").ifEmpty { "No cookies for this page." }
             }.getOrDefault("Cookie metadata is unavailable from Android System WebView.")
-            BrowserTool.Elements -> readTree()
+            BrowserTool.Elements -> if (domDetails == null) readTree() else readElement()
             BrowserTool.Storage -> evaluateInspection(InspectorScripts.storageMetadata)
             BrowserTool.Sources -> evaluateInspection(InspectorScripts.sourceFiles)
             BrowserTool.Performance -> evaluateInspection(InspectorScripts.performanceSummary)
@@ -276,7 +314,7 @@ internal fun BrowserScreen(
             closeUtilities()
             inspecting = true
         } else inspecting = !inspecting
-        if (!inspecting) focus.clearFocus()
+        if (!inspecting && browser?.hasFocus() != true) focus.clearFocus()
     }
 
     val toggleTools by rememberUpdatedState(::toggleInspector)
@@ -312,11 +350,11 @@ internal fun BrowserScreen(
     LaunchedEffect(visible, inspecting, utilitiesVisible, panel, pageUrl, pageTitle, loading) {
         if (visible && inspecting && !utilitiesVisible) readPanel(panel)
     }
-    LaunchedEffect(visible, inspecting, utilitiesVisible, panel, pageUrl) {
-        if (visible && inspecting && !utilitiesVisible && panel == BrowserTool.Network && pageUrl != null) {
+    LaunchedEffect(browserStarted, recordingNetwork, document, pageUrl) {
+        if (browserStarted && recordingNetwork && pageUrl != null) {
             while (true) {
-                delay(1500)
                 readTimings()
+                delay(1500)
             }
         }
     }
@@ -325,6 +363,9 @@ internal fun BrowserScreen(
             if (!destroyed.get() && !rendererGone && pageUrl != null) browser?.evaluateJavascript(InspectorScripts.clearSelection, null)
             domTree = null
             domDetails = null
+            domExpansion = emptyMap()
+            domQuery = ""
+            domKeepSelected = false
             picking = false
             elementNotice = ""
         }
@@ -337,7 +378,10 @@ internal fun BrowserScreen(
             true
         } ?: false
         picking = false
-        if (picked) readElement() else {
+        if (picked) {
+            domQuery = ""
+            readElement(reveal = true)
+        } else {
             view.evaluateJavascript(InspectorScripts.disarmPicker, null)
             elementNotice = "Picker expired. Tap Pick element to try again."
         }
@@ -362,8 +406,12 @@ internal fun BrowserScreen(
     LaunchedEffect(linkNotice) { if (linkNotice != null) { delay(3500); linkNotice = null } }
 
     LifecycleStartEffect(browser, visible, rendererGone) {
+        browserStarted = visible && !rendererGone && browser != null
         if (visible && !destroyed.get()) browser?.onResume()
-        onStopOrDispose { if (!destroyed.get()) browser?.onPause() }
+        onStopOrDispose {
+            browserStarted = false
+            if (!destroyed.get()) browser?.onPause()
+        }
     }
     DisposableEffect(browser) {
         onDispose { if (destroyed.compareAndSet(false, true)) browser?.destroy() }
@@ -399,10 +447,13 @@ internal fun BrowserScreen(
             requestLog.page(null)
         }
     }
-    BackHandler(visible && (utilitiesVisible || inspecting || canGoBack)) {
+    BackHandler(visible && !imeVisible && (utilitiesVisible || inspecting || canGoBack)) {
         when {
             utilitiesVisible -> closeUtilities()
-            inspecting -> { inspecting = false; focus.clearFocus() }
+            inspecting -> {
+                inspecting = false
+                if (browser?.hasFocus() != true) focus.clearFocus()
+            }
             else -> goBack()
         }
     }
@@ -439,7 +490,7 @@ internal fun BrowserScreen(
                     color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.labelMedium)
             }
         }
-        BrowserDock(visible && (inspecting || utilitiesVisible), page = {
+        BrowserDock(visible && (inspecting || utilitiesVisible), pageHasFocus = { browser?.hasFocus() == true }, page = {
             if (browser != null && !rendererGone) AndroidView(
                 modifier = Modifier.fillMaxSize().testTag("browser_page").clipToBounds(),
                 factory = {
@@ -449,6 +500,13 @@ internal fun BrowserScreen(
                         // Compose already subtracts the system bars and keyboard from the WebView bounds.
                         ViewCompat.setOnApplyWindowInsetsListener(this) { view, _ ->
                             ViewCompat.onApplyWindowInsets(view, WindowInsetsCompat.CONSUMED)
+                        }
+                        // Give Chromium the real touch event and the native input connection.
+                        setOnTouchListener { view, event ->
+                            if (event.actionMasked == MotionEvent.ACTION_DOWN && view.isEnabled && !view.hasFocus()) {
+                                view.requestFocus()
+                            }
+                            false
                         }
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
@@ -504,7 +562,7 @@ internal fun BrowserScreen(
                                 }
                                 val preserve = loadTarget == url && pageUrl == null
                                 resetDocument()
-                                requestLog.page(target, preserveExisting = preserve)
+                                requestLog.page(target, continuing = preserve)
                                 requestLog.add("", target, mainFrame = true, kind = RequestEventKind.Navigation)
                                 loadTarget = url
                                 awaitingStart = false
@@ -549,7 +607,8 @@ internal fun BrowserScreen(
 
                             override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) {
                                 BrowserAddress.https(request.url.toString())?.let {
-                                    requestLog.add(request.method, it, request.isForMainFrame, RequestEventKind.HttpError, response.statusCode)
+                                    requestLog.add(request.method, it, request.isForMainFrame, RequestEventKind.HttpError,
+                                        response.statusCode, response.mimeType)
                                 }
                             }
 
@@ -583,6 +642,7 @@ internal fun BrowserScreen(
                     view.visibility = if (visible) View.VISIBLE else View.INVISIBLE
                     view.isEnabled = showPage
                     view.isFocusable = showPage
+                    view.isFocusableInTouchMode = showPage
                     view.importantForAccessibility = if (showPage) View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
                     else View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
                 },
@@ -611,15 +671,26 @@ internal fun BrowserScreen(
             } else BrowserInspector(panel, output, pageUrl?.takeIf { error == null }, { panel = it }, { readPanel(panel) },
                 ::toggleInspector, onOpenApi, ::openInSystemBrowser,
                 elements = { key(document) {
-                    ElementsPanel(domTree, domDetails, pageUrl != null && error == null, elementNotice,
+                    ElementsPanel(domTree, domDetails, pageUrl != null && error == null, elementNotice, domQuery, domReveal, picking,
                         onPick = {
-                            domDetails = null
-                            evaluateInspection(InspectorScripts.select) {
-                                elementNotice = it.orEmpty()
-                                picking = it != null
+                            if (picking) {
+                                picking = false
+                                activeView()?.evaluateJavascript(InspectorScripts.disarmPicker, null)
+                                elementNotice = ""
+                            } else {
+                                evaluateInspection(InspectorScripts.select) {
+                                    elementNotice = it.orEmpty()
+                                    picking = it != null
+                                }
                             }
                         },
-                        onRead = ::readElement,
+                        onSearch = { query -> domQuery = query; readTree() },
+                        onExpand = { node, more ->
+                            val count = if (more) (domExpansion[node.id] ?: 24) + 24 else if (node.expanded) 0 else 24
+                            domExpansion = domExpansion + (node.id to count)
+                            if (count == 0) domKeepSelected = false
+                            readTree()
+                        },
                         onSelect = { node ->
                             picking = false
                             domDetails = null
@@ -628,18 +699,23 @@ internal fun BrowserScreen(
                             }
                         },
                         onReveal = { evaluateInspection(InspectorScripts.scrollToElement) { elementNotice = it.orEmpty() } },
-                        onEdit = { html, code ->
+                        onEdit = { html, original, code, complete ->
                             val script = if (html) InspectorScripts.html else InspectorScripts.css
-                            evaluateInspection(script.replace("__ESUITE_VALUE__", JsonPrimitive(code).toString())) {
-                                if (it == "HTML updated locally") readTree(::readElement)
-                                else if (it == "CSS updated locally") readElement()
-                                else elementNotice = it.orEmpty()
+                            val edit = Regex("__ESUITE_(EXPECTED|VALUE)__").replace(script) {
+                                JsonPrimitive(if (it.groupValues[1] == "EXPECTED") original else code).toString()
+                            }
+                            evaluateInspection(edit) {
+                                val applied = it == "HTML updated locally" || it == "CSS updated locally"
+                                complete(applied)
+                                if (applied) { domQuery = ""; readElement(reveal = html) }
+                                else elementNotice = it ?: "The edit couldn’t be applied. Your draft is still here."
                             }
                         })
-                } }, network = { key(document) {
-                    val events by requestLog.events.collectAsState()
-                    NetworkPanel(events, timings, pageUrl != null || loadTarget != null, requestLog::clear)
-                } }) {
+                } }, network = {
+                    val network by requestLog.state.collectAsState()
+                    NetworkPanel(network, pageUrl != null || loadTarget != null, clearRequests = requestLog::clear,
+                        onRecord = { recordingNetwork = it; requestLog.setRecording(it) }, onPreserve = requestLog::setPreserve)
+                }) {
                 ConsolePanel(console, consoleDraft, { consoleDraft = it }, scriptMode, { scriptMode = it },
                     activeView() != null, running != null, run = {
                         val origin = pageUrl?.let(BrowserAddress::https)?.let(BrowserAddress::origin)

@@ -6,10 +6,12 @@ between phases. No production key is generated or used by this test runner.
 """
 from pathlib import Path
 import atexit
+import hashlib
 import os
 import subprocess
 import sys
 import time
+import urllib.request
 import xml.etree.ElementTree as ET
 
 out = Path('native-test-results'); out.mkdir(exist_ok=True)
@@ -97,6 +99,33 @@ def probe_reported_site():
         report.write_text(f'Live-site check could not complete: {error}\n')
 
 
+def probe_previous_keyboard():
+    """Record how the same IME fixture behaves against the published 1.0.7 APK."""
+    report = out / 'BrowserKeyboardBaseline.txt'
+    previous = out / 'previous-keyboard.apk'
+    installed = False
+    try:
+        url = 'https://github.com/modhack2003/Esuite/releases/download/v1.0.7/ESuite-1.0.7.apk'
+        with urllib.request.urlopen(url, timeout=60) as response:
+            data = response.read(10 * 1024 * 1024)
+        if hashlib.sha256(data).hexdigest() != 'd684bff6146eb4774f4638c8c5e1b5378c61cd1518c8936ade0b943eded75861':
+            raise ValueError('Previous release checksum does not match')
+        previous.write_bytes(data)
+        command('adb', 'install', str(previous))
+        installed = True
+        result = subprocess.run([
+            'adb', 'shell', 'am', 'instrument', '-w', '-r', '-e', 'class', 'dev.esuite.uitests.BrowserKeyboardUiTest',
+            'dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner',
+        ], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=150)
+        report.write_text(result.stdout)
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        report.write_text(f'Baseline comparison could not complete: {error}\n')
+    finally:
+        previous.unlink(missing_ok=True)
+        if installed:
+            command('adb', 'uninstall', 'dev.esuite.app')
+
+
 try:
     if os.environ.get('GITHUB_ACTIONS') != 'true' or command('adb', 'shell', 'getprop', 'ro.kernel.qemu').strip() != '1':
         raise RuntimeError('Refusing destructive fixture setup outside a disposable Actions emulator')
@@ -106,9 +135,12 @@ try:
     suite('dev.esuite.app.test/androidx.test.runner.AndroidJUnitRunner', 'PlatformBoundaries', 2)
     # Delete disposable fixture data, then test the actual optimized release code.
     command('adb', 'uninstall', 'dev.esuite.app')
-    command('adb', 'install', unique('**/app/build/outputs/apk/ci/app-release-ci.apk'))
     command('adb', 'install', '-r', '-t', unique('**/ui-tests/build/outputs/apk/debug/ui-tests-debug.apk'))
+    if os.environ.get('ESUITE_REPORTED_SITE') == 'true':
+        probe_previous_keyboard()
+    command('adb', 'install', unique('**/app/build/outputs/apk/ci/app-release-ci.apk'))
     suite('dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner', 'OptimizedUi', 4, 'dev.esuite.uitests.ProductionUiTest')
+    suite('dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner', 'BrowserKeyboard', 1, 'dev.esuite.uitests.BrowserKeyboardUiTest')
     if os.environ.get('ESUITE_REPORTED_SITE') == 'true':
         probe_reported_site()
     subprocess.run(['adb', 'pull', '/sdcard/Android/data/dev.esuite.uitests/files', str(out / 'ui-evidence')], check=False, timeout=30)

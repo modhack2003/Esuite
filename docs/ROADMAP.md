@@ -135,3 +135,10 @@ Evidence and exact acceptance: [Vivo 1.0.2 review](reviews/vivo-1.0.2-production
 - [x] Add a Network waterfall, request details, pause, type and status filters, and timing and transfer-size sorts.
 - [x] Add on-device response checks for security headers, cookie attributes, cache policy and CORS. Make them accessible from Tools and API Lab.
 - [x] Pass the ten-configuration Android matrix and signed upgrades from 1.0.6, then verify the published APK against the signing artifact. [Release verification](AGENT_HANDOFF.md#107-elements-network-and-response-checks)
+
+## 1.0.8 browser input and inspection
+
+- [x] Give website fields native touch focus and prioritize the focused pane while the keyboard is open.
+- [x] Render Elements as a navigable HTML tree and edit current markup with stale-node checks.
+- [x] Combine Network observations with source labels, filtering, timing, recording and same-origin log preservation.
+- [ ] Complete the optimized IME and browser inspection gates, signed upgrades and public APK verification. [Release progress](AGENT_HANDOFF.md#108-browser-input-and-inspection)

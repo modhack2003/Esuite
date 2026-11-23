@@ -3,8 +3,6 @@ package dev.esuite.app.browser
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
 internal object BrowserAddress {
     private val scheme = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
@@ -31,38 +29,6 @@ internal object BrowserAddress {
 
     fun origin(url: HttpUrl): String =
         url.newBuilder().encodedPath("/").query(null).fragment(null).build().toString().removeSuffix("/")
-}
-
-internal enum class RequestEventKind(val label: String) { Navigation("Navigation"), Request("Request"), HttpError("HTTP error"), LoadError("Load error") }
-
-internal data class BrowserRequestEvent(
-    val id: Long, val kind: RequestEventKind, val method: String, val path: String,
-    val mainFrame: Boolean, val code: Int?,
-)
-
-/** These are WebView callbacks. Timing entries come independently from the viewed document. */
-internal class BrowserRequestLog {
-    private var origin: String? = null
-    private var sequence = 0L
-    private val records = MutableStateFlow<List<BrowserRequestEvent>>(emptyList())
-    val events = records.asStateFlow()
-
-    @Synchronized
-    fun page(url: HttpUrl?, preserveExisting: Boolean = false) {
-        val next = url?.let(BrowserAddress::origin)
-        if (next != origin || !preserveExisting) clear()
-        origin = next
-    }
-
-    @Synchronized
-    fun add(method: String, url: HttpUrl, mainFrame: Boolean = false, kind: RequestEventKind = RequestEventKind.Request, code: Int? = null) {
-        if (BrowserAddress.origin(url) != origin) return
-        val event = BrowserRequestEvent(++sequence, kind, method.take(12), url.encodedPath.take(280), mainFrame, code)
-        records.value = (listOf(event) + records.value).take(60)
-    }
-
-    @Synchronized
-    fun clear() { records.value = emptyList() }
 }
 
 internal fun cookieMetadata(rows: List<String>, hasAttributes: Boolean): List<String> =

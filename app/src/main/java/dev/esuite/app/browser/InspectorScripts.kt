@@ -7,11 +7,9 @@ object InspectorScripts {
           if (window.__esuitePicker) document.removeEventListener('click', window.__esuitePicker, true);
           window.__esuitePickPending = true;
           window.__esuitePicker = function(event) {
-            if (!(event.target instanceof Element) || !event.target.style) return;
+            if (!(event.target instanceof Element)) return;
             event.preventDefault(); event.stopImmediatePropagation();
-            if(window.__esuiteElement) window.__esuiteElement.style.outline = window.__esuiteOutline || '';
-            window.__esuiteElement = event.target; window.__esuiteOutline = event.target.style.outline;
-            event.target.style.outline = '2px solid #5BE0D6';
+            window.__esuiteElement = event.target;
             document.removeEventListener('click', window.__esuitePicker, true);
             window.__esuitePickPending = false;
           };
@@ -22,11 +20,13 @@ object InspectorScripts {
     val clearSelection = """
         (() => {
           document.removeEventListener('click', window.__esuitePicker, true);
-          if (window.__esuiteElement && window.__esuiteElement.isConnected) {
-            window.__esuiteElement.style.outline = window.__esuiteOutline || '';
+          if (window.__esuiteHighlight) {
+            window.__esuiteHighlight.node.remove();
+            window.removeEventListener('scroll', window.__esuiteHighlight.update, true);
+            window.removeEventListener('resize', window.__esuiteHighlight.update);
           }
-          delete window.__esuitePicker; delete window.__esuiteElement; delete window.__esuiteOutline;
-          delete window.__esuiteTree; delete window.__esuitePickPending;
+          delete window.__esuiteHighlight; delete window.__esuitePicker; delete window.__esuiteElement;
+          delete window.__esuiteDom; delete window.__esuitePickPending;
         })()
     """.trimIndent()
     val pickResult = """
@@ -34,6 +34,28 @@ object InspectorScripts {
     """.trimIndent()
     val disarmPicker = """
         (() => { document.removeEventListener('click', window.__esuitePicker, true); delete window.__esuitePickPending; })()
+    """.trimIndent()
+    val highlightSelection = """
+        (() => {
+          if (!window.__esuiteHighlight) {
+            const node = document.createElement('div');
+            node.setAttribute('aria-hidden','true');
+            node.style.cssText = 'all:initial;position:fixed;z-index:2147483647;pointer-events:none;box-sizing:border-box;border:2px solid #5BE0D6';
+            const update = () => {
+              const selected = window.__esuiteElement;
+              if (!selected || !selected.isConnected) { node.style.display = 'none'; return; }
+              const rect = selected.getBoundingClientRect();
+              node.style.display = 'block';
+              node.style.left = rect.left + 'px'; node.style.top = rect.top + 'px';
+              node.style.width = rect.width + 'px'; node.style.height = rect.height + 'px';
+            };
+            window.__esuiteHighlight = {node, update};
+            document.documentElement.appendChild(node);
+            window.addEventListener('scroll', update, true);
+            window.addEventListener('resize', update);
+          }
+          window.__esuiteHighlight.update();
+        })()
     """.trimIndent()
     val selection = """
         (() => {
@@ -64,13 +86,13 @@ object InspectorScripts {
             if (budget <= 0 || rules.length >= 12) break;
             try { if (!sheet.disabled && (!sheet.media.mediaText || matchMedia(sheet.media.mediaText).matches)) visit(sheet.cssRules); } catch (_) { }
           }
+          const overlay = window.__esuiteHighlight && window.__esuiteHighlight.node;
+          if (overlay && e.contains(overlay)) overlay.remove();
           const html = e.outerHTML;
-          const inline = document.createElement('span').style;
-          inline.cssText = e.style.cssText;
-          inline.outline = window.__esuiteOutline || '';
+          if (overlay && !overlay.isConnected) document.documentElement.appendChild(overlay);
           const round = value => Math.round(value * 10) / 10;
           return JSON.stringify({htmlTruncated:html.length>16000,htmlCharacters:html.length,htmlLimit:16000,
-            tag:e.tagName,html:html.slice(0,16000),css:inline.cssText.slice(0,4000),attributes,rules,
+            tag:e.tagName,html:html.slice(0,16000),css:(e.getAttribute('style') || '').slice(0,4000),attributes,rules,
             computed:computed(['display','position','color','background-color','font-family','font-size','font-weight',
               'line-height','opacity','visibility','z-index','overflow','box-sizing','justify-content','align-items','gap']),
             layout:computed(['margin','border-width','padding','width','height','min-width','max-width','min-height','max-height']),
@@ -83,12 +105,11 @@ object InspectorScripts {
           const e=window.__esuiteElement;
           if(!e || !e.isConnected) return 'Select an element first';
           if(!e.parentNode || e===document.documentElement) return 'Select a child element to edit';
+          if(e.outerHTML !== __ESUITE_EXPECTED__) return 'The page changed this element. Copy your draft and refresh the selection.';
           const range=document.createRange(); range.selectNode(e);
           const fragment=range.createContextualFragment(__ESUITE_VALUE__);
           const replacement=fragment.firstElementChild;
           e.replaceWith(fragment); window.__esuiteElement=replacement;
-          window.__esuiteOutline=replacement ? replacement.style.outline : '';
-          if(replacement) replacement.style.outline='2px solid #5BE0D6';
           return 'HTML updated locally';
         })()
     """.trimIndent()
@@ -97,8 +118,6 @@ object InspectorScripts {
           const e=window.__esuiteElement;
           if(!e || !e.isConnected) return 'Select an element first';
           e.style.cssText=__ESUITE_VALUE__;
-          window.__esuiteOutline=e.style.outline;
-          e.style.outline='2px solid #5BE0D6';
           return 'CSS updated locally';
         })()
     """.trimIndent()
@@ -139,33 +158,98 @@ object InspectorScripts {
     """.trimIndent()
     val elementTree = """
         (() => {
-          const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_ELEMENT);
-          const nodes = [], rows = [], parents = new Map();
-          let element = walker.currentNode;
-          while (element && rows.length < 160) {
-            const parent = parents.has(element.parentElement) ? parents.get(element.parentElement) : -1;
-            const depth = parent < 0 ? 0 : rows[parent].depth + 1;
-            const classes = (element.getAttribute('class') || '').trim().split(/\s+/).slice(0, 3).map(name => name.slice(0, 36));
-            rows.push({id:rows.length, parent, depth, tag:element.tagName.slice(0,50),
-              name:element.id.slice(0,64), classes:classes.filter(Boolean), children:element.childElementCount});
-            parents.set(element, nodes.length);
-            nodes.push(element);
-            element = walker.nextNode();
+          const options = __ESUITE_TREE_OPTIONS__;
+          const root = document.documentElement;
+          const state = window.__esuiteDom || (window.__esuiteDom = {ids:new WeakMap(), handles:new Map(), next:0});
+          const handles = state.handles;
+          const id = node => {
+            if (!state.ids.has(node)) state.ids.set(node, state.next++);
+            return state.ids.get(node);
+          };
+          const overlay = window.__esuiteHighlight && window.__esuiteHighlight.node;
+          const usable = node => node !== overlay && (node.nodeType === 1 || node.nodeType === 8 ||
+            (node.nodeType === 3 && node.nodeValue.trim() !== ''));
+          const prefix = (text, limit) => {
+            const last = text.charCodeAt(limit - 1);
+            return text.slice(0, text.length > limit && last >= 0xd800 && last <= 0xdbff ? limit - 1 : limit);
+          };
+          const voidTags = new Set('area base br col embed hr img input link meta param source track wbr'.split(' '));
+          const selected = window.__esuiteElement;
+          const path = new Set();
+          for (let node = selected; node && node.nodeType === 1; node = node.parentElement) path.add(node);
+          const rows = [];
+          const include = options.reveal ? new Set(path) : new Set();
+          const query = (options.query || '').trim().toLowerCase();
+          let limited = false;
+          if (query) {
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT);
+            let node = root, scanned = 0, matched = 0;
+            while (node && scanned < 6000 && matched < 60) {
+              scanned++;
+              if (usable(node)) {
+                const text = node.nodeType === 1
+                  ? [node.localName, '#' + prefix(node.id,120),
+                      ...prefix(node.getAttribute('class') || '',120).split(/\s+/).map(name => '.' + name),
+                      ...Array.from(node.attributes).slice(0,12).map(attr =>
+                        attr.name + (hidden(attr.name) ? '' : ' ' + prefix(attr.value,120)))].join(' ')
+                  : prefix(node.nodeValue,180);
+                if (text.toLowerCase().includes(query)) {
+                  matched++;
+                  for (let ancestor = node; ancestor && ancestor !== document; ancestor = ancestor.parentNode) include.add(ancestor);
+                }
+              }
+              node = walker.nextNode();
+            }
+            limited = node !== null;
           }
-          window.__esuiteTree = nodes;
-          return JSON.stringify({rows, limited:element !== null});
+          function hidden(name) { return /^(on|value|nonce|srcdoc)|secret|token|password/i.test(name); }
+          let budget = 100000;
+          function visit(node, parent, depth) {
+            if (depth > 100 || rows.length >= 400 || budget < 700) { limited = true; return; }
+            if (!usable(node) || (query && !include.has(node))) return;
+            const key = id(node);
+            const tag = node.nodeType === 1 ? prefix(node.localName,80) : '';
+            const htmlVoid = node.namespaceURI === 'http://www.w3.org/1999/xhtml' && voidTags.has(tag);
+            const attributes = tag ? Array.from(node.attributes).slice(0,10).map(attr => ({
+              name:prefix(attr.name,64), value:hidden(attr.name) ? 'Hidden' : prefix(attr.value,100)
+            })) : [];
+            const opening = tag ? '' : prefix(node.nodeValue,160);
+            let hasChildren = false;
+            if (tag && !htmlVoid) for (let child = node.firstChild; child; child = child.nextSibling) {
+              if (usable(child)) { hasChildren = true; break; }
+            }
+            const capacity = options.expanded[key] ?? (node === root ? 24 : 0);
+            const expanded = hasChildren && (query !== '' || capacity > 0 || (options.reveal && path.has(node)));
+            const row = {id:key, parent, depth, tag, attributes, text:opening, comment:node.nodeType===8,
+              children:hasChildren, expanded, voidTag:htmlVoid, more:false,
+              attributesLimited:tag ? node.attributes.length > attributes.length : false};
+            budget -= JSON.stringify(row).length;
+            handles.delete(key);
+            handles.set(key,node);
+            if (handles.size > 800) handles.delete(handles.keys().next().value);
+            rows.push(row);
+            if (!expanded) return;
+            let count = 0;
+            const batch = Math.max(24, Math.min(capacity,600));
+            for (let child = node.firstChild; child; child = child.nextSibling) {
+              if (!usable(child) || (query && !include.has(child))) continue;
+              if (rows.length >= 400 || budget < 700) { row.more = !query; limited = true; break; }
+              if (query || count < batch || include.has(child)) visit(child,key,depth + 1);
+              else row.more = true;
+              count++;
+            }
+          }
+          visit(root,-1,0);
+          return JSON.stringify({rows,limited,selected:selected && selected.isConnected ? id(selected) : null});
         })()
     """.trimIndent()
 
     val selectTreeElement = """
         (() => {
-          const element = window.__esuiteTree && window.__esuiteTree[__ESUITE_NODE__];
-          if (!element || !element.isConnected || !element.style) return 'The element changed. Refresh the tree.';
+          const element = window.__esuiteDom && window.__esuiteDom.handles.get(__ESUITE_NODE__);
+          if (!element || !element.isConnected || !(element instanceof Element)) return 'The element changed. Refresh the tree.';
           document.removeEventListener('click', window.__esuitePicker, true);
-          if (window.__esuiteElement) window.__esuiteElement.style.outline = window.__esuiteOutline || '';
           window.__esuiteElement = element;
-          window.__esuiteOutline = element.style.outline;
-          element.style.outline = '2px solid #5BE0D6';
           return 'Selected';
         })()
     """.trimIndent()
@@ -196,19 +280,34 @@ object InspectorScripts {
     val networkTiming = """
         (() => {
           const rows = [];
-          const entries = performance.getEntriesByType('navigation').concat(performance.getEntriesByType('resource').slice(-100));
+          const state = window.__esuiteTimings || (window.__esuiteTimings = {ids:new WeakMap(), next:0});
+          const entries = performance.getEntriesByType('navigation').concat(performance.getEntriesByType('resource').slice(-140));
           const milliseconds = value => Number.isFinite(value) && value >= 0 ? Math.round(value * 10) / 10 : null;
           const phase = (start,end) => start > 0 && end >= start ? milliseconds(end-start) : null;
-          for (const item of entries) {
-            const url = new URL(item.name, document.baseURI);
-            if (url.origin !== location.origin) continue;
-            rows.push({path:url.pathname.slice(0,280), kind:item.entryType==='navigation' ? 'document' : (item.initiatorType || 'other'),
-              status:item.responseStatus || null, start:milliseconds(item.startTime), duration:milliseconds(item.duration),
-              transfer:Number.isFinite(item.transferSize) ? item.transferSize : null, protocol:(item.nextHopProtocol || '').slice(0,24),
-              dns:phase(item.domainLookupStart,item.domainLookupEnd), connect:phase(item.connectStart,item.connectEnd),
-              wait:phase(item.requestStart,item.responseStart), download:phase(item.responseStart,item.responseEnd)});
+          const size = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
+          function type(item,url) {
+            if (item.entryType === 'navigation' || item.initiatorType === 'iframe') return 'document';
+            if (item.initiatorType === 'fetch' || item.initiatorType === 'xmlhttprequest') return 'fetch';
+            if (item.initiatorType === 'script') return 'script';
+            if (item.initiatorType === 'img' || item.initiatorType === 'image') return 'image';
+            if (/\.css$/i.test(url.pathname)) return 'stylesheet';
+            if (/\.(woff2?|ttf|otf)$/i.test(url.pathname)) return 'font';
+            if (['audio','video','track'].includes(item.initiatorType)) return 'media';
+            return 'other';
           }
-          return JSON.stringify(rows);
+          for (const item of entries) {
+            let url;
+            try { url = new URL(item.name, document.baseURI); } catch (_) { continue; }
+            if (url.protocol !== 'https:' || url.origin !== location.origin) continue;
+            if (!state.ids.has(item)) state.ids.set(item,state.next++);
+            rows.push({id:state.ids.get(item), path:url.pathname.slice(0,280), kind:type(item,url),
+              status:item.responseStatus || null, start:milliseconds(item.startTime), duration:milliseconds(item.duration),
+              transfer:size(item.transferSize), protocol:(item.nextHopProtocol || '').slice(0,24),
+              dns:phase(item.domainLookupStart,item.domainLookupEnd), connect:phase(item.connectStart,item.connectEnd),
+              tls:phase(item.secureConnectionStart,item.connectEnd), wait:phase(item.requestStart,item.responseStart),
+              download:phase(item.responseStart,item.responseEnd), encoded:size(item.encodedBodySize), decoded:size(item.decodedBodySize)});
+          }
+          return JSON.stringify({timeOrigin:performance.timeOrigin || performance.timing.navigationStart, rows});
         })()
     """.trimIndent()
 

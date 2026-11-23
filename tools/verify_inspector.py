@@ -18,16 +18,27 @@ with sync_playwright() as p:
         else:
             route.fulfill(body='''<html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1">
                 <style>#profile { padding: 7px; color: rgb(0, 60, 120) } @media(max-width:1px) { #profile { color: red } }</style></head>
-                <main><h1>Fixture heading</h1><button id="profile" onclick="window.clicked=true">Profile</button></main>
+                <main><!-- fixture comment --><h1>Fixture heading</h1><button id="profile" onclick="window.clicked=true">Profile</button>
+                    <input id="fixture-input" aria-label="Fixture input"></main>
                 <script src="/assets/fixture.js?fixture=private"></script></html>''', content_type="text/html")
     page.route("**/*", serve)
     page.goto("https://example.test/")
     page.evaluate("localStorage.setItem('test', 'value'); sessionStorage.setItem('session', 'one')")
-    tree = json.loads(page.evaluate(scripts["elementTree"]))
-    rows = tree['rows']
-    button = next(row for row in rows if row['name'] == 'profile')
-    assert rows[0]['tag'] == 'HTML' and any(row['tag'] == 'BODY' for row in rows)
-    assert rows[button['parent']]['tag'] == 'MAIN' and button['depth'] == 3
+    def read_tree(expanded=None, search='', reveal=False):
+        options = json.dumps({'expanded': expanded or {}, 'query': search, 'reveal': reveal})
+        return json.loads(page.evaluate(scripts['elementTree'].replace('__ESUITE_TREE_OPTIONS__', options)))
+    rows = read_tree()['rows']
+    assert rows[0]['tag'] == 'html' and rows[0]['expanded']
+    body = next(row for row in rows if row['tag'] == 'body')
+    assert not body['expanded'] and not any(row['tag'] == 'main' for row in rows)
+    main = next(row for row in read_tree({body['id']: 24})['rows'] if row['tag'] == 'main')
+    rows = read_tree({body['id']: 24, main['id']: 24})['rows']
+    button = next(row for row in rows if {'name': 'id', 'value': 'profile'} in row['attributes'])
+    assert button['parent'] == main['id'] and button['depth'] == 3
+    assert any(row['comment'] and 'fixture comment' in row['text'] for row in rows)
+    assert any(row['tag'] == 'input' and row['voidTag'] for row in rows)
+    found = read_tree(search='fixture input')['rows']
+    assert [row['tag'] for row in found] == ['html', 'body', 'main', 'input']
     assert 'window.clicked' not in json.dumps(rows)
     assert page.evaluate(scripts["selectTreeElement"].replace('__ESUITE_NODE__', str(button['id']))) == 'Selected'
     assert json.loads(page.evaluate(scripts["selection"]))['tag'] == 'BUTTON'
@@ -36,10 +47,23 @@ with sync_playwright() as p:
     page.evaluate("document.querySelector('main').insertAdjacentHTML('beforeend', '<button id=profile onclick=window.clicked=true>Profile</button>')")
     source_list = page.evaluate(scripts["sourceFiles"])
     assert "/assets/fixture.js" in source_list and "private" not in source_list
-    timing = json.loads(page.evaluate(scripts["networkTiming"]))
+    timing = json.loads(page.evaluate(scripts["networkTiming"]))['rows']
     asset = next(row for row in timing if row['path'] == '/assets/fixture.js')
     assert asset['kind'] == 'script' and asset['duration'] >= 0 and asset['start'] >= 0
     assert 'private' not in json.dumps(timing) and any(row['kind'] == 'document' for row in timing)
+    page.evaluate("Promise.all([fetch('/repeat?fixture=private'),fetch('/repeat?fixture=private')].map(r => r.then(response => response.text())))")
+    page.wait_for_function("performance.getEntriesByType('resource').filter(row => row.name.includes('/repeat?')).length === 2")
+    repeated = [row for row in json.loads(page.evaluate(scripts['networkTiming']))['rows'] if row['path'] == '/repeat']
+    assert len(repeated) == 2 and repeated[0]['id'] != repeated[1]['id']
+    assert repeated == [row for row in json.loads(page.evaluate(scripts['networkTiming']))['rows'] if row['path'] == '/repeat']
+
+    page.evaluate("document.querySelector('main').insertAdjacentHTML('beforeend','<section id=large>' + '<i>row</i>'.repeat(90) + '</section>')")
+    large = next(row for row in read_tree(search='large')['rows'] if row['tag'] == 'section')
+    first_batch = read_tree({body['id']: 24, main['id']: 24, large['id']: 24})['rows']
+    assert sum(row['parent'] == large['id'] for row in first_batch) == 24
+    assert next(row for row in first_batch if row['id'] == large['id'])['more']
+    second_batch = read_tree({body['id']: 24, main['id']: 24, large['id']: 48})['rows']
+    assert sum(row['parent'] == large['id'] for row in second_batch) == 48
     assert re.search(r"Timed resources · [1-9][0-9]*", page.evaluate(scripts["performanceSummary"]))
     assert "Viewport declaration · width=device-width" in page.evaluate(scripts["viewportSummary"])
     assert "Secure context · Yes" in page.evaluate(scripts["securitySummary"])
@@ -109,17 +133,23 @@ with sync_playwright() as p:
     page.locator("#profile").click()
     assert page.evaluate("window.clicked") is True, "Picker must detach after selection"
     # HTML replacement must retarget selection; CSS edits must affect the new node.
-    page.evaluate(scripts["html"].replace("__ESUITE_VALUE__", json.dumps('<p id="replacement">Edited</p>')))
+    def edit_html(old, new):
+        values = {'__ESUITE_EXPECTED__': json.dumps(old), '__ESUITE_VALUE__': json.dumps(new)}
+        return page.evaluate(re.sub(r'__ESUITE_(?:EXPECTED|VALUE)__', lambda hit: values[hit[0]], scripts['html']))
+    assert 'changed' in edit_html('<button>stale</button>', '<p>Wrong</p>')
+    old = json.loads(page.evaluate(scripts['selection']))['html']
+    assert edit_html(old, '<p id="replacement">Edited</p>') == 'HTML updated locally'
     replaced = json.loads(page.evaluate(scripts["selection"]))
     assert replaced["tag"] == "P" and 'id="replacement"' in replaced["html"]
     page.evaluate(scripts["css"].replace("__ESUITE_VALUE__", json.dumps('color: rgb(255, 0, 0); outline: 1px solid blue')))
     assert page.locator("#replacement").evaluate("e=>getComputedStyle(e).color") == "rgb(255, 0, 0)"
     page.evaluate(scripts["select"])
     page.evaluate("document.body.dispatchEvent(new MouseEvent('click', {bubbles:true}))")
+    page.evaluate(scripts['highlightSelection'])
     assert page.locator("#replacement").evaluate("e=>e.style.outlineColor==='blue' && e.style.outlineWidth==='1px'"), "Changing selection must preserve edited outline"
     page.evaluate(scripts["select"])
     page.locator("#replacement").click()
-    page.evaluate(scripts["html"].replace("__ESUITE_VALUE__", json.dumps('text only')))
+    assert edit_html(json.loads(page.evaluate(scripts['selection']))['html'], 'text only') == 'HTML updated locally'
     assert json.loads(page.evaluate(scripts["selection"])) is None
     page.evaluate(scripts["select"])
     page.evaluate(scripts["clearSelection"])

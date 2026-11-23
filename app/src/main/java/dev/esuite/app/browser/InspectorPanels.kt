@@ -6,15 +6,16 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.Clear
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -25,269 +26,205 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.esuite.app.ui.TechnicalKeyboard
 import dev.esuite.app.ui.technicalTextStyle
-import kotlinx.serialization.Serializable
 import java.util.Locale
 
-@Serializable internal data class DomTree(val rows: List<DomNode>, val limited: Boolean)
-@Serializable internal data class DomNode(val id: Int, val parent: Int, val depth: Int, val tag: String, val name: String,
-    val classes: List<String>, val children: Int) {
-    val description: String get() = buildString {
-        append(tag)
-        if (name.isNotEmpty()) append('#').append(name)
-        classes.forEach { append('.').append(it) }
+private enum class ResourceType(val label: String, val key: String) {
+    All("All", ""), Document("Doc", "document"), Fetch("Fetch / XHR", "fetch"), Script("JS", "script"),
+    Style("CSS", "stylesheet"), Image("Img", "image"), Font("Font", "font"), Media("Media", "media"), Other("Other", "other"),
+}
+
+private enum class StatusFilter(val label: String) {
+    All("All statuses"), Success("2xx"), Redirect("3xx"), Errors("Errors"), Unknown("Unavailable"),
+    ;
+
+    fun includes(row: BrowserRequestEvent): Boolean = when (this) {
+        All -> true
+        Success -> row.status in 200..299
+        Redirect -> row.status in 300..399
+        Errors -> row.failed
+        Unknown -> row.status == null && !row.failed
     }
 }
-@Serializable internal data class InspectionProperty(val name: String, val value: String)
-@Serializable internal data class DomDetails(val tag: String, val html: String, val htmlCharacters: Int, val htmlTruncated: Boolean,
-    val htmlLimit: Int, val css: String, val attributes: List<InspectionProperty>, val rules: List<InspectionProperty>,
-    val computed: List<InspectionProperty>, val layout: List<InspectionProperty>, val bounds: List<Double>, val scroll: List<Int>)
-@Serializable internal data class ResourceTiming(val path: String, val kind: String, val status: Int?, val start: Double?, val duration: Double?,
-    val transfer: Long?, val protocol: String, val dns: Double?, val connect: Double?, val wait: Double?, val download: Double?)
 
-private enum class ElementView(val label: String) { Markup("Markup"), Styles("Styles"), Layout("Layout") }
+private enum class NetworkOrder(val label: String) { Start("Start time"), Slowest("Slowest"), Largest("Largest") }
+private enum class DetailsTab(val label: String) { General("General"), Timing("Timing") }
 
 @Composable
-internal fun ElementsPanel(tree: DomTree?, detail: DomDetails?, ready: Boolean, notice: String,
-    onPick: () -> Unit, onRead: () -> Unit, onSelect: (Int) -> Unit, onReveal: () -> Unit,
-    onEdit: (html: Boolean, text: String) -> Unit,
+internal fun NetworkPanel(state: BrowserNetworkState, ready: Boolean, clearRequests: () -> Unit,
+    onRecord: (Boolean) -> Unit, onPreserve: (Boolean) -> Unit,
 ) {
-    var query by remember { mutableStateOf("") }
-    var finding by remember { mutableStateOf(false) }
-    var collapsed by remember(tree) { mutableStateOf(emptySet<Int>()) }
-    var browsing by remember { mutableStateOf(true) }
-    var view by remember { mutableStateOf(ElementView.Markup) }
-    var editing by remember { mutableStateOf<Boolean?>(null) }
-    var editor by remember { mutableStateOf("") }
-    val list = rememberLazyListState()
-    val visibleRows = remember(tree, collapsed, query) {
-        val childrenHidden = HashSet<Int>()
-        tree?.rows.orEmpty().filter { row ->
-            if (query.isNotBlank()) row.description.contains(query.trim(), ignoreCase = true)
-            else (row.parent !in childrenHidden).also { visible -> if (!visible || row.id in collapsed) childrenHidden.add(row.id) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var resourceType by rememberSaveable { mutableStateOf(ResourceType.All) }
+    var status by rememberSaveable { mutableStateOf(StatusFilter.All) }
+    var order by rememberSaveable { mutableStateOf(NetworkOrder.Start) }
+    var showFilters by rememberSaveable { mutableStateOf(false) }
+    var showWaterfall by rememberSaveable { mutableStateOf(true) }
+    var selected by rememberSaveable { mutableStateOf<String?>(null) }
+    val rows = remember(state.rows, resourceType, status, query, order) {
+        val text = query.trim()
+        val found = state.rows.filter { row ->
+            val typeMatches = resourceType == ResourceType.All || row.resourceType == resourceType.key ||
+                (resourceType == ResourceType.Other && row.resourceType == "unknown")
+            typeMatches && status.includes(row) &&
+                "${row.path} ${row.method.orEmpty()} ${row.kind.label} ${row.resourceType} ${row.status ?: ""}".contains(text, true)
+        }
+        when (order) {
+            NetworkOrder.Start -> found.sortedBy { it.timestamp }
+            NetworkOrder.Slowest -> found.sortedByDescending { it.timing?.duration ?: -1.0 }
+            NetworkOrder.Largest -> found.sortedByDescending { it.timing?.transfer ?: -1L }
         }
     }
-    if (!ready) {
-        InspectionMessage("Load an HTTPS page to inspect its elements.")
-        return
-    }
-    LaunchedEffect(detail) { if (detail != null) browsing = false }
-    LaunchedEffect(browsing, view, query) { list.scrollToItem(0) }
-    Column(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            if (!browsing) TextButton(onClick = { browsing = true }) { Text("Tree") }
-            TextButton(onClick = { onPick() }) { Text("Pick element") }
-            TextButton(onClick = { browsing = false; onRead() }) { Text("Read selection") }
-            if (!browsing && detail != null) TextButton(onClick = onReveal) { Text("Show on page") }
-            if (browsing) TextButton(onClick = { finding = !finding; if (!finding) query = "" }) {
-                Text(if (finding) "Done" else "Find")
-            }
-        }
-        if (notice.isNotBlank()) InspectionMessage(notice)
-        if (browsing && finding) InspectionSearch(query, { query = it }, "Find tag, ID, or class", "elements_search")
-        LazyColumn(Modifier.fillMaxWidth().weight(1f), state = list, contentPadding = PaddingValues(vertical = 4.dp)) {
-            if (browsing) {
-                if (visibleRows.isEmpty()) item { InspectionMessage(if (tree == null) "Reading the document…" else "No matching elements") }
-                items(visibleRows, key = DomNode::id) { node ->
-                    val expand = if (node.id in collapsed) "Expand" else "Collapse"
-                    ListItem(
-                        headlineContent = { Text(node.description, style = technicalTextStyle(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        modifier = Modifier.padding(start = (node.depth.coerceIn(0, 9) * 9).dp).testTag("elements_node_${node.id}")
-                            .clickable(onClickLabel = "Inspect element") { onSelect(node.id); browsing = false },
-                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                        trailingContent = { if (node.children > 0 && query.isBlank()) {
-                            IconButton(onClick = { collapsed = if (node.id in collapsed) collapsed - node.id else collapsed + node.id }) {
-                                Icon(if (node.id in collapsed) Icons.AutoMirrored.Outlined.KeyboardArrowRight else Icons.Outlined.KeyboardArrowDown,
-                                    contentDescription = "$expand ${node.tag}")
-                            }
-                        } },
-                    )
-                    HorizontalDivider()
+    val end = remember(rows) { rows.maxOfOrNull { (it.timing?.start ?: 0.0) + (it.timing?.duration ?: 0.0) }?.coerceAtLeast(1.0) ?: 1.0 }
+    val transfer = remember(rows) { rows.mapNotNull { it.timing?.transfer }.sum() }
+    val knownTransfer = remember(rows) { rows.any { it.timing?.transfer != null } }
+    val current = state.rows.firstOrNull { it.id == selected }
+    val colors = MaterialTheme.colorScheme
+    BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
+        val wide = maxWidth >= 520.dp
+        Column(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { onRecord(!state.recording) }, modifier = Modifier.testTag("network_record")) {
+                    Text(if (state.recording) "Pause" else "Record", color = if (state.recording) colors.error else colors.primary)
                 }
-                if (tree?.limited == true) item { InspectionMessage("Showing the first 160 elements in document order.") }
-            } else if (detail != null) {
-                item {
-                    Text(detail.tag, Modifier.padding(8.dp), style = MaterialTheme.typography.titleSmall)
+                IconButton(onClick = { selected = null; clearRequests() }, modifier = Modifier.testTag("network_clear")) {
+                    Icon(Icons.Outlined.Clear, contentDescription = "Clear Network log")
+                }
+                FilterChip(state.preserve, { onPreserve(!state.preserve) }, { Text("Preserve log") },
+                    modifier = Modifier.testTag("network_preserve"))
+                IconButton(onClick = { showFilters = !showFilters }, modifier = Modifier.testTag("network_filters")) {
+                    Icon(Icons.Outlined.Search, contentDescription = if (showFilters) "Hide filters" else "Search and filter")
+                }
+            }
+            LazyColumn(Modifier.fillMaxWidth().weight(1f).testTag("network_rows")) {
+                if (showFilters) item {
+                    InspectionSearch(query, { query = it }, "Filter by path, type, method, or status", "network_search")
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        ElementView.entries.forEach { option -> FilterChip(view == option, { view = option }, { Text(option.label) }) }
+                        ResourceType.entries.forEach { type ->
+                            FilterChip(resourceType == type, { resourceType = type }, { Text(type.label) })
+                        }
+                    }
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        StatusFilter.entries.forEach { option ->
+                            FilterChip(status == option, { status = option }, { Text(option.label) })
+                        }
+                    }
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        NetworkOrder.entries.forEach { option ->
+                            FilterChip(order == option, { order = option }, { Text(option.label) })
+                        }
+                        if (wide) FilterChip(showWaterfall, { showWaterfall = !showWaterfall }, { Text("Waterfall") })
                     }
                 }
-                when (view) {
-                    ElementView.Markup -> {
-                        item {
-                            TextButton(onClick = { editor = ""; editing = true }) { Text("Replace HTML") }
-                            if (detail.htmlTruncated) InspectionMessage("Showing ${detail.htmlLimit} of ${detail.htmlCharacters} characters.")
-                            SelectionContainer { Text(detail.html, Modifier.padding(8.dp), style = technicalTextStyle()) }
-                        }
-                        item { InspectionMessage("Attributes") }
-                        items(detail.attributes) { InspectionValue(it.name, it.value) }
-                    }
-                    ElementView.Styles -> {
-                        item { TextButton(onClick = { editor = detail.css; editing = false }) { Text("Edit inline CSS") } }
-                        item { InspectionMessage("Computed properties") }
-                        items(detail.computed) { InspectionValue(it.name, it.value) }
-                        if (detail.rules.isNotEmpty()) item { InspectionMessage("Matched rules from readable stylesheets") }
-                        items(detail.rules) { InspectionValue(it.name, it.value) }
-                    }
-                    ElementView.Layout -> {
-                        item {
-                            InspectionValue("Viewport position (x, y)", detail.bounds.take(2).joinToString(", ") + " CSS px")
-                            InspectionValue("Box size", detail.bounds.drop(2).joinToString(" × ") + " CSS px")
-                            InspectionValue("Scrollable size", detail.scroll.take(2).joinToString(" × ") + " CSS px")
-                            InspectionValue("Client size", detail.scroll.drop(2).joinToString(" × ") + " CSS px")
-                        }
-                        items(detail.layout) { InspectionValue(it.name, it.value) }
-                    }
+                item {
+                    val total = if (knownTransfer) " · ${bytes(transfer)} measured" else ""
+                    val paused = if (state.recording) "" else " · Paused"
+                    InspectionMessage("${rows.size} of ${state.rows.size} same-origin observations$total$paused")
                 }
-            } else item { InspectionMessage("Select an element in the tree or pick one on the page.") }
+                if (wide && rows.isNotEmpty()) item {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Name", Modifier.weight(2f), style = MaterialTheme.typography.labelMedium)
+                        Text("Method · Type · Status", Modifier.weight(2f), style = MaterialTheme.typography.labelMedium)
+                        Text("Size · Time", Modifier.weight(1.3f), style = MaterialTheme.typography.labelMedium)
+                        if (showWaterfall) Text("Waterfall", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
+                    }
+                    HorizontalDivider()
+                }
+                if (rows.isEmpty()) item {
+                    InspectionMessage(when {
+                        !ready -> "Load an HTTPS page to see its network activity."
+                        state.rows.isNotEmpty() -> "No observations match these filters."
+                        !state.recording -> "Recording is paused."
+                        else -> "Waiting for same-origin network activity."
+                    })
+                }
+                items(rows, key = BrowserRequestEvent::id) { row ->
+                    val facts = listOfNotNull(row.method, row.resourceType.takeUnless { it == "unknown" },
+                        row.status?.let { "HTTP $it" }, row.kind.label.takeIf { row.timing == null }).joinToString(" · ")
+                    val metrics = listOfNotNull(row.timing?.transfer?.let(::bytes),
+                        row.timing?.duration?.let(::duration)).joinToString(" · ")
+                    val modifier = Modifier.fillMaxWidth().testTag("network_event")
+                        .clickable(onClickLabel = "Network details") { selected = row.id }
+                        .padding(horizontal = 6.dp, vertical = 9.dp)
+                    if (wide) Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(row.path, Modifier.weight(2f), style = technicalTextStyle(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(facts, Modifier.weight(2f), style = MaterialTheme.typography.bodySmall,
+                            color = if (row.failed) colors.error else colors.onSurfaceVariant)
+                        Text(metrics.ifEmpty { "—" }, Modifier.weight(1.3f), style = MaterialTheme.typography.bodySmall)
+                        if (showWaterfall) Box(Modifier.weight(1f)) { row.timing?.let { WaterfallBar(it, end) } }
+                    } else Column(modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(row.path, style = technicalTextStyle(), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(listOf(facts, metrics).filter(String::isNotEmpty).joinToString(" · "), style = MaterialTheme.typography.bodySmall,
+                            color = if (row.failed) colors.error else colors.onSurfaceVariant)
+                    }
+                    HorizontalDivider(color = colors.outlineVariant)
+                }
+            }
         }
     }
-    editing?.let { html ->
-        val excess = editor.length > 8_192
-        AlertDialog(
-            onDismissRequest = { editing = null },
-            title = { Text(if (html) "Replace selected HTML" else "Edit inline CSS") },
-            text = { OutlinedTextField(editor, { editor = it.take(8_193) }, label = { Text(if (html) "HTML" else "CSS declarations") },
-                isError = excess, minLines = 3, maxLines = 6, keyboardOptions = TechnicalKeyboard,
-                textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("browser_element_edit"),
-                supportingText = if (excess) ({ Text("Maximum 8,192 characters") }) else null) },
-            confirmButton = { TextButton(enabled = !excess, onClick = { onEdit(html, editor); editing = null }) { Text("Apply") } },
-            dismissButton = { TextButton(onClick = { editing = null }) { Text("Cancel") } },
-        )
+    current?.let { row ->
+        key(row.id) { NetworkDetails(row) { selected = null } }
     }
 }
-
-private enum class NetworkView(val label: String) { Requests("Requests"), Waterfall("Waterfall") }
-private enum class NetworkFilter(val label: String, val timingOnly: Boolean = false) {
-    All("All"), Documents("Documents"), Errors("Errors"), Fetch("Fetch / XHR", timingOnly = true), Scripts("Scripts", timingOnly = true)
-}
-private enum class TimingOrder(val label: String) { Start("Start time"), Slowest("Slowest first"), Largest("Largest first") }
 
 @Composable
-internal fun NetworkPanel(requests: List<BrowserRequestEvent>, timings: List<ResourceTiming>, ready: Boolean,
-    clearRequests: () -> Unit,
-) {
-    var query by remember { mutableStateOf("") }
-    var mode by remember { mutableStateOf(NetworkView.Requests) }
-    var filter by remember { mutableStateOf(NetworkFilter.All) }
-    var order by remember { mutableStateOf(TimingOrder.Start) }
-    var showFilters by remember { mutableStateOf(false) }
-    var frozen by remember { mutableStateOf<Pair<List<BrowserRequestEvent>, List<ResourceTiming>>?>(null) }
-    var detail by remember { mutableStateOf<List<InspectionProperty>?>(null) }
-    val list = rememberLazyListState()
-    val (events, resources) = frozen ?: (requests to timings)
-    val end = remember(resources) { resources.maxOfOrNull { (it.start ?: 0.0) + (it.duration ?: 0.0) }?.coerceAtLeast(1.0) ?: 1.0 }
-    if (!ready) {
-        InspectionMessage("Load an HTTPS page to see its network activity.")
-        return
-    }
-    LaunchedEffect(mode, showFilters) { list.scrollToItem(0) }
-    Column(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            NetworkView.entries.forEach { option ->
-                FilterChip(mode == option, {
-                    mode = option
-                    if (mode == NetworkView.Requests && filter.timingOnly) filter = NetworkFilter.All
-                }, { Text(option.label) })
-            }
-            TextButton(onClick = { showFilters = !showFilters }, modifier = Modifier.testTag("network_filters")) {
-                Text(if (showFilters) "Done" else "Filters")
-            }
-        }
-        LazyColumn(Modifier.fillMaxWidth().weight(1f), state = list, contentPadding = PaddingValues(vertical = 4.dp)) {
-            if (showFilters) item {
-                InspectionSearch(query, { query = it }, "Filter by path, type, or status", "network_search")
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val filters = NetworkFilter.entries.filter { mode == NetworkView.Waterfall || !it.timingOnly }
-                    filters.forEach { option -> FilterChip(filter == option, { filter = option }, { Text(option.label) }) }
-                }
-                if (mode == NetworkView.Waterfall) Row(Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    TimingOrder.entries.forEach { option -> FilterChip(order == option, { order = option }, { Text(option.label) }) }
-                }
-                Row(Modifier.horizontalScroll(rememberScrollState())) {
-                    TextButton(onClick = { frozen = if (frozen == null) requests to timings else null }) { Text(if (frozen == null) "Freeze view" else "Resume view") }
-                    if (mode == NetworkView.Requests) TextButton(onClick = { frozen = null; clearRequests() }) { Text("Clear requests") }
-                }
-            }
-            if (mode == NetworkView.Requests) {
-                val filtered = events.filter { event ->
-                    "${event.kind.label} ${event.method} ${event.path} ${event.code.orEmptyLabel()}".contains(query.trim(), true) && when (filter) {
-                        NetworkFilter.All -> true
-                        NetworkFilter.Documents -> event.mainFrame
-                        NetworkFilter.Errors -> event.kind == RequestEventKind.HttpError || event.kind == RequestEventKind.LoadError
-                        NetworkFilter.Fetch, NetworkFilter.Scripts -> false
+private fun NetworkDetails(row: BrowserRequestEvent, close: () -> Unit) {
+    var tab by remember { mutableStateOf(DetailsTab.General) }
+    val timing = row.timing
+    AlertDialog(onDismissRequest = close, title = { Text("Network details") },
+        text = {
+            Column {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    DetailsTab.entries.forEach { item ->
+                        FilterChip(tab == item, { tab = item }, { Text(item.label) })
                     }
                 }
-                item { InspectionMessage("Same-origin WebView events · ${filtered.size} shown${if (frozen != null) " · Frozen" else ""}") }
-                if (filtered.isEmpty()) item { InspectionMessage("No matching events") }
-                items(filtered, key = BrowserRequestEvent::id) { event ->
-                    val label = if (event.kind == RequestEventKind.Navigation) "Navigation ${event.path}" else "${event.method} ${event.path}"
-                    ListItem(headlineContent = { Text(label, Modifier.testTag("network_event"), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        supportingContent = { Text(listOfNotNull(event.kind.label, event.code?.toString()).joinToString(" · ")) },
-                        trailingContent = { TextButton(onClick = { detail = listOf(
-                            InspectionProperty("Path", event.path), InspectionProperty("Method", event.method.ifBlank { "Unavailable" }),
-                            InspectionProperty("Callback", event.kind.label), InspectionProperty("Frame", if (event.mainFrame) "Main" else "Subresource"),
-                            InspectionProperty("Observed status or error code", event.code?.toString() ?: "Unavailable"),
-                        ) }) { Text("Details") } })
-                    HorizontalDivider()
-                }
-            } else {
-                val filtered = resources.filter { resource ->
-                    "${resource.path} ${resource.kind} ${resource.status.orEmptyLabel()}".contains(query.trim(), true) && when (filter) {
-                        NetworkFilter.All -> true
-                        NetworkFilter.Documents -> resource.kind == "document"
-                        NetworkFilter.Errors -> (resource.status ?: 0) >= 400
-                        NetworkFilter.Fetch -> resource.kind == "fetch" || resource.kind == "xmlhttprequest"
-                        NetworkFilter.Scripts -> resource.kind == "script"
-                    }
-                }
-                val ordered = when (order) {
-                    TimingOrder.Start -> filtered.sortedBy { it.start ?: Double.POSITIVE_INFINITY }
-                    TimingOrder.Slowest -> filtered.sortedByDescending { it.duration ?: -1.0 }
-                    TimingOrder.Largest -> filtered.sortedByDescending { it.transfer ?: -1L }
-                }
-                item { InspectionMessage("Same-origin timing · ${filtered.size} shown · ${duration(end)} scale${if (frozen != null) " · Frozen" else ""}") }
-                if (filtered.isEmpty()) item { InspectionMessage("No matching resource timings") }
-                items(ordered) { resource ->
-                    ListItem(headlineContent = { Text(resource.path, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        supportingContent = {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(listOfNotNull(resource.kind, resource.status?.let { "HTTP $it" }, duration(resource.duration)).joinToString(" · "))
-                                WaterfallBar(resource, end)
+                LazyColumn(Modifier.heightIn(max = 350.dp)) {
+                    if (tab == DetailsTab.General) {
+                        item {
+                            InspectionValue("Path", row.path)
+                            InspectionValue("Source", if (timing == null) "WebView callback · ${row.kind.label}" else "Browser resource timing")
+                            InspectionValue("Method", row.method ?: "Unavailable")
+                            InspectionValue("Resource type", row.resourceType.takeUnless { it == "unknown" } ?: "Unavailable")
+                            InspectionValue("HTTP status", row.status?.toString() ?: "Unavailable")
+                            if (row.kind == RequestEventKind.LoadError) InspectionValue("WebView error code", row.code?.toString().orEmpty())
+                            if (row.mimeType != null) InspectionValue("Response content type", row.mimeType)
+                            if (timing != null) {
+                                InspectionValue("Protocol", timing.protocol.ifEmpty { "Unavailable" })
+                                InspectionValue("Transfer size", timing.transfer?.let(::bytes) ?: "Unavailable")
+                                InspectionValue("Encoded body size", timing.encoded?.let(::bytes) ?: "Unavailable")
+                                InspectionValue("Decoded body size", timing.decoded?.let(::bytes) ?: "Unavailable")
                             }
-                        }, trailingContent = { TextButton(onClick = { detail = listOf(
-                            InspectionProperty("Path", resource.path), InspectionProperty("Type", resource.kind),
-                            InspectionProperty("Status", resource.status?.toString() ?: "Unavailable"),
-                            InspectionProperty("Protocol", resource.protocol.ifBlank { "Unavailable" }),
-                            InspectionProperty("Transfer size", resource.transfer?.let { "$it B" } ?: "Unavailable"),
-                            InspectionProperty("Start", duration(resource.start)), InspectionProperty("Duration", duration(resource.duration)),
-                            InspectionProperty("DNS", duration(resource.dns)), InspectionProperty("Connect", duration(resource.connect)),
-                            InspectionProperty("Waiting for response", duration(resource.wait)), InspectionProperty("Download", duration(resource.download)),
-                        ) }) { Text("Details") } })
-                    HorizontalDivider()
+                        }
+                    } else if (timing == null) item {
+                        InspectionMessage("This WebView callback has no timing phases.")
+                    } else item {
+                        InspectionValue("Start after navigation", duration(timing.start))
+                        InspectionValue("Total", duration(timing.duration))
+                        InspectionValue("DNS", duration(timing.dns))
+                        InspectionValue("Connection", duration(timing.connect))
+                        InspectionValue("TLS", duration(timing.tls))
+                        InspectionValue("Waiting for response", duration(timing.wait))
+                        InspectionValue("Download", duration(timing.download))
+                    }
                 }
             }
-        }
-    }
-    detail?.let { properties ->
-        AlertDialog(onDismissRequest = { detail = null }, title = { Text("Network details") },
-            text = { LazyColumn(Modifier.heightIn(max = 360.dp)) { items(properties) { InspectionValue(it.name, it.value) } } },
-            confirmButton = { TextButton(onClick = { detail = null }) { Text("Close") } })
-    }
+        },
+        confirmButton = { TextButton(onClick = close) { Text("Close") } })
 }
 
 @Composable private fun WaterfallBar(resource: ResourceTiming, end: Double) {
     val colors = MaterialTheme.colorScheme
-    val fraction = ((resource.start ?: 0.0) / end).coerceIn(0.0, 1.0).toFloat()
-    val width = ((resource.duration ?: 0.0) / end).coerceIn(0.0, 1.0).toFloat()
+    val fraction = ((resource.start ?: return) / end).coerceIn(0.0, 1.0).toFloat()
+    val width = ((resource.duration ?: return) / end).coerceIn(0.0, 1.0).toFloat()
     Canvas(Modifier.fillMaxWidth().height(5.dp)) {
         drawRect(colors.outlineVariant)
         val start = size.width * fraction
-        drawRect(colors.primary, topLeft = Offset(start, 0f), size = Size((size.width * width).coerceAtLeast(1f).coerceAtMost(size.width - start), size.height))
+        drawRect(colors.primary, topLeft = Offset(start, 0f),
+            size = Size((size.width * width).coerceAtLeast(1f).coerceAtMost(size.width - start), size.height))
     }
 }
 
-@Composable private fun InspectionSearch(text: String, update: (String) -> Unit, label: String, tag: String) {
+@Composable internal fun InspectionSearch(text: String, update: (String) -> Unit, label: String, tag: String) {
     val focus = LocalFocusManager.current
     OutlinedTextField(text, { update(it.take(240)) }, label = { Text(label) }, singleLine = true,
         modifier = Modifier.fillMaxWidth().testTag(tag), keyboardOptions = TechnicalKeyboard.copy(imeAction = ImeAction.Done),
@@ -295,12 +232,12 @@ internal fun NetworkPanel(requests: List<BrowserRequestEvent>, timings: List<Res
         trailingIcon = { if (text.isNotEmpty()) TextButton(onClick = { update("") }) { Text("Clear") } })
 }
 
-@Composable private fun InspectionMessage(message: String) {
+@Composable internal fun InspectionMessage(message: String) {
     Text(message, Modifier.padding(horizontal = 8.dp, vertical = 6.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
         style = MaterialTheme.typography.bodySmall)
 }
 
-@Composable private fun InspectionValue(name: String, value: String) {
+@Composable internal fun InspectionValue(name: String, value: String) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp)) {
         Text(name, style = MaterialTheme.typography.labelLarge)
         SelectionContainer { Text(value.ifBlank { "—" }, style = technicalTextStyle()) }
@@ -308,4 +245,8 @@ internal fun NetworkPanel(requests: List<BrowserRequestEvent>, timings: List<Res
 }
 
 private fun duration(ms: Double?): String = ms?.let { String.format(Locale.ROOT, "%.1f ms", it) } ?: "Unavailable"
-private fun Int?.orEmptyLabel(): String = this?.toString().orEmpty()
+private fun bytes(value: Long): String = when {
+    value < 1024 -> "$value B"
+    value < 1024 * 1024 -> String.format(Locale.ROOT, "%.1f KiB", value / 1024.0)
+    else -> String.format(Locale.ROOT, "%.1f MiB", value / 1048576.0)
+}

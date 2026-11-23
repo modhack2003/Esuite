@@ -1,5 +1,6 @@
 package dev.esuite.app.browser
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -24,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -55,17 +57,24 @@ internal enum class BrowserTool(val label: String, val summary: String) {
 @Composable
 internal fun BrowserDock(
     dockVisible: Boolean,
+    pageHasFocus: () -> Boolean,
     page: @Composable () -> Unit,
     dock: @Composable () -> Unit,
 ) {
     var heightFraction by rememberSaveable { mutableFloatStateOf(0.53f) }
     var widthFraction by rememberSaveable { mutableFloatStateOf(0.43f) }
     BoxWithConstraints(Modifier.fillMaxSize().clipToBounds()) {
-        val side = maxWidth >= 720.dp || (maxWidth >= 480.dp && maxHeight < 400.dp)
+        val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val side = maxWidth >= 720.dp || (maxWidth >= 480.dp && landscape)
         val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
         val maxFraction = if (side) 0.66f else 0.74f
         val minFraction = if (side) 0.30f else 0.27f
-        val fraction = if (side) widthFraction else if (imeVisible) maxOf(heightFraction, 0.73f) else heightFraction
+        val fraction = when {
+            side -> widthFraction
+            imeVisible && pageHasFocus() -> minFraction
+            imeVisible -> maxOf(heightFraction, 0.73f)
+            else -> heightFraction
+        }
         fun resize(value: Float) {
             val bounded = value.coerceIn(minFraction, maxFraction)
             if (side) widthFraction = bounded else heightFraction = bounded
@@ -173,6 +182,7 @@ internal fun BrowserInspector(
     var showPanels by remember { mutableStateOf(false) }
     BoxWithConstraints(Modifier.fillMaxSize().background(colors.surfaceContainerLow)) {
         val compactConsole = panel == BrowserTool.Console && maxHeight < 205.dp && WindowInsets.ime.getBottom(LocalDensity.current) > 0
+        val showTabs = maxHeight >= 184.dp && !compactConsole
         Column(Modifier.fillMaxSize()) {
             if (!compactConsole) {
                 DockHeader("Developer Tools", currentUrl?.let(BrowserAddress::https)?.let(BrowserAddress::origin).orEmpty(),
@@ -183,7 +193,7 @@ internal fun BrowserInspector(
                 PanelChooser(panel) { tool -> choose(tool); showPanels = false }
                 return@Column
             }
-            if (!compactConsole) {
+            if (showTabs) {
                 Row(
                     Modifier.fillMaxWidth().background(colors.surfaceContainer).testTag("browser_tool_tabs")
                         .horizontalScroll(rememberScrollState()).selectableGroup(),

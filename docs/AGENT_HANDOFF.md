@@ -10,6 +10,10 @@ Read this file first, then `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md
 - No analytics, hosted AI, remote workers, automatic evidence uploads or external callback collectors. The design services received synthetic data only.
 - The React prototype is a synthetic design reference. Native features must be assessed from Kotlin source and tests.
 
+## 1.0.8 browser input and inspection
+
+Browser gives Android WebView native touch focus and preserves the dock split when the keyboard closes. The independent UI harness taps website inputs and types through an emulator-only IME. Elements shows a bounded HTML tree with stable node IDs, a noninteractive highlight and draft-preserving markup edits. Network stores bounded, same-origin observations in memory with distinct identities for callbacks and Resource Timing entries. The signed upgrade baseline is 1.0.7.
+
 ## 1.0.7 Elements, Network and response checks
 
 Elements adds a searchable DOM tree, tap-to-pick selection, editable markup and inline CSS, and separate style and layout views. Network adds a waterfall, request details, filters, sorting and a freeze control. Tools and API Lab review security headers, cookie flags, caching and CORS from existing response data on-device. The app uses native Jetpack Compose Material 3 controls for the dock, filters, tool cards and dialogs. Desktop breakpoints, CPU and heap profiling, and full raw network capture remain open.
