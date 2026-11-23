@@ -141,4 +141,4 @@ Evidence and exact acceptance: [Vivo 1.0.2 review](reviews/vivo-1.0.2-production
 - [x] Give website fields native touch focus and prioritize the focused pane while the keyboard is open.
 - [x] Render Elements as a navigable HTML tree and edit current markup with stale-node checks.
 - [x] Combine Network observations with source labels, filtering, timing, recording and same-origin log preservation.
-- [ ] Complete the optimized IME and browser inspection gates, signed upgrades and public APK verification. [Release progress](AGENT_HANDOFF.md#108-browser-input-and-inspection)
+- [x] Complete the optimized IME and browser inspection gates, signed upgrades and public APK verification. [Release verification](AGENT_HANDOFF.md#108-browser-input-and-inspection)
