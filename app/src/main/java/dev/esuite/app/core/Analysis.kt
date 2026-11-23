@@ -5,25 +5,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.util.Base64
 import kotlin.math.ln
 
-data class Observation(val title: String, val evidence: String)
-object PassiveAnalyzer {
-    fun inspect(exchange: Exchange): List<Observation> {
-        if (exchange.status == null) return emptyList()
-        val out = mutableListOf<Observation>()
-        val headers = exchange.responseHeaders
-        fun value(name: String) = headers.filter { it.name.equals(name, true) }.joinToString(",") { it.value }
-        if (exchange.request.url.startsWith("https://") && value("Strict-Transport-Security").isBlank()) out += Observation("HSTS header absent", "HTTPS response has no Strict-Transport-Security header. Assess deployment context.")
-        if (value("Content-Type").contains("text/html", true) && value("Content-Security-Policy").isBlank()) out += Observation("CSP header absent", "HTML response has no Content-Security-Policy header. This is a hardening observation, not confirmed XSS.")
-        headers.filter { it.name.equals("Set-Cookie", true) }.forEach { h ->
-            val parts = h.value.split(';').map { it.trim() }; val name = parts.first().substringBefore('=')
-            if (parts.none { it.equals("Secure", true) }) out += Observation("Cookie missing Secure", "Cookie '$name' does not set Secure in this response.")
-            if (parts.none { it.equals("HttpOnly", true) }) out += Observation("Cookie missing HttpOnly", "Cookie '$name' is script-readable unless other restrictions apply. Some cookies intentionally require script access.")
-        }
-        if (value("Access-Control-Allow-Origin") == "*" && value("Access-Control-Allow-Credentials").equals("true", true)) out += Observation("Conflicting CORS configuration", "Wildcard origin with credentials is rejected by browsers; this is not proof of credentialed cross-origin access.")
-        return out
-    }
-}
-
 object ResponseComparer {
     private val json = Json
     private fun normalize(e: JsonElement): JsonElement = when (e) {

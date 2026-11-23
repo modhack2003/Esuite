@@ -14,13 +14,13 @@ internal enum class RequestEventKind(val label: String) {
 @Serializable internal data class ResourceTiming(
     val id: Int, val path: String, val kind: String, val status: Int?, val start: Double?, val duration: Double?,
     val transfer: Long?, val protocol: String, val dns: Double?, val connect: Double?, val tls: Double?,
-    val wait: Double?, val download: Double?, val encoded: Long?, val decoded: Long?,
+    val wait: Double?, val download: Double?, val encoded: Long?, val decoded: Long?, val pathClipped: Boolean = false,
 )
 
 internal data class BrowserRequestEvent(
     val id: String, val kind: RequestEventKind, val path: String, val timestamp: Double,
     val method: String? = null, val mainFrame: Boolean = false, val code: Int? = null,
-    val timing: ResourceTiming? = null, val mimeType: String? = null,
+    val timing: ResourceTiming? = null, val mimeType: String? = null, val pathClipped: Boolean = false,
 ) {
     val status: Int? get() = when (kind) {
         RequestEventKind.HttpError -> code
@@ -37,6 +37,8 @@ internal data class BrowserNetworkState(
     val preserve: Boolean = false,
 )
 
+internal data class BrowserLogSnapshot(val origin: String, val rows: List<BrowserRequestEvent>)
+
 /** WebView callback and Performance API observations have independent identities. */
 internal class BrowserRequestLog(private val now: () -> Long = System::currentTimeMillis) {
     private var origin: String? = null
@@ -45,6 +47,11 @@ internal class BrowserRequestLog(private val now: () -> Long = System::currentTi
     private var earliestStart = 0L
     private val records = MutableStateFlow(BrowserNetworkState())
     val state = records.asStateFlow()
+
+    @Synchronized
+    fun snapshot(): BrowserLogSnapshot? = origin?.let { current ->
+        records.value.rows.takeIf { it.isNotEmpty() }?.let { BrowserLogSnapshot(current, it) }
+    }
 
     @Synchronized
     fun page(url: HttpUrl?, continuing: Boolean = false) {
@@ -64,7 +71,8 @@ internal class BrowserRequestLog(private val now: () -> Long = System::currentTi
         code: Int? = null, mimeType: String? = null) {
         if (BrowserAddress.origin(url) != origin || !records.value.recording) return
         val event = BrowserRequestEvent("callback:${++sequence}", kind, url.encodedPath.take(280), now().toDouble(),
-            method.take(12).ifBlank { null }, mainFrame, code, mimeType = mimeType?.take(80))
+            method.takeIf { it.length in 1..64 && it.isNotBlank() }, mainFrame, code, mimeType = mimeType?.take(80),
+            pathClipped = url.encodedPath.length > 280)
         records.value = records.value.copy(rows = bounded(listOf(event) + records.value.rows))
     }
 
@@ -78,7 +86,7 @@ internal class BrowserRequestLog(private val now: () -> Long = System::currentTi
             val started = batch.timeOrigin + (timing.start ?: return@mapNotNull null)
             if (!started.isFinite() || started < earliestStart) return@mapNotNull null
             BrowserRequestEvent("timing:${batch.timeOrigin}:${timing.id}", RequestEventKind.Timing, timing.path, started,
-                mainFrame = timing.kind == "document", timing = timing)
+                mainFrame = timing.kind == "document", timing = timing, pathClipped = timing.pathClipped)
         }
         if (new.isNotEmpty()) {
             records.value = records.value.copy(rows = bounded((new + records.value.rows).distinctBy { it.id }))

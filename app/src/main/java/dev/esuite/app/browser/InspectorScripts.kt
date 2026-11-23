@@ -315,7 +315,7 @@ object InspectorScripts {
             try { url = new URL(item.name, document.baseURI); } catch (_) { continue; }
             if (url.protocol !== 'https:' || url.origin !== location.origin) continue;
             if (!state.ids.has(item)) state.ids.set(item,state.next++);
-            rows.push({id:state.ids.get(item), path:url.pathname.slice(0,280), kind:type(item,url),
+            rows.push({id:state.ids.get(item), path:url.pathname.slice(0,280), pathClipped:url.pathname.length > 280, kind:type(item,url),
               status:item.responseStatus || null, start:milliseconds(item.startTime), duration:milliseconds(item.duration),
               transfer:size(item.transferSize), protocol:(item.nextHopProtocol || '').slice(0,24),
               dns:phase(item.domainLookupStart,item.domainLookupEnd), connect:phase(item.connectStart,item.connectEnd),

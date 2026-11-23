@@ -22,7 +22,7 @@ import dev.esuite.app.core.*
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun FindingsScreen(state: AppState, model: AppViewModel, project: Project?, openApi: () -> Unit) {
+internal fun FindingsScreen(state: AppState, model: AppViewModel, project: Project?, openApi: () -> Unit, openReview: (Exchange) -> Unit) {
     val scope = rememberCoroutineScope()
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -35,6 +35,12 @@ internal fun FindingsScreen(state: AppState, model: AppViewModel, project: Proje
     var selectedId by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     var composeNote by remember { mutableStateOf(true) }
+    var evidenceId by remember(state.identity) { mutableStateOf<String?>(null) }
+    var pickingEvidence by remember { mutableStateOf(false) }
+    val evidenceOptions = remember(state.workspace.exchanges, project) {
+        state.workspace.exchanges.filter { it.projectId == project?.id }
+    }
+    val attachment = evidenceOptions.firstOrNull { it.id == evidenceId }
     val findings = remember(state.workspace.findings, project?.id) {
         state.workspace.findings.filter { it.projectId == project?.id }
     }
@@ -45,17 +51,18 @@ internal fun FindingsScreen(state: AppState, model: AppViewModel, project: Proje
         }
     }
 
-    fun saveObservation(noteTitle: String, noteDetail: String, evidence: Exchange?, clearComposer: Boolean) {
+    fun saveObservation(noteTitle: String, noteDetail: String, evidence: Exchange?) {
         focus.clearFocus()
         keyboard?.hide()
         saving = true
         scope.launch {
             try {
-                if (model.addFinding(noteTitle, noteDetail, evidence) && clearComposer &&
+                if (model.addFinding(noteTitle, noteDetail, evidence) &&
                     model.drafts.text(titleKey) == noteTitle && model.drafts.text(detailKey) == noteDetail
                 ) {
                     model.drafts.clear(titleKey)
                     model.drafts.clear(detailKey)
+                    evidenceId = null
                     composeNote = false
                 }
             } finally { saving = false }
@@ -82,8 +89,17 @@ internal fun FindingsScreen(state: AppState, model: AppViewModel, project: Proje
                         singleLine = true, modifier = Modifier.fillMaxWidth().testTag("finding_title"))
                     OutlinedTextField(detail, { model.drafts.set(detailKey, it) }, label = { Text("Notes") },
                         minLines = 2, maxLines = 8, modifier = Modifier.fillMaxWidth().testTag("finding_detail"))
-                    Button(onClick = { saveObservation(title, detail, state.selected, true) },
-                        enabled = !saving && title.isNotBlank() && detail.isNotBlank(),
+                    Text(when {
+                        attachment != null -> "Evidence · ${exchangeLabel(attachment)}"
+                        evidenceId != null -> "The selected evidence is no longer available."
+                        else -> "No evidence selected"
+                    })
+                    Row {
+                        TextButton(onClick = { pickingEvidence = true }) { Text("Choose evidence") }
+                        if (evidenceId != null) TextButton(onClick = { evidenceId = null }) { Text("Remove selection") }
+                    }
+                    Button(onClick = { saveObservation(title, detail, attachment) },
+                        enabled = !saving && title.isNotBlank() && detail.isNotBlank() && (evidenceId == null || attachment != null),
                         modifier = Modifier.testTag("save_finding")) { Text("Save observation") }
                     DraftNotice()
                 }
@@ -107,21 +123,17 @@ internal fun FindingsScreen(state: AppState, model: AppViewModel, project: Proje
                     }
                 }
             }
-            state.selected?.let { exchange ->
+            state.selected?.takeIf { it in evidenceOptions && it.hasReviewableResponse() }?.let { exchange ->
                 item {
-                    val observations = remember(exchange) { PassiveAnalyzer.inspect(exchange) }
-                    if (observations.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Response observations", style = MaterialTheme.typography.titleMedium)
-                        observations.forEach { observation ->
-                            Panel(observation.title, observation.evidence)
-                            OutlinedButton(onClick = { saveObservation(observation.title, observation.evidence, exchange, false) },
-                                enabled = !saving) { Text("Save observation") }
-                        }
-                    }
+                    OutlinedButton(onClick = { openReview(exchange) }) { Text("Review selected response") }
+                    Text(exchangeLabel(exchange), style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
     }
+
+    if (pickingEvidence && project != null) ExchangePicker("Choose finding evidence", project, evidenceOptions,
+        close = { pickingEvidence = false }, choose = { evidenceId = it.id; pickingEvidence = false })
 
     findings.firstOrNull { it.id == selectedId }?.let { finding ->
         var remove by remember(finding.id) { mutableStateOf(false) }
@@ -132,7 +144,7 @@ internal fun FindingsScreen(state: AppState, model: AppViewModel, project: Proje
                 Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Panel(finding.title, finding.detail)
-                    FindingEvidence(finding, model, openApi)
+                    FindingEvidence(finding, model, openApi) { exchange -> selectedId = null; openReview(exchange) }
                     LocalReportAction("Preview observation report", "esuite-observation.json", { model.exportObservation(finding.id) }, model::message)
                     TextButton(onClick = { remove = true }) { Text("Remove observation") }
                 }
@@ -148,7 +160,7 @@ internal fun FindingsScreen(state: AppState, model: AppViewModel, project: Proje
     }
 }
 /** One row per referenced evidence id: a viewer for a retained snapshot, an explicit state for a reference with none. */
-@Composable private fun FindingEvidence(finding: Finding, model: AppViewModel, openApi: () -> Unit) {
+@Composable private fun FindingEvidence(finding: Finding, model: AppViewModel, openApi: () -> Unit, openReview: (Exchange) -> Unit) {
     if (finding.evidenceIds.isEmpty()) {
         Text("No exchange was attached to this observation.", style = MaterialTheme.typography.bodySmall, color = Muted)
         return
@@ -170,9 +182,10 @@ internal fun FindingsScreen(state: AppState, model: AppViewModel, project: Proje
                     Panel("Retained evidence · ${snapshot.status ?: if (snapshot.error != null) "error" else "metadata only"} · ${snapshot.durationMs} ms",
                         "identity ${snapshot.identity} · ${snapshot.source}\n${snapshot.completeness}\n" +
                             "Immutable copy saved with the observation; bodies are capped at ${Limits.EVIDENCE_BYTES} bytes.\n${snapshot.error.orEmpty()}\n\n" +
-                            snapshot.request.headers.joinToString("\n") { "${it.name}: ${it.value}" } + "\n\n${snapshot.request.body}\n\n" +
+                            snapshot.request.headers.joinToString("\n") { "${it.name}: ${it.value}" } + "\n\nRetained request preview · completeness unavailable\n${snapshot.request.body}\n\n" +
                             snapshot.responseHeaders.joinToString("\n") { "${it.name}: ${it.value}" } +
                             "\n\n${snapshot.response.encoding}${if (snapshot.response.truncated) " · TRUNCATED" else ""}\n${snapshot.response.value}")
+                    if (snapshot.hasReviewableResponse()) OutlinedButton(onClick = { openReview(snapshot) }) { Text("Review retained response") }
                     Button(onClick = { model.replay(snapshot); openApi() }) { Text("To API Lab (review before sending)") }
                     TextButton(onClick = { confirmEvidence = true }) { Text("Remove retained evidence") }
                 }

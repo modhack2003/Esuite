@@ -142,3 +142,11 @@ Evidence and exact acceptance: [Vivo 1.0.2 review](reviews/vivo-1.0.2-production
 - [x] Render Elements as a navigable HTML tree and edit current markup with stale-node checks.
 - [x] Combine Network observations with source labels, filtering, timing, recording and same-origin log preservation.
 - [x] Complete the optimized IME and browser inspection gates, signed upgrades and public APK verification. [Release verification](AGENT_HANDOFF.md#108-browser-input-and-inspection)
+
+
+## 1.0.9 Activity and passive review
+
+- [x] Add explicit Browser handoff, source-aware Activity and a Site Map grouped by complete observed paths.
+- [x] Share passive review rules and attach explicit encrypted evidence from the selected exchange.
+- [x] Add typed commands for Site Map, response review and finding creation.
+- [ ] Verify the optimized Android matrix, signed upgrades and the published APK. [Release evidence](AGENT_HANDOFF.md#109-activity-and-passive-review)

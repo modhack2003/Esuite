@@ -20,7 +20,7 @@ class ScopeAnalysisTest {
     @Test fun observationsAndExportsDoNotOverclaimOrLeakKnownSecrets() {
         val e = Exchange(projectId = "p", identity = "A", request = RequestDraft(url = "https://example.test/?unusual_secret=yes", headers = listOf(Header("Authorization", "Bearer secret")), body = "private"), status = 200,
             responseHeaders = listOf(Header("Content-Type", "text/html"), Header("Set-Cookie", "session=secret; Path=/")), response = StoredBody("private"))
-        assertTrue(PassiveAnalyzer.inspect(e).any { it.title == "Cookie missing HttpOnly" })
+        assertTrue(ResponseChecks.run(ResponseCheck.Quick, e).any { it.ruleId == "cookies.flags" && "HttpOnly absent" in it.detail })
         val redacted = Redactor.exchange(e)
         assertEquals("https://example.test/", redacted.request.url)
         assertEquals("[REDACTED]", redacted.request.headers.first().value)

@@ -11,6 +11,7 @@ import dev.esuite.app.storage.WorkspaceVault
 import dev.esuite.app.storage.WorkspaceStore
 import dev.esuite.app.browser.BrowserProfiles
 import dev.esuite.app.browser.BrowserAddress
+import dev.esuite.app.browser.BrowserLogSnapshot
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -40,6 +41,8 @@ data class AppState(
 class AppViewModel @JvmOverloads constructor(application: Application, private val vault: WorkspaceStore = WorkspaceVault(application)) : AndroidViewModel(application) {
     private val mutable = MutableStateFlow(AppState())
     val state = mutable.asStateFlow()
+    private val importedBrowser = MutableStateFlow<BrowserActivity?>(null)
+    internal val browserActivity = importedBrowser.asStateFlow()
     val engine = ApiEngine()
     /**
      * Pending editor text, in memory only and never part of [AppState.workspace], so typing cannot
@@ -62,6 +65,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
     private var profileCleanupNote: String? = null
     init { loadWorkspace() }
     fun loadWorkspace() {
+        importedBrowser.value = null
         workspaceGeneration += 1
         contextGeneration += 1
         val generation = workspaceGeneration
@@ -128,6 +132,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
     // Best effort onStop scheduling; arbitrary process death before acknowledgement can lose pending edits.
     fun flush() { if (state.value.ready) saveNow() }
     fun eraseVault() {
+        importedBrowser.value = null
         workspaceGeneration += 1
         contextGeneration += 1
         loadJob?.cancel()
@@ -149,7 +154,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         }
     }
     fun message(text: String) = mutable.update { it.copy(message = text.take(4000)) }
-    private fun currentContext() = RequestContext(contextGeneration, state.value.projectId, state.value.identity)
+    internal fun currentContext() = RequestContext(contextGeneration, state.value.projectId, state.value.identity)
     private fun supersededMessage(started: RequestContext, current: RequestContext): String =
         if (started.identity != current.identity)
             "A result for identity ${started.identity} arrived after you switched to ${current.identity}. It is recorded in Activity and was not applied here."
@@ -160,21 +165,24 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         workspacePreferences.edit { putString("last_project", id) }
     }
 
-    fun createProject(name: String, origin: String) {
-        runCatching {
+    fun createProject(name: String, origin: String): Project? {
+        return runCatching {
+            require(state.value.ready) { "Saved site data is opening." }
             require(name.isNotBlank() && name.length <= 100) { "Site name is too long" }
             require(state.value.workspace.projects.size < 20) { "Saved site limit reached (20)" }
             val scope = ScopePolicy(origin.trim())
             require(scope.target.isHttps) { "Enter an HTTPS origin" }
             val project = Project(name = name.trim(), origin = scope.canonicalOrigin)
             cancelRequest()
+            importedBrowser.value = null
             contextGeneration += 1
             drafts.clearProject(state.value.projectId)
             mutable.update { it.copy(workspace = it.workspace.copy(projects = it.workspace.projects + project), projectId = project.id, identity = "A",
                 draft = RequestDraft(url = project.origin + "/"), selected = null, comparison = "", message = "Site added to API Lab.") }
             rememberProject(project.id)
             persistDurable()
-        }.onFailure { message(it.message ?: "Invalid site") }
+            project
+        }.onFailure { message(it.message ?: "Invalid site") }.getOrNull()
     }
     fun openSite(address: String): Boolean {
         if (!state.value.ready) { message("Saved site data is opening."); return false }
@@ -199,12 +207,26 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         val previous = state.value
         if (id == previous.projectId) return
         val project = previous.workspace.projects.firstOrNull { it.id == id } ?: return
+        importedBrowser.value = null
         cancelRequest()
         contextGeneration += 1
         drafts.clearProject(previous.projectId)
         mutable.update { it.copy(projectId = id, identity = "A", draft = RequestDraft(url = project.origin + "/"), selected = null, comparison = "", message = "Selected ${project.origin}") }
         rememberProject(id)
     }
+    internal fun clearBrowserActivity() { importedBrowser.value = null }
+
+    internal fun openBrowserActivity(log: BrowserLogSnapshot, siteId: String?): Boolean {
+        if (!state.value.ready || log.rows.isEmpty()) return false
+        val site = if (siteId == null) {
+            val host = BrowserAddress.https(log.origin)?.host ?: return false
+            createProject(host.take(100), log.origin) ?: return false
+        } else state.value.workspace.projects.firstOrNull { it.id == siteId && it.origin == log.origin } ?: return false
+        selectProject(site.id)
+        importedBrowser.value = BrowserActivity(site.id, log)
+        return true
+    }
+
     fun identity(value: String) {
         require(value in listOf("A", "B"))
         val previous = state.value
@@ -418,6 +440,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
     }
     fun deleteProject() {
         val p = currentProject() ?: return
+        importedBrowser.value = null
         // A profile the provider still holds loaded no longer aborts the deletion: the workspace
         // deletion completes and the profile is recorded as pending cleanup with a retry path.
         val cleanup = BrowserProfiles.clearProject(p.id)
@@ -437,16 +460,27 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         if (result.unsupported) return message(result.describe())
         mutable.update { it.copy(pendingProfileCleanup = result.pending, message = result.describe()) }
     }
-    suspend fun addFinding(title: String, detail: String, evidence: Exchange? = state.value.selected): Boolean {
+    suspend fun addFinding(
+        title: String, detail: String, evidence: Exchange?,
+        expectedContext: RequestContext = currentContext(), findingId: String = java.util.UUID.randomUUID().toString(),
+    ): Boolean {
         val project = currentProject() ?: return false
+        if (!ResultAttribution.accepts(expectedContext, currentContext())) {
+            message("The selected site or identity changed. Reopen the original context to save.")
+            return false
+        }
         return admitDurable("Observation added. Check the save status for confirmation.") { workspace ->
             require(title.isNotBlank() && title.length <= 200 && detail.isNotBlank() && detail.length <= 16000) {
                 "Use a title between 1 and 200 characters and notes between 1 and 16,000 characters."
             }
             require(workspace.findings.size < Limits.FINDINGS) { "Observation limit reached. Remove a saved observation before adding one." }
-            val attached = evidence?.takeIf { it.projectId == project.id }
-            val finding = Finding(projectId = project.id, title = title, detail = detail,
-                evidenceIds = listOfNotNull(attached?.id), evidence = listOfNotNull(attached?.let(EvidenceRetention::snapshot)))
+            require(workspace.findings.none { it.id == findingId }) { "This observation was already added." }
+            require(evidence == null || (evidence.projectId == project.id && workspace.containsEvidence(evidence))) {
+                "The selected exchange is no longer available in this site’s history."
+            }
+            val snapshot = evidence?.let(EvidenceRetention::snapshot)
+            val finding = Finding(id = findingId, projectId = project.id, title = title, detail = detail,
+                evidenceIds = listOfNotNull(snapshot?.id), evidence = listOfNotNull(snapshot))
             workspace.copy(findings = listOf(finding) + workspace.findings)
         }
     }
@@ -462,6 +496,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         persistDurable()
     }
     fun clearHistory() {
+        importedBrowser.value = null
         mutable.update { it.copy(workspace = it.workspace.copy(exchanges = it.workspace.exchanges.filterNot { e -> e.projectId == it.projectId }), selected = null) }
         persistDurable()
     }

@@ -10,7 +10,7 @@ package dev.esuite.app.core
  * project deletion — can orphan retained evidence. A reference with no snapshot is an explicit
  * missing state: [missing] is exactly the set difference.
  *
- * Snapshots deliberately reuse [Exchange] so [Redactor.exchange], [PassiveAnalyzer] and replay all
+ * Snapshots deliberately reuse [Exchange] so [Redactor.exchange], and replay all
  * work on a snapshot unchanged.
  */
 object EvidenceRetention {
@@ -20,11 +20,11 @@ object EvidenceRetention {
      * cut on a 4-character group so the retained value stays decodable.
      */
     fun snapshot(exchange: Exchange): Exchange {
-        var response = cap(exchange.response.value)
+        var response = utf8Preview(exchange.response.value, Limits.EVIDENCE_BYTES)
         val cut = response.length < exchange.response.value.length
         if (cut && exchange.response.encoding == "base64") response = response.take(response.length / 4 * 4)
         return exchange.copy(
-            request = exchange.request.copy(body = cap(exchange.request.body)),
+            request = exchange.request.copy(body = utf8Preview(exchange.request.body, Limits.EVIDENCE_BYTES)),
             response = exchange.response.copy(value = response, truncated = exchange.response.truncated || cut),
         )
     }
@@ -62,13 +62,4 @@ object EvidenceRetention {
         }
     }
 
-    /** Cut on a UTF-8 code-point boundary so a retained body never holds a partial character. */
-    private fun cap(text: String): String {
-        if (text.length <= Limits.EVIDENCE_BYTES / 4) return text
-        val bytes = text.toByteArray(Charsets.UTF_8)
-        if (bytes.size <= Limits.EVIDENCE_BYTES) return text
-        var end = Limits.EVIDENCE_BYTES
-        while (end > 0 && (bytes[end].toInt() and 0xC0) == 0x80) end -= 1
-        return String(bytes, 0, end, Charsets.UTF_8)
-    }
 }

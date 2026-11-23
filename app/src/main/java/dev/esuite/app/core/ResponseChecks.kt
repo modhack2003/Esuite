@@ -3,6 +3,7 @@ package dev.esuite.app.core
 import java.util.Locale
 
 internal enum class ResponseCheck(val label: String, val summary: String) {
+    Quick("Quick response review", "Review headers, cookie flags, cache policy, and CORS without sending requests."),
     Headers("Security headers", "Review browser hardening headers on an observed response."),
     Cookies("Cookie flags", "Check Secure, HttpOnly and SameSite from Set-Cookie lines."),
     Cache("Cache policy", "Review whether shared caches may store the response."),
@@ -10,7 +11,20 @@ internal enum class ResponseCheck(val label: String, val summary: String) {
 }
 
 internal enum class CheckStatus(val label: String) { Present("Present"), Review("Review"), Unavailable("Unavailable") }
-internal data class CheckItem(val name: String, val status: CheckStatus, val detail: String)
+internal data class CheckItem(val name: String, val status: CheckStatus, val detail: String, val ruleId: String = "")
+
+internal const val RESPONSE_RULE_VERSION = 1
+internal const val MAX_REVIEW_EXCHANGES = 20
+
+internal fun Exchange.hasReviewableResponse(): Boolean =
+    status != null && error == null && source != "Browser metadata"
+
+internal fun Workspace.containsEvidence(exchange: Exchange): Boolean =
+    exchange in exchanges || findings.any { it.projectId == exchange.projectId && exchange in it.evidence }
+
+internal fun latestReviewableResponse(state: Workspace, siteId: String?, identity: String): Exchange? =
+    state.exchanges.firstOrNull { it.projectId == siteId && it.identity == identity && it.hasReviewableResponse() }
+
 
 /** Runs only against headers already supplied by the user. The parser never reads the response body. */
 internal object ResponseChecks {
@@ -21,7 +35,16 @@ internal object ResponseChecks {
 
     fun run(check: ResponseCheck, input: String): List<CheckItem> = run(check, parseHeaders(input))
 
+    fun run(check: ResponseCheck, exchange: Exchange): List<CheckItem> =
+        if (!exchange.hasReviewableResponse()) listOf(CheckItem("Response evidence", CheckStatus.Unavailable,
+            "The observed record has no captured response headers to review.", "response.evidence"))
+        else if (exchange.responseHeaders.isEmpty()) listOf(CheckItem("Response headers", CheckStatus.Unavailable,
+            "The HTTP response was captured with zero response header fields.", "response.empty-headers"))
+        else run(check, exchange.responseHeaders)
+
     fun run(check: ResponseCheck, supplied: List<Header>): List<CheckItem> {
+        if (check == ResponseCheck.Quick) return ResponseCheck.entries.filterNot { it == ResponseCheck.Quick }.flatMap { run(it, supplied) }
+
         val headers = supplied.groupBy({ it.name.lowercase(Locale.ROOT) }, Header::value)
         fun values(name: String) = headers[name].orEmpty()
         fun present(name: String, good: String, missing: String): CheckItem = if (values(name).any(String::isNotBlank)) {
@@ -29,6 +52,7 @@ internal object ResponseChecks {
         } else CheckItem(name, CheckStatus.Review, missing)
 
         return when (check) {
+            ResponseCheck.Quick -> error("Use the grouped review")
             ResponseCheck.Headers -> buildList {
                 val hsts = values("strict-transport-security").firstOrNull().orEmpty()
                 val age = hsts.split(';').map(String::trim).firstOrNull { it.substringBefore('=').trim().equals("max-age", true) }
@@ -85,6 +109,9 @@ internal object ResponseChecks {
                     else -> CheckItem("Cache variation", CheckStatus.Present, "The response declares a specific allowed origin and varies by Origin.")
                 })
             }
+        }.map { item ->
+            val field = if (check == ResponseCheck.Cookies) "flags" else item.name.lowercase(Locale.ROOT).replace(' ', '-')
+            item.copy(ruleId = "${check.name.lowercase(Locale.ROOT)}.$field")
         }
     }
 

@@ -94,6 +94,7 @@ internal fun BrowserScreen(
     onSettings: () -> Unit,
     onDataCleared: (Boolean) -> Unit,
     onOpenApi: (String) -> Unit,
+    onOpenActivity: (BrowserLogSnapshot) -> Unit,
     utilities: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
@@ -714,7 +715,8 @@ internal fun BrowserScreen(
                 } }, network = {
                     val network by requestLog.state.collectAsState()
                     NetworkPanel(network, pageUrl != null || loadTarget != null, clearRequests = requestLog::clear,
-                        onRecord = { recordingNetwork = it; requestLog.setRecording(it) }, onPreserve = requestLog::setPreserve)
+                        onRecord = { recordingNetwork = it; requestLog.setRecording(it) }, onPreserve = requestLog::setPreserve,
+                        onOpenActivity = { requestLog.snapshot()?.let(onOpenActivity) })
                 }) {
                 ConsolePanel(console, consoleDraft, { consoleDraft = it }, scriptMode, { scriptMode = it },
                     activeView() != null, running != null, run = {

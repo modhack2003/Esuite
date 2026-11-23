@@ -17,9 +17,7 @@ import dev.esuite.app.AppViewModel
 import dev.esuite.app.IdentityControls
 import dev.esuite.app.Panel
 import dev.esuite.app.core.*
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 private enum class ApiSection(val label: String) {
     Request("Request"), Response("Response"), Collection("Saved"), Identity("Session")
@@ -27,7 +25,7 @@ private enum class ApiSection(val label: String) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> Unit) {
+internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> Unit, onReview: (Exchange) -> Unit) {
     val project = model.currentProject()
     if (project == null) {
         Text("Open an HTTPS site to use API Lab.", style = MaterialTheme.typography.titleMedium)
@@ -97,12 +95,10 @@ internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> 
                 val headerText = remember(exchange.responseHeaders) { exchange.responseHeaders.asEditorText() }
                 val preview = remember(exchange.id) { exchange.response.value.take(48_000) }
                 var fullBody by remember(exchange.id) { mutableStateOf(false) }
-                var review by remember(exchange.id) { mutableStateOf(false) }
-                if (exchange.status != null) {
-                    OutlinedButton(onClick = { review = true }, modifier = Modifier.testTag("api_review_response")) {
+                if (exchange.hasReviewableResponse()) {
+                    OutlinedButton(onClick = { onReview(exchange) }, modifier = Modifier.testTag("api_review_response")) {
                         Text("Check response headers")
                     }
-                    if (review) ReviewResponseDialog(exchange.responseHeaders) { review = false }
                 }
                 Panel(responseTitle, exchange.error ?: headerText.ifBlank { "No response headers" })
                 if (exchange.response.value.isNotEmpty()) {
@@ -187,31 +183,6 @@ internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> 
             )
         }
     }
-}
-
-@Composable
-private fun ReviewResponseDialog(headers: List<Header>, dismiss: () -> Unit) {
-    var check by remember { mutableStateOf(ResponseCheck.Headers) }
-    val results by produceState<List<CheckItem>?>(null, check, headers) {
-        value = null
-        value = withContext(Dispatchers.Default) { ResponseChecks.run(check, headers) }
-    }
-    AlertDialog(
-        modifier = Modifier.testTag("api_response_checks"),
-        onDismissRequest = dismiss,
-        title = { Text("Response checks") },
-        text = {
-            Column {
-                ResponseCheckOptions(check) { check = it }
-                Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
-                    val current = results
-                    if (current == null) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    else ResponseCheckResults(current)
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = dismiss) { Text("Done") } },
-    )
 }
 
 private fun List<Header>.asEditorText() = joinToString("\n") { "${it.name}: ${it.value}" }

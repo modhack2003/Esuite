@@ -51,7 +51,7 @@ private enum class DetailsTab(val label: String) { General("General"), Timing("T
 
 @Composable
 internal fun NetworkPanel(state: BrowserNetworkState, ready: Boolean, clearRequests: () -> Unit,
-    onRecord: (Boolean) -> Unit, onPreserve: (Boolean) -> Unit,
+    onRecord: (Boolean) -> Unit, onPreserve: (Boolean) -> Unit, onOpenActivity: () -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var resourceType by rememberSaveable { mutableStateOf(ResourceType.All) }
@@ -96,6 +96,9 @@ internal fun NetworkPanel(state: BrowserNetworkState, ready: Boolean, clearReque
                 }
             }
             LazyColumn(Modifier.fillMaxWidth().weight(1f).testTag("network_rows")) {
+                if (state.rows.isNotEmpty()) item {
+                    TextButton(onClick = onOpenActivity, modifier = Modifier.testTag("network_open_activity")) { Text("Open in Activity") }
+                }
                 if (showFilters) item {
                     InspectionSearch(query, { query = it }, "Filter by path, type, method, or status", "network_search")
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -146,13 +149,13 @@ internal fun NetworkPanel(state: BrowserNetworkState, ready: Boolean, clearReque
                         .clickable(onClickLabel = "Network details") { selected = row.id }
                         .padding(horizontal = 6.dp, vertical = 9.dp)
                     if (wide) Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(row.path, Modifier.weight(2f), style = technicalTextStyle(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(row.path + if (row.pathClipped) "…" else "", Modifier.weight(2f), style = technicalTextStyle(), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(facts, Modifier.weight(2f), style = MaterialTheme.typography.bodySmall,
                             color = if (row.failed) colors.error else colors.onSurfaceVariant)
                         Text(metrics.ifEmpty { "—" }, Modifier.weight(1.3f), style = MaterialTheme.typography.bodySmall)
                         if (showWaterfall) Box(Modifier.weight(1f)) { row.timing?.let { WaterfallBar(it, end) } }
                     } else Column(modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(row.path, style = technicalTextStyle(), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(row.path + if (row.pathClipped) "…" else "", style = technicalTextStyle(), maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(listOf(facts, metrics).filter(String::isNotEmpty).joinToString(" · "), style = MaterialTheme.typography.bodySmall,
                             color = if (row.failed) colors.error else colors.onSurfaceVariant)
                         if (showWaterfall) row.timing?.let { WaterfallBar(it, end) }
@@ -182,7 +185,7 @@ private fun NetworkDetails(row: BrowserRequestEvent, close: () -> Unit) {
                 LazyColumn(Modifier.heightIn(max = 350.dp)) {
                     if (tab == DetailsTab.General) {
                         item {
-                            InspectionValue("Path", row.path)
+                            InspectionValue("Path", row.path + if (row.pathClipped) "… (clipped)" else "")
                             InspectionValue("Source", if (timing == null) "WebView callback · ${row.kind.label}" else "Browser resource timing")
                             InspectionValue("Method", row.method ?: "Unavailable")
                             InspectionValue("Resource type", row.resourceType.takeUnless { it == "unknown" } ?: "Unavailable")

@@ -25,7 +25,7 @@ private enum class ToolGroup(val label: String) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ToolsScreen(state: AppState, model: AppViewModel) {
+internal fun ToolsScreen(state: AppState, model: AppViewModel, onReview: (Exchange, ResponseCheck) -> Unit) {
     val pending by model.drafts.values.collectAsStateWithLifecycle()
     val inputKey = DraftKey.of(state.projectId, Editor.ToolsInput, state.identity)
     val input = pending[inputKey].orEmpty()
@@ -71,6 +71,7 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel) {
             if (group == ToolGroup.Checks) {
                 ResponseCheckOptions(template) { resetOutput(); template = it }
                 Text(template.summary, style = MaterialTheme.typography.bodySmall, color = Muted)
+                Text("Pasted headers are reviewed locally without attaching an exchange.", style = MaterialTheme.typography.bodySmall)
             }
             OutlinedTextField(input, { model.drafts.set(inputKey, it); resetOutput() }, label = { Text(if (group == ToolGroup.Checks) "Response headers" else "Input") },
                 minLines = 1, maxLines = 6, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(),
@@ -103,16 +104,16 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel) {
                     }
                 }
                 ToolGroup.Checks -> {
-                    val latest = state.workspace.exchanges.firstOrNull { it.projectId == state.projectId && it.status != null }
+                    val latest = latestReviewableResponse(state.workspace, state.projectId, state.identity)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(enabled = input.isNotBlank() && !working, modifier = Modifier.testTag("run_response_check"), onClick = {
                             val chosen = template
                             runTool({ ResponseChecks.run(chosen, input) }) { checkResults = it }
                         }) { Text("Check pasted headers") }
-                        if (latest != null) OutlinedButton(enabled = !working, onClick = {
-                            val chosen = template
-                            runTool({ ResponseChecks.run(chosen, latest.responseHeaders) }) { checkResults = it }
-                        }) { Text("Check latest response") }
+                        if (latest != null) {
+                            Text(exchangeLabel(latest), style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth())
+                            OutlinedButton(enabled = !working, onClick = { onReview(latest, template) }) { Text("Check latest response") }
+                        }
                     }
                     ResponseCheckResults(checkResults)
                 }

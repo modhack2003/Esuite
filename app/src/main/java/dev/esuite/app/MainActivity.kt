@@ -19,8 +19,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.rememberScrollState
@@ -54,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.esuite.app.browser.BrowserProfiles
+import dev.esuite.app.browser.BrowserLogSnapshot
 import dev.esuite.app.browser.BrowserScreen
 import dev.esuite.app.browser.BrowserSkeleton
 import dev.esuite.app.core.*
@@ -134,12 +133,33 @@ internal fun ESuiteApp(
     var clearRequest by remember { mutableIntStateOf(0) }
     var starting by remember { mutableStateOf(true) }
     var browserMessage by remember { mutableStateOf<String?>(null) }
+    var browserImport by remember { mutableStateOf<BrowserLogSnapshot?>(null) }
+    var browserImportError by remember { mutableStateOf("") }
+    var review by remember { mutableStateOf<ReviewLaunch?>(null) }
+    var finding by remember { mutableStateOf<FindingSeed?>(null) }
     val screen = Screen.entries.firstOrNull { it.name == selectedName } ?: Screen.Browser
     val browserVisible = screen == Screen.Browser || screen == Screen.Tools
     val site = state.workspace.projects.firstOrNull { it.id == state.projectId }
     fun navigate(next: Screen) { selectedName = next.name }
     fun settings() { previousName = screen.name; navigate(Screen.Settings) }
     fun closeSettings() { selectedName = previousName }
+    fun openReview(exchanges: List<Exchange>, template: ResponseCheck) {
+        val target = model.currentProject() ?: return
+        val current = model.state.value.workspace
+        val chosen = exchanges.distinctBy(Exchange::id)
+        val scope = ScopePolicy(target.origin)
+        if (chosen.size !in 1..MAX_REVIEW_EXCHANGES || chosen.any { it.projectId != target.id || !current.containsEvidence(it) || !scope.allows(it.request.url) }) {
+            model.message("Choose current exchanges from this site.")
+            return
+        }
+        review = ReviewLaunch(target, model.currentContext(), chosen, template)
+    }
+    fun openFinding(exchange: Exchange?) {
+        if (exchange == null) navigate(Screen.Findings)
+        else model.currentProject()?.let { target ->
+            finding = FindingSeed(target, model.currentContext(), exchange)
+        }
+    }
 
     BackHandler(enabled = !browserVisible) {
         if (screen == Screen.Settings) closeSettings() else navigate(Screen.Browser)
@@ -179,6 +199,7 @@ internal fun ESuiteApp(
                         onShortcut = onBrowserShortcut,
                         onSettings = ::settings,
                         onDataCleared = { cleared ->
+                            model.clearBrowserActivity()
                             val cleanup = BrowserProfiles.clearAllEsuiteOwned()
                             browserMessage = when {
                                 !cleared -> "Browser data couldn’t be cleared. Check Android System WebView."
@@ -186,11 +207,9 @@ internal fun ESuiteApp(
                                 else -> "Browsing data cleared."
                             }
                         },
-                        onOpenApi = {
-                            model.openSite(it)
-                            navigate(Screen.Api)
-                        },
-                        utilities = { ToolsScreen(state, model) },
+                        onOpenApi = { if (model.openSite(it)) navigate(Screen.Api) },
+                        onOpenActivity = { browserImportError = ""; browserImport = it },
+                        utilities = { ToolsScreen(state, model) { exchange, template -> openReview(listOf(exchange), template) } },
                     )
                     if (!browserVisible) {
                         AnimatedContent(
@@ -209,10 +228,10 @@ internal fun ESuiteApp(
                                         browserMessage, ::closeSettings)
                                     !state.ready -> SavedDataState(state, ::settings)
                                     destination == Screen.Findings -> key(state.projectId) {
-                                        FindingsScreen(state, model, site) { navigate(Screen.Api) }
+                                        FindingsScreen(state, model, site, { navigate(Screen.Api) }) { openReview(listOf(it), ResponseCheck.Quick) }
                                     }
                                     destination == Screen.Traffic -> key(state.projectId) {
-                                        TrafficScreen(state, model, site) { navigate(Screen.Api) }
+                                        ActivityScreen(state, model, site, { navigate(Screen.Api) }, ::openReview, ::openFinding)
                                     }
                                     else -> {
                                         val pageScroll = key(destination, state.projectId) { rememberScrollState() }
@@ -221,7 +240,9 @@ internal fun ESuiteApp(
                                             verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                             WorkspaceStatus(site, state)
                                             SitePicker(state, site, model, allowNew = true)
-                                            if (site != null) ApiScreen(state, model) { scope.launch { pageScroll.scrollTo(0) } }
+                                            if (site != null) ApiScreen(state, model, { scope.launch { pageScroll.scrollTo(0) } }) {
+                                                openReview(listOf(it), ResponseCheck.Quick)
+                                            }
                                         }
                                     }
                                 }
@@ -231,6 +252,17 @@ internal fun ESuiteApp(
                 }
             }
         }
+        browserImport?.let { log ->
+            BrowserActivityImport(log, state.workspace.projects, browserImportError, close = { browserImport = null }) { target ->
+                if (model.openBrowserActivity(log, target)) {
+                    browserImport = null
+                    navigate(Screen.Traffic)
+                } else browserImportError = if (target == null) model.state.value.message.ifBlank { "Cannot create the selected site." }
+                    else "That site is no longer available."
+            }
+        }
+        review?.let { ResponseReviewDialog(it, model) { review = null } }
+        finding?.let { SaveFindingDialog(it, model) { finding = null } }
         AnimatedVisibility(starting, enter = EnterTransition.None,
             exit = if (motion) fadeOut(tween(160)) else ExitTransition.None) { LaunchScreen() }
     }
@@ -318,63 +350,4 @@ private fun SavedDataState(state: AppState, settings: () -> Unit) {
             }
         }
     }
-}
-
-@Composable private fun TrafficScreen(state: AppState, model: AppViewModel, project: Project?, openApi: () -> Unit) {
-    var filter by remember { mutableStateOf("") }
-    var detail by remember { mutableStateOf<Exchange?>(null) }
-    var confirmClear by remember { mutableStateOf(false) }
-    val history = remember(state.workspace.exchanges, state.projectId) {
-        state.workspace.exchanges.filter { it.projectId == state.projectId }
-    }
-    val entries = remember(history, filter) {
-        val query = filter.trim()
-        if (query.isEmpty()) history else history.filter { exchange ->
-            "${exchange.request.method} ${exchange.request.url} ${exchange.source}".contains(query, ignoreCase = true)
-        }
-    }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item { WorkspaceStatus(project, state) }
-        item { Text("Activity", style = MaterialTheme.typography.headlineSmall) }
-        item { SitePicker(state, project, model) }
-        item {
-            OutlinedTextField(filter, { filter = it }, singleLine = true, keyboardOptions = TechnicalKeyboard,
-                label = { Text("Filter method, URL or source") }, modifier = Modifier.fillMaxWidth())
-        }
-        if (entries.isEmpty()) item { Text("No matching history. Browse an in-scope page or send an API request.") }
-        items(entries, key = { it.id }) { exchange ->
-            OutlinedButton(onClick = { model.select(exchange); detail = exchange }, modifier = Modifier.fillMaxWidth().testTag("traffic_exchange")) {
-                Text("${exchange.request.method} ${exchange.request.url}\n${exchange.source} · identity ${exchange.identity} · ${exchange.status ?: if (exchange.error != null) "error" else "metadata only"}", Modifier.fillMaxWidth())
-            }
-        }
-        if (history.isNotEmpty()) item { OutlinedButton(onClick = { confirmClear = true }) { Text("Clear site history") } }
-    }
-    detail?.let { exchange ->
-        AlertDialog(onDismissRequest = { detail = null }, title = { Text("Exchange detail", Modifier.testTag("traffic_detail")) }, text = {
-            Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(ResultAttribution.label(exchange, project?.origin))
-                Text(exchange.completeness)
-                exchange.error?.let { Text(it) }
-                SelectionContainer {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("${exchange.request.method} ${exchange.request.url}", style = technicalTextStyle())
-                        if (exchange.request.headers.isNotEmpty()) Text(exchange.request.headers.joinToString("\n") { "${it.name}: ${it.value}" }, style = technicalTextStyle())
-                        if (exchange.request.body.isNotEmpty()) Text(exchange.request.body, style = technicalTextStyle())
-                        if (exchange.status != null) Text("HTTP ${exchange.status} · ${exchange.durationMs} ms")
-                        if (exchange.responseHeaders.isNotEmpty()) Text(exchange.responseHeaders.joinToString("\n") { "${it.name}: ${it.value}" }, style = technicalTextStyle())
-                        if (exchange.response.value.isNotEmpty()) {
-                            Text("Response body · ${exchange.response.encoding}")
-                            Text(exchange.response.value, style = technicalTextStyle())
-                        }
-                        if (exchange.response.truncated) Text("Response body truncated", color = Amber)
-                    }
-                }
-            }
-        }, confirmButton = { TextButton(onClick = { detail = null; model.replay(exchange); openApi() }) { Text("Review in API Lab") } },
-            dismissButton = { TextButton(onClick = { detail = null }) { Text("Close") } })
-    }
-    if (confirmClear) AlertDialog(onDismissRequest = { confirmClear = false }, title = { Text("Clear site history?") },
-        text = { Text("This removes history entries for the selected site. Evidence saved with observations stays on this device.") },
-        confirmButton = { TextButton(onClick = { confirmClear = false; model.clearHistory() }) { Text("Clear history") } },
-        dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } })
 }

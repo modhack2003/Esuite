@@ -10,6 +10,10 @@ Read this file first, then `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md
 - No analytics, hosted AI, remote workers, automatic evidence uploads or external callback collectors. The design services received synthetic data only.
 - The React prototype is a synthetic design reference. Native features must be assessed from Kotlin source and tests.
 
+## 1.0.9 Activity and passive review
+
+Activity combines stored HTTP exchanges with an explicitly imported, in-memory Browser Network snapshot. Source labels preserve the distinction between callbacks, timings and captured responses. Site Map uses complete observed paths and exact site scope. Quick response review shares one rule engine with API Lab, Tools and Findings. Review results can attach the selected exchange as immutable encrypted evidence. The device harness covers Browser handoff, Site Map, review, finding save and evidence retention after history clearing. The upgrade baseline is the published 1.0.8 APK.
+
 ## 1.0.8 browser input and inspection
 
 Browser gives Android WebView native touch focus and preserves the dock split when the keyboard closes. The independent UI harness taps website inputs and types through an emulator-only IME. Elements shows a bounded HTML tree with stable node IDs, a noninteractive highlight and draft-preserving markup edits. Network stores bounded, same-origin observations in memory with distinct identities for callbacks and Resource Timing entries. The signed upgrade baseline is 1.0.7.

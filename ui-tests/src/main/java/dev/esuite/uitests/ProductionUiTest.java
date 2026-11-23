@@ -147,7 +147,7 @@ public class ProductionUiTest extends NativeUiDriver {
         click("open_settings"); assertNotNull(find(By.res("settings_title")));
         click("appearance_tab_light");
         assertTrue(tag("appearance_tab_light").isSelected());
-        assertNotNull(find(By.textContains("Version 1.0.8")));
+        assertNotNull(find(By.textContains("Version 1.0.9")));
         assertNotNull(find(By.text("Credits")));
         device.pressBack();
         click("browser_tools");
