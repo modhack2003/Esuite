@@ -129,8 +129,7 @@ public class ProductionUiTest extends NativeUiDriver {
         click("nav_tools");
         revealUtilityControl(By.text("Import cURL"), true).click();
         click("tools_apply_import");
-        revealUtilityControl(By.res("tools_output"), true);
-        assertTrue(waitText("tools_output", "Draft loaded in API Lab", 5000));
+        assertTrue(waitText("tools_import_status", "Draft loaded in API Lab", 5000));
         click("nav_api");
         assertTrue(waitText("api_url", "https://example.test/staged", 5000));
         assertTrue(waitText("api_body", "first=one&second=two", 5000));
@@ -196,6 +195,8 @@ public class ProductionUiTest extends NativeUiDriver {
         assertNotNull(tag("tools_input"));
         assertTrue("General tools should also leave the page visible", pageBounds().height() > full.height() / 4);
         click("browser_tools");
+        assertTrue("Developer Tools did not replace the utility dock",
+                device.wait(Until.hasObject(By.res("browser_panel_picker")), 5000));
         selectBrowserTool("page"); click("browser_open_api");
         assertTrue(waitText("api_url", "https://example.com/", 15000));
         click("nav_browser");
@@ -203,7 +204,10 @@ public class ProductionUiTest extends NativeUiDriver {
         click("open_settings"); assertNotNull(find(By.res("settings_title")));
         click("appearance_tab_light");
         assertTrue(tag("appearance_tab_light").isSelected());
-        assertNotNull(find(By.textContains("Version 1.0.9")));
+        var version = java.util.regex.Pattern.compile("(?m)^\\s*versionName=([^\\r\\n]+)").matcher(
+                device.executeShellCommand("dumpsys package dev.esuite.app"));
+        assertTrue("Could not read the installed package version", version.find());
+        assertTrue(waitText("settings_version", "Version " + version.group(1).trim(), 5000));
         assertNotNull(find(By.text("Credits")));
         device.pressBack();
         click("browser_tools");
@@ -214,8 +218,8 @@ public class ProductionUiTest extends NativeUiDriver {
     }
 
     private Rect pageBounds() {
-        UiObject2 page = device.findObject(By.res("browser_page"));
-        if (page == null) page = device.findObject(By.clazz("android.webkit.WebView"));
+        UiObject2 page = device.wait(Until.findObject(By.res("browser_page")), 2000);
+        if (page == null) page = device.wait(Until.findObject(By.clazz("android.webkit.WebView")), 5000);
         assertNotNull("The WebView disappeared", page);
         return page.getVisibleBounds();
     }

@@ -139,7 +139,7 @@ try:
     if os.environ.get('ESUITE_REPORTED_SITE') == 'true':
         probe_previous_keyboard()
     command('adb', 'install', unique('**/app/build/outputs/apk/ci/app-release-ci.apk'))
-    suite('dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner', 'OptimizedUi', 4, 'dev.esuite.uitests.ProductionUiTest')
+    suite('dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner', 'OptimizedUi', 7, 'dev.esuite.uitests.ProductionUiTest')
     suite('dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner', 'BrowserKeyboard', 1, 'dev.esuite.uitests.BrowserKeyboardUiTest')
     suite('dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner', 'Assessment', 1, 'dev.esuite.uitests.AssessmentUiTest')
     if os.environ.get('ESUITE_REPORTED_SITE') == 'true':

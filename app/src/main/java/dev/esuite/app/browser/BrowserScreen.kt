@@ -339,8 +339,8 @@ internal fun BrowserScreen(
 
     fun toggleInspector() {
         if (utilitiesVisible) {
-            closeUtilities()
             inspecting = true
+            closeUtilities()
         } else inspecting = !inspecting
         if (!inspecting && browser?.hasFocus() != true) focus.clearFocus()
     }
@@ -533,7 +533,7 @@ internal fun BrowserScreen(
                 }, ::openAddress,
                 browser != null && !rendererGone && !clearing && !addressOverflow && address.isNotBlank(),
                 canGoBack, canGoForward, loading, pageUrl != null,
-                inspecting && !utilitiesVisible, browser != null && !rendererGone,
+                inspecting && !utilitiesVisible, utilitiesVisible, browser != null && !rendererGone,
                 back = ::goBack, forward = { addressEdited = false; browser?.goForward() },
                 reload = {
                     if (loading) {
@@ -841,7 +841,7 @@ private suspend fun awaitConsole(view: WebView, token: String): String {
 private fun BrowserToolbar(
     address: String, edit: (String) -> Unit, go: () -> Unit, submitEnabled: Boolean,
     canGoBack: Boolean, canGoForward: Boolean, loading: Boolean, loaded: Boolean,
-    inspecting: Boolean, toolsEnabled: Boolean,
+    inspecting: Boolean, utilitiesVisible: Boolean, toolsEnabled: Boolean,
     back: () -> Unit, forward: () -> Unit, reload: () -> Unit, tools: () -> Unit,
     commands: () -> Unit, settings: () -> Unit,
 ) {
@@ -875,7 +875,11 @@ private fun BrowserToolbar(
     val actions: @Composable (Boolean) -> Unit = { showLabel ->
         val toolDescription = if (inspecting) "Close Developer Tools" else "Open Developer Tools"
         val toolModifier = Modifier.testTag("browser_tools").semantics { contentDescription = toolDescription; selected = inspecting }
-        if (showLabel) {
+        if (utilitiesVisible) {
+            FilledTonalIconButton(onClick = tools, enabled = toolsEnabled, modifier = toolModifier, shape = MaterialTheme.shapes.small) {
+                Icon(painterResource(R.drawable.ic_terminal), null)
+            }
+        } else if (showLabel) {
             FilterChip(selected = inspecting, onClick = tools, enabled = toolsEnabled, modifier = toolModifier,
                 label = { Text("DevTools", maxLines = 1) }, leadingIcon = {
                     Icon(painterResource(R.drawable.ic_terminal), null, Modifier.size(18.dp))

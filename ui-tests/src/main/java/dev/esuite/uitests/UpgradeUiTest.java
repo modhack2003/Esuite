@@ -6,11 +6,12 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import static org.junit.Assert.*;
 
-/** Seed the immutable v1.0.8 baseline, then verify the update without clearing app data. */
+/** Seed the immutable v1.0.9 baseline, then verify the update without clearing app data. */
 @RunWith(AndroidJUnit4.class)
 public class UpgradeUiTest extends NativeUiDriver {
     private static final String SAVED = "Synthetic upgrade request";
     private static final String NOTE="Synthetic upgrade evidence retained";
+    private static final String IDENTITY="X-Upgrade-Fixture: synthetic-identity-b";
     private void readObservation() {
         click("nav_findings");
         assertNotNull(find(By.textContains(NOTE)));
@@ -20,6 +21,15 @@ public class UpgradeUiTest extends NativeUiDriver {
         enter("site_url","https://example.test"); click("site_continue");
         click("api_tab_collection"); enter("api_saved_name", SAVED); click("api_save_draft");
         assertNotNull(find(By.text("Load: " + SAVED)));
+        click("api_tab_identity");
+        click("identity_B");
+        enter("api_identity_headers", IDENTITY);
+        click("api_save_identity");
+        top();
+        assertTrue(waitText("workspace_save_status", "Saved on this device", 15000));
+        click("nav_browser"); click("open_settings"); click("appearance_tab_light");
+        assertTrue(tag("appearance_tab_light").isSelected());
+        device.pressBack();
         click("nav_findings"); enter("finding_title","Preserve on upgrade");
         enter("finding_detail",NOTE); click("save_finding"); top();
         assertTrue(waitText("workspace_save_status", "Saved on this device", 15000));
@@ -32,6 +42,11 @@ public class UpgradeUiTest extends NativeUiDriver {
         top(); assertTrue(waitText("workspace_context", "https://example.test", 15000));
         click("nav_api"); click("api_tab_collection");
         assertNotNull(find(By.text("Load: " + SAVED)));
+        click("api_tab_identity"); click("identity_B");
+        assertTrue(waitText("api_identity_headers", IDENTITY, 5000));
+        click("nav_browser"); click("open_settings");
+        assertTrue("Appearance should survive an in-place update", tag("appearance_tab_light").isSelected());
+        device.pressBack();
         click("nav_findings"); checkpoint("upgraded-note-retained");
     }
 }

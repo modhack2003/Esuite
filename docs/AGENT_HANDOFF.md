@@ -22,6 +22,10 @@ The first branch matrix passed nine Android configurations. API 34 opened the fi
 
 Browser work continues with native page find, bounded address editing, Elements line numbers and breadcrumbs, a selectable markup preview, stale CSS edit rejection, and Network source and method filters. Waterfall rows share the same time axis when preserving observations across navigations.
 
+The updated release source passed 1,100 JVM fixture checks and 120 Chromium fixture checks, including all 13 reproduced defects. Both Gradle variants passed 102 JVM tests each, and the optimized APK built locally. The second branch matrix passed its build and design jobs and found two recurring UI failures in the utility dock. The branch correction gives the DevTools switch a direct action and keeps import completion visible while the form scrolls. Device verification is still required. [Second development matrix](https://github.com/modhack2003/Esuite/actions/runs/45273016774)
+
+The production-signed upgrade harness now uses the checksum-pinned 1.0.9 APK and checks the saved site, request, finding, identity configuration and appearance after installation over the baseline. The harness compiles before signing, and the in-place installation still requires the existing production signer.
+
 | Plan area | Branch progress |
 | --- | --- |
 | Confirmed defects | Q061, Q211, Q221, Q451, Q511, Q601–Q603, Q631, Q711, Q731, Q741 and Q751 have fixes and regression coverage. The Android end-to-end matrix is separate. |

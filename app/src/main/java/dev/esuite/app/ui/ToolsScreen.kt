@@ -18,7 +18,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -61,6 +64,7 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel, onReview: (Exchan
     var inputError by remember(inputKey) { mutableStateOf<String?>(null) }
     var documentRequest by remember { mutableStateOf<Pair<ImportFormat, RequestContext>?>(null) }
     var preview by remember { mutableStateOf<ImportPreview?>(null) }
+    var importStatus by remember(inputKey) { mutableStateOf<String?>(null) }
     var checkResults by remember(inputKey) { mutableStateOf(emptyList<CheckItem>()) }
     var template by rememberSaveable { mutableStateOf(ResponseCheck.Headers) }
     var working by remember(inputKey) { mutableStateOf(false) }
@@ -73,8 +77,9 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel, onReview: (Exchan
         outputClipped = false
         checkResults = emptyList()
         preview = null
+        importStatus = null
     }
-    fun <T> runTool(action: suspend () -> T, done: (T) -> Unit) {
+    fun <T> runTool(action: suspend () -> T, failed: (String) -> Unit = { output = it }, done: (T) -> Unit) {
         resetOutput()
         working = true
         worker = scope.launch {
@@ -83,7 +88,7 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel, onReview: (Exchan
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
-                output = failure.message?.atCharacterBoundary(OUTPUT_CHARS) ?: "Check your input"
+                failed(failure.message?.atCharacterBoundary(OUTPUT_CHARS) ?: "Check your input")
             }
             working = false
         }
@@ -132,6 +137,13 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel, onReview: (Exchan
             }
         }
         HorizontalDivider()
+        if (group == ToolGroup.Import) {
+            importStatus?.let { status ->
+                Text(status, Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
+                    .testTag("tools_import_status").semantics { liveRegion = LiveRegionMode.Polite },
+                    maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+            }
+        }
         Column(Modifier.fillMaxWidth().weight(1f).testTag("tools_content").verticalScroll(contentScroll)
             .padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (group == ToolGroup.Checks) {
@@ -229,9 +241,10 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel, onReview: (Exchan
     }
     preview?.let { selected ->
         ImportReviewDialog(selected, close = { preview = null }) { requests ->
-            runTool({
-                withContext(Dispatchers.Main.immediate) { model.applyImport(selected.format, selected.context, requests) }
-            }) { output = it }
+            runTool(
+                { withContext(Dispatchers.Main.immediate) { model.applyImport(selected.format, selected.context, requests) } },
+                failed = { importStatus = it },
+            ) { importStatus = it }
         }
     }
 }
