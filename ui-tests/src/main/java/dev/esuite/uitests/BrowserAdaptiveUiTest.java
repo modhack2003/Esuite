@@ -3,6 +3,7 @@ package dev.esuite.uitests;
 import android.graphics.Rect;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.uiautomator.By;
+import androidx.test.uiautomator.UiObject2;
 import androidx.test.uiautomator.Until;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -23,7 +24,7 @@ public final class BrowserAdaptiveUiTest extends NativeUiDriver {
             assertNotNull(device.wait(Until.findObject(By.clazz("android.webkit.WebView")), 45_000));
             click("browser_tools");
             assertNotNull(tag("browser_panel_picker"));
-            Rect portraitPage = tag("browser_page").getVisibleBounds();
+            Rect portraitPage = pageBounds();
             Rect portraitDock = tag("browser_dock").getVisibleBounds();
             assertTrue("Portrait page and dock should stack", portraitPage.bottom <= portraitDock.top);
             checkpoint("browser-portrait-large-text");
@@ -34,7 +35,7 @@ public final class BrowserAdaptiveUiTest extends NativeUiDriver {
             }
             assertTrue("Emulator did not enter landscape", device.getDisplayWidth() > device.getDisplayHeight());
             assertTrue(waitText("browser_url", "https://example.com/", 10_000));
-            Rect landscapePage = tag("browser_page").getVisibleBounds();
+            Rect landscapePage = pageBounds();
             Rect landscapeDock = tag("browser_dock").getVisibleBounds();
             assertTrue("Landscape page and inspector should be side by side", landscapePage.right <= landscapeDock.left);
             assertTrue("The page needs a usable viewport", landscapePage.width() >= 100 && landscapePage.height() >= 75);
@@ -51,5 +52,12 @@ public final class BrowserAdaptiveUiTest extends NativeUiDriver {
             if (previous.equals("null")) device.executeShellCommand("settings delete system font_scale");
             else device.executeShellCommand("settings put system font_scale " + previous);
         }
+    }
+
+    private Rect pageBounds() {
+        UiObject2 page = device.findObject(By.res("browser_page"));
+        if (page == null) page = device.findObject(By.clazz("android.webkit.WebView"));
+        assertNotNull("The page disappeared", page);
+        return page.getVisibleBounds();
     }
 }
