@@ -1,5 +1,6 @@
 package dev.esuite.uitests;
 
+import android.graphics.Bitmap;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.uiautomator.By;
@@ -16,6 +17,14 @@ import static org.junit.Assert.*;
 /** Shared independent UI driver. No app classes and no automatic data clearing. */
 public abstract class NativeUiDriver {
     protected final UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
+
+    protected Bitmap pixelScreenshot() {
+        Bitmap screenshot = InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();
+        if (screenshot == null || screenshot.getConfig() != Bitmap.Config.HARDWARE) return screenshot;
+        Bitmap pixels = screenshot.copy(Bitmap.Config.ARGB_8888, false);
+        screenshot.recycle();
+        return pixels;
+    }
 
     @org.junit.Rule public org.junit.rules.TestWatcher evidence = new org.junit.rules.TestWatcher() {
         @Override protected void failed(Throwable error, org.junit.runner.Description description) {

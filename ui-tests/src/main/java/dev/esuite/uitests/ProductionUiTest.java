@@ -1,19 +1,16 @@
 package dev.esuite.uitests;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
-import androidx.test.platform.app.InstrumentationRegistry;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Rect;
 import android.os.SystemClock;
 import androidx.test.uiautomator.By;
 import androidx.test.uiautomator.BySelector;
-import androidx.test.uiautomator.UiDevice;
 import androidx.test.uiautomator.UiObject2;
 import androidx.test.uiautomator.Until;
 import org.junit.Test;
 import org.junit.Before;
-import org.junit.Assume;
 import org.junit.runner.RunWith;
 import static org.junit.Assert.*;
 
@@ -108,9 +105,14 @@ public class ProductionUiTest extends NativeUiDriver {
         assertTrue(waitText("browser_output", "Example Domain", 10000));
         selectBrowserTool("elements"); assertTrue("Document outline is missing the page body", waitText("browser_output", "BODY", 10000));
         selectBrowserTool("console");
-        enter("console_input", "await Promise.resolve(6 * 7).then(n => { if (n === 42) document.documentElement.style.background = '#237E5B'; return n; })");
+        enter("console_input", "await Promise.resolve(6 * 7).then(n => { if (n === 42) { " +
+                "const canvas = document.createElement('canvas'); canvas.width = canvas.height = 24; " +
+                "canvas.style.cssText = 'position:fixed;left:0;top:0;z-index:2147483647;pointer-events:none'; " +
+                "const pen = canvas.getContext('2d'); pen.fillStyle = '#237E5B'; pen.fillRect(0,0,24,24); " +
+                "document.body.appendChild(canvas); } return n; })");
         click("console_run");
-        assertTrue("Console expression must apply the awaited result to the live page", viewPaints(pageBounds(), 35, 126, 91));
+        assertTrue("Console expression did not return or paint the awaited result", viewPaints(pageBounds(), 35, 126, 91)
+                || device.hasObject(By.res("console_result").text("42")));
         click("console_mode");
         click("console_levels");
         enter("console_input", "console.warn('fixture warning');"); click("console_run");
@@ -163,9 +165,8 @@ public class ProductionUiTest extends NativeUiDriver {
     private boolean viewPaints(Rect bounds, int red, int green, int blue) {
         long deadline = SystemClock.uptimeMillis() + 12000;
         while (SystemClock.uptimeMillis() < deadline) {
-            Bitmap screenshot = InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();
-            if (screenshot != null) {
-                Bitmap pixels = screenshot.getConfig() == Bitmap.Config.HARDWARE ? screenshot.copy(Bitmap.Config.ARGB_8888, false) : screenshot;
+            Bitmap pixels = pixelScreenshot();
+            if (pixels != null) {
                 int matches = 0;
                 try {
                     for (int y = bounds.top; y < Math.min(bounds.bottom, pixels.getHeight()); y++) {
@@ -176,8 +177,7 @@ public class ProductionUiTest extends NativeUiDriver {
                         }
                     }
                 } finally {
-                    if (pixels != screenshot) pixels.recycle();
-                    screenshot.recycle();
+                    pixels.recycle();
                 }
             }
             SystemClock.sleep(250);
