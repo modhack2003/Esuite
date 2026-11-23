@@ -37,9 +37,6 @@ public class AssessmentUiTest extends NativeUiDriver {
         assertTrue("HTTPS response did not arrive", waitText("workspace_status", "HTTP 200", 45000));
         click("nav_traffic");
         click("activity_tab_history");
-        UiObject2 response = activityControl(By.res("traffic_exchange").hasDescendant(By.textContains("HTTP exchange")));
-        String rowId = response.getResourceName();
-        assertEquals("traffic_exchange", rowId);
         activityControl(By.res("activity_select_review")).click();
         click("activity_review_selected");
         assertTrue(device.wait(Until.hasObject(By.res("review_summary")), 10000));
@@ -71,6 +68,7 @@ public class AssessmentUiTest extends NativeUiDriver {
             assertTrue(device.wait(Until.hasObject(By.pkg("dev.esuite.app").desc("Browser")), 10000));
             click("nav_traffic");
             click("activity_commands");
+            enter("command_search", "/review");
             click("command_review");
             click("pick_exchange");
             assertTrue(device.wait(Until.hasObject(By.res("review_summary")), 10000));

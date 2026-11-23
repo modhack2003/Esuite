@@ -135,18 +135,20 @@ internal fun ResponseReviewDialog(launch: ReviewLaunch, model: AppViewModel, clo
         return
     }
     WorkflowDialog("Response checks", close, "api_response_checks") {
-        Text(launch.site.origin)
-        ResponseCheckOptions(template) { template = it }
-        if (!ready) {
-            LinearProgressIndicator(progress = { results.size.toFloat() / launch.exchanges.size }, modifier = Modifier.fillMaxWidth())
-            Text("Reviewed ${results.size} of ${launch.exchanges.size} responses")
-        } else {
-            val all = results.flatMap(ReviewedResponse::items)
-            val available = all.count { it.status != CheckStatus.Unavailable }
-            Text("${results.size} responses · $available checks with evidence · ${all.count { it.status == CheckStatus.Review }} to review · ${all.size - available} unavailable",
-                modifier = Modifier.testTag("review_summary"), style = MaterialTheme.typography.bodySmall)
-        }
         LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("review_results"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            item {
+                Text(launch.site.origin)
+                ResponseCheckOptions(template) { template = it }
+                if (!ready) {
+                    LinearProgressIndicator(progress = { results.size.toFloat() / launch.exchanges.size }, modifier = Modifier.fillMaxWidth())
+                    Text("Reviewed ${results.size} of ${launch.exchanges.size} responses")
+                } else {
+                    val all = results.flatMap(ReviewedResponse::items)
+                    val available = all.count { it.status != CheckStatus.Unavailable }
+                    Text("${results.size} responses · $available checks with evidence · ${all.count { it.status == CheckStatus.Review }} to review · ${all.size - available} unavailable",
+                        modifier = Modifier.testTag("review_summary"), style = MaterialTheme.typography.bodySmall)
+                }
+            }
             results.forEach { result ->
                 item(key = result.exchange.id) {
                     Text(exchangeLabel(result.exchange), style = MaterialTheme.typography.titleSmall)
