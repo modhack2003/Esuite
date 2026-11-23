@@ -218,7 +218,8 @@ object InspectorScripts {
             if (tag && !htmlVoid) for (let child = node.firstChild; child; child = child.nextSibling) {
               if (usable(child)) { hasChildren = true; break; }
             }
-            const capacity = options.expanded[key] ?? (node === root ? 24 : 0);
+            const requested = options.expanded[key];
+            const capacity = typeof requested === 'number' ? requested : (node === root ? 24 : 0);
             const expanded = hasChildren && (query !== '' || capacity > 0 || (options.reveal && path.has(node)));
             const row = {id:key, parent, depth, tag, attributes, text:opening, comment:node.nodeType===8,
               children:hasChildren, expanded, voidTag:htmlVoid, more:false,
@@ -280,8 +281,22 @@ object InspectorScripts {
     val networkTiming = """
         (() => {
           const rows = [];
-          const state = window.__esuiteTimings || (window.__esuiteTimings = {ids:new WeakMap(), next:0});
-          const entries = performance.getEntriesByType('navigation').concat(performance.getEntriesByType('resource').slice(-140));
+          let state = window.__esuiteTimings;
+          if (!state) {
+            state = window.__esuiteTimings = {ids:new WeakMap(), next:0, recent:[]};
+            if (typeof PerformanceObserver === 'function') {
+              try {
+                const observer = new PerformanceObserver(list => {
+                  state.recent = state.recent.concat(list.getEntries()).slice(-140);
+                });
+                observer.observe({entryTypes:['resource']});
+                state.observer = observer;
+              } catch (_) { }
+            }
+          }
+          const resources = Array.from(new Set(performance.getEntriesByType('resource').slice(-140).concat(state.recent)));
+          resources.sort((first,second) => first.startTime - second.startTime);
+          const entries = performance.getEntriesByType('navigation').concat(resources.slice(-140));
           const milliseconds = value => Number.isFinite(value) && value >= 0 ? Math.round(value * 10) / 10 : null;
           const phase = (start,end) => start > 0 && end >= start ? milliseconds(end-start) : null;
           const size = value => Number.isSafeInteger(value) && value >= 0 ? value : null;

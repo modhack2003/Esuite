@@ -34,14 +34,16 @@ public final class BrowserKeyboardUiTest extends NativeUiDriver {
                   '<p id="typed" style="margin:0"></p></main>';
                 document.body.addEventListener('input', event => {
                   const field = event.target;
-                  if ((field.value ?? field.textContent).includes('Esuite42')) {
+                  const value = typeof field.value === 'string' ? field.value : field.textContent;
+                  if (value.indexOf('Esuite42') !== -1) {
                     document.getElementById('typed').textContent = 'Received ' + field.dataset.field;
                   }
                 });
                 return 'Form ready';
                 """);
         click("console_run");
-        assertTrue(waitText("console_result", "Form ready", 10_000));
+        assertTrue("The HTTPS form fixture did not initialize", device.wait(Until.hasObject(
+                By.res("console_messages").descContains("Latest result: Form ready")), 10_000));
         click("browser_close_dock");
 
         String previousIme = device.executeShellCommand("settings get secure default_input_method").trim();

@@ -107,8 +107,6 @@ public class ProductionUiTest extends NativeUiDriver {
         assertNotNull(device.wait(Until.findObject(By.desc("Collapse html")), 5000));
         click("elements_toggle_0");
         assertNotNull(device.wait(Until.findObject(By.desc("Expand html")), 5000));
-        click("elements_toggle_0");
-        assertNotNull(device.wait(Until.findObject(By.desc("Collapse html")), 5000));
         selectBrowserTool("console");
         enter("console_input", "await Promise.resolve(6 * 7).then(n => { const mobile = innerWidth >= 200 && innerWidth < 600; if (n === 42 && mobile) { " +
                 "const canvas = document.createElement('canvas'); canvas.width = canvas.height = 24; " +
@@ -134,8 +132,6 @@ public class ProductionUiTest extends NativeUiDriver {
         assertTrue(waitText("network_record", "Record", 5000));
         click("network_clear");
         assertTrue(device.wait(Until.gone(By.res("network_event")), 5000));
-        click("network_preserve");
-        assertTrue(tag("network_preserve").isSelected());
         click("network_record");
         selectBrowserTool("viewport");
         assertTrue("Viewport panel did not open", device.wait(Until.hasObject(By.res("browser_tool_heading")

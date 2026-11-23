@@ -135,7 +135,9 @@ internal fun ElementsPanel(
             }
             when {
                 lines.isEmpty() && tree == null -> item { InspectionMessage("Reading the document…") }
-                lines.isEmpty() -> item { InspectionMessage("No matching nodes.") }
+                lines.isEmpty() -> item {
+                    InspectionMessage(if (tree?.limited == true) "No match in the portion of the document searched." else "No matching nodes.")
+                }
                 tree?.limited == true -> item { InspectionMessage("This view reached its document limit. Collapse a branch or refine your search.") }
             }
             if (notice.isNotBlank()) item { InspectionMessage(notice) }
@@ -186,15 +188,15 @@ private fun MarkupRow(
     val open = line.kind == "open"
     Row(
         Modifier.fillMaxWidth().background(if (selected) colors.secondaryContainer else colors.surfaceContainerLow)
-            .heightIn(min = 36.dp).padding(start = indent),
+            .heightIn(min = 48.dp).padding(start = indent),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (open && node.children && expandable) {
-            IconButton(onClick = { onExpand(node, false) }, modifier = Modifier.size(36.dp).testTag("elements_toggle_${node.id}")) {
+            IconButton(onClick = { onExpand(node, false) }, modifier = Modifier.size(48.dp).testTag("elements_toggle_${node.id}")) {
                 Icon(if (node.expanded) Icons.Outlined.KeyboardArrowDown else Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                     contentDescription = (if (node.expanded) "Collapse " else "Expand ") + node.tag)
             }
-        } else Spacer(Modifier.width(36.dp))
+        } else Spacer(Modifier.width(48.dp))
         val markup = buildAnnotatedString {
             when {
                 node.comment -> withStyle(SpanStyle(color = colors.onSurfaceVariant)) { append("<!-- ${node.text} -->") }

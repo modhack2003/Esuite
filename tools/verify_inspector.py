@@ -56,6 +56,10 @@ with sync_playwright() as p:
     repeated = [row for row in json.loads(page.evaluate(scripts['networkTiming']))['rows'] if row['path'] == '/repeat']
     assert len(repeated) == 2 and repeated[0]['id'] != repeated[1]['id']
     assert repeated == [row for row in json.loads(page.evaluate(scripts['networkTiming']))['rows'] if row['path'] == '/repeat']
+    page.evaluate("performance.setResourceTimingBufferSize(performance.getEntriesByType('resource').length)")
+    page.evaluate("fetch('/after-buffer-filled').then(response => response.text())")
+    page.wait_for_function("window.__esuiteTimings.recent.some(row => row.name.endsWith('/after-buffer-filled'))")
+    assert any(row['path'] == '/after-buffer-filled' for row in json.loads(page.evaluate(scripts['networkTiming']))['rows'])
 
     page.evaluate("document.querySelector('main').insertAdjacentHTML('beforeend','<section id=large>' + '<i>row</i>'.repeat(90) + '</section>')")
     large = next(row for row in read_tree(search='large')['rows'] if row['tag'] == 'section')
