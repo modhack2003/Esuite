@@ -128,3 +128,10 @@ Evidence and exact acceptance: [Vivo 1.0.2 review](reviews/vivo-1.0.2-production
 - [x] Enable mobile viewport declarations and make the WebView visible once the page commits. Refresh app startup, palette, typography, and navigation.
 - [x] Verify the browser changes across the Android matrix, the live portfolio rendering, and the upgrade from signed 1.0.5. [Release record](RELEASE_1.0.6.md)
 - [ ] Evaluate native browser-engine support for debugger breakpoints, CPU and heap profiling, and richer network inspection.
+
+## 1.0.7 inspection and response review
+
+- [x] Add a searchable DOM tree, element selection and editing, computed styles and layout details.
+- [x] Add a Network waterfall, request details, pause, type and status filters, and timing and transfer-size sorts.
+- [x] Add on-device response checks for security headers, cookie attributes, cache policy and CORS. Make them accessible from Tools and API Lab.
+- [x] Pass the ten-configuration Android matrix and signed upgrades from 1.0.6, then verify the published APK against the signing artifact. [Release verification](AGENT_HANDOFF.md#107-elements-network-and-response-checks)

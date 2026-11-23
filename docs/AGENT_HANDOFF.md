@@ -10,6 +10,14 @@ Read this file first, then `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md
 - No analytics, hosted AI, remote workers, automatic evidence uploads or external callback collectors. The design services received synthetic data only.
 - The React prototype is a synthetic design reference. Native features must be assessed from Kotlin source and tests.
 
+## 1.0.7 Elements, Network and response checks
+
+Elements adds a searchable DOM tree, tap-to-pick selection, editable markup and inline CSS, and separate style and layout views. Network adds a waterfall, request details, filters, sorting and a freeze control. Tools and API Lab review security headers, cookie flags, caching and CORS from existing response data on-device. The app uses native Jetpack Compose Material 3 controls for the dock, filters, tool cards and dialogs. Desktop breakpoints, CPU and heap profiling, and full raw network capture remain open.
+
+Stable 1.0.7 (version code 10) is published from `c19d6ecd574f8b36a14ae4153921272cce425293`. Both local build variants passed 82 JVM tests each. CI passed all ten Android configurations with 186 passes, 24 skips for older WebView profile capabilities, and zero failures. The Android 15 check for the previously clipped portfolio page passed. [Exact-source CI](https://github.com/modhack2003/Esuite/actions/runs/45139758423)
+
+The production-signed APK passed all 18 smoke and upgrade checks on APIs 28, 35 and 37.0, including in-place upgrades from 1.0.6 that retained encrypted evidence. The public assets match the tested signing artifact byte for byte. The 3,428,045-byte APK passed SHA-256, certificate continuity and 16 KiB alignment checks. Its SHA-256 is `d684bff6146eb4774f4638c8c5e1b5378c61cd1518c8936ade0b943eded75861`. [Signed release workflow](https://github.com/modhack2003/Esuite/actions/runs/45141228649) · [Published release](https://github.com/modhack2003/Esuite/releases/tag/v1.0.7)
+
 ## 1.0.5 browser refresh
 
 Browser opens without a saved site and uses the app-private WebView profile independently of legacy profile support. Activity and Findings open saved records by site. The [1.0.5 notes](RELEASE_1.0.5.md) cover inspector scope, settings and release verification.

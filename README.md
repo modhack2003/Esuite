@@ -44,7 +44,7 @@ Explore the [self-contained UI concept](docs/ui/index.html), [editable Canva con
 | Android app | Native Home, live Browser, Traffic, API Lab, Findings and Tools |
 | Native utilities | UTF-8 Base64 encode/decode, form URL encode/decode and SHA-256 hashing |
 | Native request editor | Real scoped HTTP, cancellation, response limits, raw HTTP import and account A/B comparison |
-| Browser | Standalone HTTPS browsing and search, resizable developer dock, element selection and edits, JavaScript console, cookie and storage metadata, source list, performance, viewport, and request timing |
+| Browser | Standalone HTTPS browsing and search, resizable developer dock, searchable DOM tree, element editing and layout details, JavaScript console, cookie and storage metadata, source list, viewport, and sortable Network waterfall |
 | Local tools | Grouped text transformations, request imports and offline configuration review |
 | Imports & cloud review | cURL/raw HTTP, OpenAPI 3 JSON, textual HAR request drafts and offline AWS configuration observations |
 | Local evidence | AES-GCM encryption for saved site data, request collections, observations, sanitized reports and site deletion |
@@ -100,11 +100,11 @@ ESuite protects saved site data with Keystore-backed authenticated encryption, b
 
 ## Try ESuite
 
-**1.0.6 adds resizable Browser tools.** Keep the page visible, edit elements, inspect viewport and timing data, and run JavaScript from the color-coded console. A branded launch screen, Inter typography, and a refined light and dark palette update the native UI. [Download ESuite 1.0.6](https://github.com/modhack2003/Esuite/releases/tag/v1.0.6) · [Release verification](docs/RELEASE_1.0.6.md)
+**1.0.7 expands Browser inspection and response review.** Search and edit the DOM, examine element styles and layout, and filter or sort the Network waterfall. Use Tools or API Lab to review security headers, cookie flags, cache policy, and CORS on-device. [Download ESuite 1.0.7](https://github.com/modhack2003/Esuite/releases/tag/v1.0.7) · [Release verification](docs/AGENT_HANDOFF.md#107-elements-network-and-response-checks)
 
 ### Android builds and production delivery
 
-**Android 9–17 (API 28–37.0).** The build uses AGP 9.2.1, Gradle 9.4.1 and JDK 17. All ten emulator jobs passed, including live browsing, dock resizing and console scripting on every tested API. The published APK preserved encrypted evidence during in-place updates from 1.0.5 on APIs 28, 35 and 37.0. Physical-device and TalkBack coverage remain open. [Release verification](docs/RELEASE_1.0.6.md)
+**Android 9–17 (API 28–37.0).** The build uses AGP 9.2.1, Gradle 9.4.1 and JDK 17. All ten emulator jobs passed, including Browser and API Lab response checks. The published APK preserved encrypted evidence during in-place updates from 1.0.6 on APIs 28, 35 and 37.0. Physical-device and TalkBack coverage remain open. [Release verification](docs/AGENT_HANDOFF.md#107-elements-network-and-response-checks)
 
 ```bash
 git clone https://github.com/modhack2003/Esuite.git
