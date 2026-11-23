@@ -85,7 +85,7 @@ public final class BrowserKeyboardUiTest extends NativeUiDriver {
         key.click();
         device.pressBack();
         assertTrue("Keyboard stayed open", device.wait(Until.gone(By.text("Type fixture text")), 5_000));
-        assertTrue("The DOM did not receive committed text for " + label,
+        assertTrue("The DOM did not receive committed text for " + field,
                 device.wait(Until.hasObject(By.text("Received " + field)), 8_000));
     }
 }
