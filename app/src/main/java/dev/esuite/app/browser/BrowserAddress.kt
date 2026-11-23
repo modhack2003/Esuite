@@ -5,13 +5,14 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 internal object BrowserAddress {
+    const val MAX_CHARS = 8192
     private val scheme = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
     private val namedScheme = Regex("^(?i:https?|file|javascript|data|intent|content|about|ftp|tel|mailto):")
     private val searchProvider = "https://duckduckgo.com/".toHttpUrl()
 
     fun resolve(input: String): HttpUrl {
         val value = input.trim()
-        require(value.isNotEmpty() && value.length <= 8192 && value.none(Char::isISOControl)) { "Enter an address or search terms." }
+        require(value.isNotEmpty() && value.length <= MAX_CHARS && value.none(Char::isISOControl)) { "Enter an address or search terms." }
         val explicitAddress = scheme.containsMatchIn(value) || namedScheme.containsMatchIn(value)
         val host = value.substringBefore('/').substringBefore('?').substringBefore('#')
         if (explicitAddress || (!value.any(Char::isWhitespace) && ('.' in host || ':' in host || host == "localhost"))) {
@@ -22,7 +23,7 @@ internal object BrowserAddress {
     }
 
     fun https(value: String): HttpUrl? {
-        if (value.length > 8192 || value.any(Char::isISOControl) || value.contains('\\')) return null
+        if (value.length > MAX_CHARS || value.any(Char::isISOControl) || value.contains('\\')) return null
         if (!value.startsWith("https://", ignoreCase = true)) return null
         return value.toHttpUrlOrNull()?.takeIf { it.isHttps && it.username.isEmpty() && it.password.isEmpty() }
     }

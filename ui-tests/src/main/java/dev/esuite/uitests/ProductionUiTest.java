@@ -143,6 +143,13 @@ public class ProductionUiTest extends NativeUiDriver {
         enter("browser_url", "example.com"); click("browser_go");
         assertTrue("The live WebView never committed the fixture page",
                 device.wait(Until.hasObject(By.text("Example Domain")), 45000));
+        click("open_app_commands");
+        enter("command_search", "/find");
+        click("command_app_find");
+        enter("browser_find_query", "Example");
+        assertTrue("Find in page did not report matching text",
+                device.wait(Until.hasObject(By.res("browser_find_count").textStartsWith("1 of ")), 5000));
+        click("browser_close_find");
         Rect full = pageBounds();
         click("browser_tools");
         Rect split = pageBounds();

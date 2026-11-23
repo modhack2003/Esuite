@@ -108,11 +108,14 @@ object InspectorScripts {
           if (overlay && !overlay.isConnected) document.documentElement.appendChild(overlay);
           const htmlLimit = 16000;
           const htmlTruncated = html.length > htmlLimit;
-          const lastUnit = html.charCodeAt(htmlLimit - 1);
-          const previewEnd = htmlTruncated && lastUnit >= 0xd800 && lastUnit <= 0xdbff ? htmlLimit - 1 : htmlLimit;
+          const prefix = (text, limit) => {
+            const lastUnit = text.charCodeAt(limit - 1);
+            return text.slice(0, text.length > limit && lastUnit >= 0xd800 && lastUnit <= 0xdbff ? limit - 1 : limit);
+          };
+          const css = e.getAttribute('style') || '';
           const round = value => Math.round(value * 10) / 10;
           return JSON.stringify({htmlTruncated,htmlCharacters:html.length,htmlLimit,
-            tag:e.tagName,html:html.slice(0,previewEnd),css:(e.getAttribute('style') || '').slice(0,4000),attributes,rules,
+            tag:e.tagName,html:prefix(html,htmlLimit),css:prefix(css,8192),cssCharacters:css.length,attributes,rules,
             computed:computed(['display','position','color','background-color','font-family','font-size','font-weight',
               'line-height','opacity','visibility','z-index','overflow','box-sizing','justify-content','align-items','gap']),
             layout:computed(['margin','border-width','padding','width','height','min-width','max-width','min-height','max-height']),
@@ -137,6 +140,7 @@ object InspectorScripts {
         (() => {
           const e=window.__esuiteElement;
           if(!e || !e.isConnected) return 'Select an element first';
+          if((e.getAttribute('style') || '') !== __ESUITE_EXPECTED__) return 'The page changed the inline style. Copy your draft and refresh the selection.';
           e.style.cssText=__ESUITE_VALUE__;
           return 'CSS updated locally';
         })()

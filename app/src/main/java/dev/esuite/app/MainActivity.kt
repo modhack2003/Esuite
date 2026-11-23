@@ -133,6 +133,7 @@ enum class Screen(val label: String, val icon: ImageVector) {
 
 private enum class AppCommand(val label: String, val aliases: String, val screen: Screen? = null) {
     Browser("Open Browser", "/browser webpage navigate", Screen.Browser),
+    Find("Find in page", "/find page text search matches", Screen.Browser),
     Activity("Open Activity", "/activity traffic history sitemap", Screen.Traffic),
     Requests("Open API Lab", "/api request headers", Screen.Api),
     Findings("Open Findings", "/findings observations evidence", Screen.Findings),
@@ -157,6 +158,8 @@ internal fun ESuiteApp(
     var selectedName by rememberSaveable { mutableStateOf(Screen.Browser.name) }
     var previousName by rememberSaveable { mutableStateOf(Screen.Browser.name) }
     var requestRouteId by rememberSaveable { mutableIntStateOf(0) }
+    var requestReturnName by rememberSaveable { mutableStateOf<String?>(null) }
+    var findInPageRequest by remember { mutableIntStateOf(0) }
     var clearRequest by remember { mutableIntStateOf(0) }
     var starting by remember { mutableStateOf(true) }
     var browserMessage by remember { mutableStateOf<String?>(null) }
@@ -168,8 +171,15 @@ internal fun ESuiteApp(
     val screen = Screen.entries.firstOrNull { it.name == selectedName } ?: Screen.Browser
     val browserVisible = screen == Screen.Browser || screen == Screen.Tools
     val site = state.workspace.projects.firstOrNull { it.id == state.projectId }
-    fun navigate(next: Screen) { selectedName = next.name }
-    fun openApiRequest() { requestRouteId++; navigate(Screen.Api) }
+    fun navigate(next: Screen) {
+        if (screen == Screen.Api && next != Screen.Settings && next != Screen.Api) requestReturnName = null
+        selectedName = next.name
+    }
+    fun openApiRequest() {
+        requestRouteId++
+        requestReturnName = screen.name.takeUnless { screen == Screen.Api }
+        navigate(Screen.Api)
+    }
     fun settings() { if (screen != Screen.Settings) { previousName = screen.name; navigate(Screen.Settings) } }
     fun closeSettings() { selectedName = previousName }
     fun openReview(exchanges: List<Exchange>, template: ResponseCheck) {
@@ -199,7 +209,12 @@ internal fun ESuiteApp(
     }
 
     BackHandler(enabled = !browserVisible) {
-        if (screen == Screen.Settings) closeSettings() else navigate(Screen.Browser)
+        val requestReturn = Screen.entries.firstOrNull { it.name == requestReturnName }
+        when {
+            screen == Screen.Settings -> closeSettings()
+            screen == Screen.Api && requestReturn != null -> navigate(requestReturn)
+            else -> navigate(Screen.Browser)
+        }
     }
     val density = LocalDensity.current
     val windowSize = LocalWindowInfo.current.containerSize
@@ -237,6 +252,7 @@ internal fun ESuiteApp(
                             visible = browserVisible,
                             motion = motion,
                             clearRequest = clearRequest,
+                            findInPageRequest = findInPageRequest,
                             utilitiesVisible = screen == Screen.Tools,
                             closeUtilities = { navigate(Screen.Browser) },
                             onReady = { starting = false },
@@ -326,6 +342,7 @@ internal fun ESuiteApp(
                 close = { commands = false },
             ) { command ->
                 commands = false
+                if (command == AppCommand.Find) findInPageRequest++
                 when (val target = command.screen) {
                     null -> latest?.let { openReview(listOf(it), ResponseCheck.Quick) }
                     Screen.Settings -> settings()

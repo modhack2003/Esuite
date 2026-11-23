@@ -154,15 +154,21 @@ with sync_playwright() as p:
     page.locator("#profile").click()
     assert page.evaluate("window.clicked") is True, "Picker must detach after selection"
     # HTML replacement must retarget selection; CSS edits must affect the new node.
-    def edit_html(old, new):
+    def edit_element(kind, old, new):
         values = {'__ESUITE_EXPECTED__': json.dumps(old), '__ESUITE_VALUE__': json.dumps(new)}
-        return page.evaluate(re.sub(r'__ESUITE_(?:EXPECTED|VALUE)__', lambda hit: values[hit[0]], scripts['html']))
+        return page.evaluate(re.sub(r'__ESUITE_(?:EXPECTED|VALUE)__', lambda hit: values[hit[0]], scripts[kind]))
+    def edit_html(old, new):
+        return edit_element('html', old, new)
     assert 'changed' in edit_html('<button>stale</button>', '<p>Wrong</p>')
     old = json.loads(page.evaluate(scripts['selection']))['html']
     assert edit_html(old, '<p id="replacement">Edited</p>') == 'HTML updated locally'
     replaced = json.loads(page.evaluate(scripts["selection"]))
     assert replaced["tag"] == "P" and 'id="replacement"' in replaced["html"]
-    page.evaluate(scripts["css"].replace("__ESUITE_VALUE__", json.dumps('color: rgb(255, 0, 0); outline: 1px solid blue')))
+    page.locator("#replacement").evaluate("e => e.style.setProperty('padding', '3px')")
+    assert 'changed the inline style' in edit_element('css', replaced['css'], 'color: red')
+    assert page.locator("#replacement").evaluate("e => e.style.padding") == '3px'
+    current = json.loads(page.evaluate(scripts["selection"]))
+    assert edit_element('css', current['css'], 'color: rgb(255, 0, 0); outline: 1px solid blue') == 'CSS updated locally'
     assert page.locator("#replacement").evaluate("e=>getComputedStyle(e).color") == "rgb(255, 0, 0)"
     page.evaluate(scripts["select"])
     page.evaluate("document.body.dispatchEvent(new MouseEvent('click', {bubbles:true}))")

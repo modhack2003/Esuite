@@ -34,6 +34,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -42,6 +44,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -64,6 +68,7 @@ import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.webkit.CookieManagerCompat
 import androidx.webkit.WebViewFeature
 import dev.esuite.app.R
+import dev.esuite.app.core.atCharacterBoundary
 import dev.esuite.app.ui.UrlKeyboard
 import java.io.ByteArrayInputStream
 import java.util.UUID
@@ -80,6 +85,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 
 private data class ConsoleRun(val document: Int, val origin: String, val token: String, val input: String, val script: Boolean)
+private data class PageFindResult(val active: Int, val total: Int)
 
 @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 @Composable
@@ -87,6 +93,7 @@ internal fun BrowserScreen(
     visible: Boolean,
     motion: Boolean,
     clearRequest: Int,
+    findInPageRequest: Int,
     utilitiesVisible: Boolean,
     closeUtilities: () -> Unit,
     onReady: () -> Unit,
@@ -117,6 +124,7 @@ internal fun BrowserScreen(
     }
     val destroyed = remember(browser) { AtomicBoolean(false) }
     var address by remember { mutableStateOf("") }
+    var addressOverflow by remember { mutableStateOf(false) }
     var addressEdited by remember { mutableStateOf(false) }
     var pageUrl by remember { mutableStateOf<String?>(null) }
     var pageTitle by remember { mutableStateOf("") }
@@ -143,6 +151,9 @@ internal fun BrowserScreen(
     var picking by remember { mutableStateOf(false) }
     var elementNotice by remember { mutableStateOf("") }
     var document by remember { mutableIntStateOf(0) }
+    var findInPage by remember { mutableStateOf(false) }
+    var findQuery by remember { mutableStateOf("") }
+    var findResult by remember { mutableStateOf<PageFindResult?>(null) }
     var inspection by remember { mutableIntStateOf(0) }
     var console by remember { mutableStateOf(emptyList<ConsoleEntry>()) }
     var consoleId by remember { mutableLongStateOf(0L) }
@@ -158,6 +169,9 @@ internal fun BrowserScreen(
     fun resetDocument() {
         if (!destroyed.get() && !rendererGone && pageUrl != null) browser?.evaluateJavascript(InspectorScripts.clearSelection, null)
         document++
+        findInPage = false
+        findQuery = ""
+        findResult = null
         pageUrl = null
         pageTitle = ""
         console = emptyList()
@@ -190,6 +204,7 @@ internal fun BrowserScreen(
         loading = true
         progress = 0
         addressEdited = false
+        addressOverflow = false
         address = url
         view.loadUrl(url)
     }
@@ -220,7 +235,10 @@ internal fun BrowserScreen(
         if (error != null || clearing || !matchesDocument(view.url, url)) return
         if (awaitingStart && !matchesDocument(loadTarget, url)) return
         pageUrl = target.toString()
-        if (!addressEdited) address = url
+        if (!addressEdited) {
+            addressOverflow = false
+            address = url
+        }
         pageTitle = view.title.orEmpty()
         updateHistory(view)
     }
@@ -229,6 +247,13 @@ internal fun BrowserScreen(
         val current = pageUrl ?: return null
         val view = browser ?: return null
         return view.takeIf { visible && !rendererGone && !destroyed.get() && error == null && matchesDocument(view.url, current) }
+    }
+
+    fun closePageFind() {
+        findInPage = false
+        findQuery = ""
+        findResult = null
+        if (browser?.hasFocus() != true) focus.clearFocus()
     }
 
     fun evaluateInspection(script: String, report: (String?) -> Unit = {
@@ -333,6 +358,39 @@ internal fun BrowserScreen(
         preparing = false
     }
     LaunchedEffect(preparing) { if (!preparing) onReady() }
+    LaunchedEffect(findInPageRequest) {
+        if (findInPageRequest != 0) findInPage = true
+    }
+    LaunchedEffect(visible) {
+        if (!visible && findInPage) closePageFind()
+    }
+    if (findInPage) {
+        val view = activeView()
+        DisposableEffect(view) {
+            onDispose {
+                if (!destroyed.get() && !rendererGone) {
+                    view?.setFindListener(null)
+                    view?.clearMatches()
+                }
+            }
+        }
+        LaunchedEffect(document, view, findQuery) {
+            findResult = null
+            if (view == null) return@LaunchedEffect
+            view.setFindListener(null)
+            view.clearMatches()
+            if (findQuery.isBlank()) return@LaunchedEffect
+            val currentDocument = document
+            val query = findQuery
+            delay(150)
+            view.setFindListener { active, count, finished ->
+                if (finished && currentDocument == document && activeView() === view && findInPage && findQuery == query) {
+                    findResult = PageFindResult(active, count)
+                }
+            }
+            view.findAllAsync(query)
+        }
+    }
     LaunchedEffect(document, visible, loading, inspecting, utilitiesVisible) {
         if (loading) return@LaunchedEffect
         val view = activeView() ?: return@LaunchedEffect
@@ -450,8 +508,9 @@ internal fun BrowserScreen(
             requestLog.page(null)
         }
     }
-    BackHandler(visible && !imeVisible && (utilitiesVisible || inspecting || canGoBack)) {
+    BackHandler(visible && !imeVisible && (findInPage || utilitiesVisible || inspecting || canGoBack)) {
         when {
+            findInPage -> closePageFind()
             utilitiesVisible -> closeUtilities()
             inspecting -> {
                 inspecting = false
@@ -464,8 +523,15 @@ internal fun BrowserScreen(
     Column(Modifier.fillMaxSize().clipToBounds()) {
         if (visible && !preparing) {
             BrowserToolbar(
-                address, { address = it.take(8192); addressEdited = true }, ::openAddress,
-                browser != null && !rendererGone && !clearing && address.isNotBlank(),
+                address, {
+                    addressOverflow = it.length > BrowserAddress.MAX_CHARS
+                    if (!addressOverflow) {
+                        address = it
+                        addressEdited = true
+                        linkNotice = null
+                    }
+                }, ::openAddress,
+                browser != null && !rendererGone && !clearing && !addressOverflow && address.isNotBlank(),
                 canGoBack, canGoForward, loading, pageUrl != null,
                 inspecting && !utilitiesVisible, browser != null && !rendererGone,
                 back = ::goBack, forward = { addressEdited = false; browser?.goForward() },
@@ -488,7 +554,14 @@ internal fun BrowserScreen(
                 tools = ::toggleInspector, commands = onCommands, settings = onSettings,
             )
             if (loading) LinearProgressIndicator(progress = { progress.coerceIn(0, 100) / 100f }, modifier = Modifier.fillMaxWidth())
-            linkNotice?.let {
+            if (findInPage) {
+                PageFindBar(findQuery, { findQuery = it.atCharacterBoundary(240) }, findResult, activeView() != null, ::closePageFind) { forward ->
+                    keyboard?.hide()
+                    activeView()?.findNext(forward)
+                }
+            }
+            val toolbarNotice = if (addressOverflow) "The address or search exceeds ${BrowserAddress.MAX_CHARS} characters." else linkNotice
+            toolbarNotice?.let {
                 Text(it, Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).padding(8.dp),
                     color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.labelMedium)
             }
@@ -840,6 +913,40 @@ private fun BrowserToolbar(
                 }
             }
             HorizontalDivider(color = colors.outlineVariant)
+        }
+    }
+}
+
+@Composable
+private fun PageFindBar(query: String, edit: (String) -> Unit, result: PageFindResult?, ready: Boolean, close: () -> Unit, move: (Boolean) -> Unit) {
+    val requester = remember { FocusRequester() }
+    LaunchedEffect(ready) { if (ready) requester.requestFocus() }
+    val hasMatches = (result?.total ?: 0) > 0
+    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow).padding(horizontal = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(query, edit, label = { Text("Find in page") }, singleLine = true, enabled = ready,
+                modifier = Modifier.weight(1f).focusRequester(requester).testTag("browser_find_query"))
+            IconButton(onClick = { move(false) }, enabled = hasMatches) {
+                Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "Previous match")
+            }
+            IconButton(onClick = { move(true) }, enabled = hasMatches) {
+                Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = "Next match")
+            }
+            IconButton(onClick = close, modifier = Modifier.testTag("browser_close_find")) {
+                Icon(Icons.Outlined.Close, contentDescription = "Close find in page")
+            }
+        }
+        val count = when {
+            !ready -> "Load a page to find text."
+            query.isBlank() -> ""
+            result == null -> "Finding matches…"
+            result.total == 0 -> "No matches"
+            else -> "${result.active + 1} of ${result.total}"
+        }
+        if (count.isNotEmpty()) {
+            Text(count, Modifier.padding(start = 6.dp, bottom = 3.dp).testTag("browser_find_count")
+                .semantics { liveRegion = LiveRegionMode.Polite },
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

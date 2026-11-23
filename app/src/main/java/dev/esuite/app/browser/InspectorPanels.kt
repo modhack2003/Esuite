@@ -25,6 +25,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.esuite.app.ui.TechnicalKeyboard
+import dev.esuite.app.core.atCharacterBoundary
+import dev.esuite.app.ui.observedAt
 import dev.esuite.app.ui.technicalTextStyle
 import java.util.Locale
 
@@ -46,7 +48,16 @@ private enum class StatusFilter(val label: String) {
     }
 }
 
-private enum class NetworkOrder(val label: String) { Start("Start time"), Slowest("Slowest"), Largest("Largest") }
+private enum class NetworkOrder(val label: String) { Start("Start time"), Latest("Newest"), Slowest("Slowest"), Largest("Largest") }
+private enum class NetworkSource(val label: String) {
+    All("All sources"), Callback("WebView callbacks"), Timing("Resource timing");
+
+    fun includes(row: BrowserRequestEvent): Boolean = when (this) {
+        All -> true
+        Callback -> row.timing == null
+        Timing -> row.timing != null
+    }
+}
 private enum class DetailsTab(val label: String) { General("General"), Timing("Timing") }
 
 @Composable
@@ -56,28 +67,36 @@ internal fun NetworkPanel(state: BrowserNetworkState, ready: Boolean, clearReque
     var query by remember { mutableStateOf("") }
     var resourceType by rememberSaveable { mutableStateOf(ResourceType.All) }
     var status by rememberSaveable { mutableStateOf(StatusFilter.All) }
+    var source by rememberSaveable { mutableStateOf(NetworkSource.All) }
+    var method by rememberSaveable { mutableStateOf<String?>(null) }
     var order by rememberSaveable { mutableStateOf(NetworkOrder.Start) }
     var showFilters by rememberSaveable { mutableStateOf(false) }
     var showWaterfall by rememberSaveable { mutableStateOf(true) }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
-    val rows = remember(state.rows, resourceType, status, query, order) {
+    val methods = remember(state.rows) { state.rows.mapNotNull(BrowserRequestEvent::method).distinct().sorted() }
+    val rows = remember(state.rows, resourceType, status, source, method, query, order) {
         val text = query.trim()
         val found = state.rows.filter { row ->
             val typeMatches = resourceType == ResourceType.All || row.resourceType == resourceType.key ||
                 (resourceType == ResourceType.Other && row.resourceType == "unknown")
-            typeMatches && status.includes(row) &&
+            typeMatches && status.includes(row) && source.includes(row) && (method == null || method == row.method.orEmpty()) &&
                 "${row.path} ${row.method.orEmpty()} ${row.kind.label} ${row.resourceType} ${row.status ?: ""}".contains(text, true)
         }
         when (order) {
             NetworkOrder.Start -> found.sortedBy { it.timestamp }
+            NetworkOrder.Latest -> found.sortedByDescending { it.timestamp }
             NetworkOrder.Slowest -> found.sortedByDescending { it.timing?.duration ?: -1.0 }
             NetworkOrder.Largest -> found.sortedByDescending { it.timing?.transfer ?: -1L }
         }
     }
-    val end = remember(rows) { rows.maxOfOrNull { (it.timing?.start ?: 0.0) + (it.timing?.duration ?: 0.0) }?.coerceAtLeast(1.0) ?: 1.0 }
+    val timedRows = remember(rows) { rows.filter { it.timing?.duration != null } }
+    val start = remember(timedRows) { timedRows.minOfOrNull(BrowserRequestEvent::timestamp) ?: 0.0 }
+    val span = remember(timedRows, start) {
+        (timedRows.maxOfOrNull { it.timestamp + (it.timing?.duration ?: 0.0) }?.minus(start) ?: 0.0).coerceAtLeast(1.0)
+    }
     val transfer = remember(rows) { rows.mapNotNull { it.timing?.transfer }.sum() }
     val knownTransfer = remember(rows) { rows.any { it.timing?.transfer != null } }
-    val current = state.rows.firstOrNull { it.id == selected }
+    val current = rows.firstOrNull { it.id == selected }
     val colors = MaterialTheme.colorScheme
     BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
         val wide = maxWidth >= 520.dp
@@ -112,11 +131,31 @@ internal fun NetworkPanel(state: BrowserNetworkState, ready: Boolean, clearReque
                         }
                     }
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        NetworkSource.entries.forEach { option ->
+                            FilterChip(source == option, { source = option }, { Text(option.label) })
+                        }
+                    }
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(method == null, { method = null }, { Text("All methods") })
+                        methods.forEach { option ->
+                            FilterChip(method == option, { method = option }, { Text(option) })
+                        }
+                        FilterChip(method == "", { method = "" }, { Text("Method unavailable") })
+                    }
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         NetworkOrder.entries.forEach { option ->
                             FilterChip(order == option, { order = option }, { Text(option.label) })
                         }
                         FilterChip(showWaterfall, { showWaterfall = !showWaterfall }, { Text("Waterfall") })
                     }
+                    TextButton(onClick = {
+                        query = ""
+                        resourceType = ResourceType.All
+                        status = StatusFilter.All
+                        source = NetworkSource.All
+                        method = null
+                        order = NetworkOrder.Start
+                    }, modifier = Modifier.testTag("network_reset_filters")) { Text("Reset filters") }
                 }
                 item {
                     val total = if (knownTransfer) " · ${bytes(transfer)} measured" else ""
@@ -153,12 +192,12 @@ internal fun NetworkPanel(state: BrowserNetworkState, ready: Boolean, clearReque
                         Text(facts, Modifier.weight(2f), style = MaterialTheme.typography.bodySmall,
                             color = if (row.failed) colors.error else colors.onSurfaceVariant)
                         Text(metrics.ifEmpty { "—" }, Modifier.weight(1.3f), style = MaterialTheme.typography.bodySmall)
-                        if (showWaterfall) Box(Modifier.weight(1f)) { row.timing?.let { WaterfallBar(it, end) } }
+                        if (showWaterfall) Box(Modifier.weight(1f)) { WaterfallBar(row, start, span) }
                     } else Column(modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(row.path + if (row.pathClipped) "…" else "", style = technicalTextStyle(), maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(listOf(facts, metrics).filter(String::isNotEmpty).joinToString(" · "), style = MaterialTheme.typography.bodySmall,
                             color = if (row.failed) colors.error else colors.onSurfaceVariant)
-                        if (showWaterfall) row.timing?.let { WaterfallBar(it, end) }
+                        if (showWaterfall) WaterfallBar(row, start, span)
                     }
                     HorizontalDivider(color = colors.outlineVariant)
                 }
@@ -186,6 +225,7 @@ private fun NetworkDetails(row: BrowserRequestEvent, close: () -> Unit) {
                     if (tab == DetailsTab.General) {
                         item {
                             InspectionValue("Path", row.path + if (row.pathClipped) "… (clipped)" else "")
+                            InspectionValue("Observed at", observedAt(row.timestamp.toLong()))
                             InspectionValue("Source", if (timing == null) "WebView callback · ${row.kind.label}" else "Browser resource timing")
                             InspectionValue("Method", row.method ?: "Unavailable")
                             InspectionValue("Resource type", row.resourceType.takeUnless { it == "unknown" } ?: "Unavailable")
@@ -216,13 +256,13 @@ private fun NetworkDetails(row: BrowserRequestEvent, close: () -> Unit) {
         confirmButton = { TextButton(onClick = close) { Text("Close") } })
 }
 
-@Composable private fun WaterfallBar(resource: ResourceTiming, end: Double) {
+@Composable private fun WaterfallBar(row: BrowserRequestEvent, startTime: Double, span: Double) {
     val colors = MaterialTheme.colorScheme
-    val fraction = ((resource.start ?: return) / end).coerceIn(0.0, 1.0).toFloat()
-    val width = ((resource.duration ?: return) / end).coerceIn(0.0, 1.0).toFloat()
+    val fraction = ((row.timestamp - startTime) / span).coerceIn(0.0, 1.0).toFloat()
+    val width = ((row.timing?.duration ?: return) / span).coerceIn(0.0, 1.0).toFloat()
     Canvas(Modifier.fillMaxWidth().height(5.dp)) {
         drawRect(colors.outlineVariant)
-        val start = size.width * fraction
+        val start = (size.width * fraction).coerceAtMost((size.width - 1f).coerceAtLeast(0f))
         drawRect(colors.primary, topLeft = Offset(start, 0f),
             size = Size((size.width * width).coerceAtLeast(1f).coerceAtMost(size.width - start), size.height))
     }
@@ -230,7 +270,7 @@ private fun NetworkDetails(row: BrowserRequestEvent, close: () -> Unit) {
 
 @Composable internal fun InspectionSearch(text: String, update: (String) -> Unit, label: String, tag: String) {
     val focus = LocalFocusManager.current
-    OutlinedTextField(text, { update(it.take(240)) }, label = { Text(label) }, singleLine = true,
+    OutlinedTextField(text, { update(it.atCharacterBoundary(240)) }, label = { Text(label) }, singleLine = true,
         modifier = Modifier.fillMaxWidth().testTag(tag), keyboardOptions = TechnicalKeyboard.copy(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
         trailingIcon = { if (text.isNotEmpty()) TextButton(onClick = { update("") }) { Text("Clear") } })

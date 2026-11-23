@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
@@ -14,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -35,11 +37,11 @@ import kotlinx.serialization.Serializable
 )
 @Serializable internal data class DomDetails(
     val tag: String, val html: String, val htmlCharacters: Int, val htmlTruncated: Boolean,
-    val htmlLimit: Int, val css: String, val attributes: List<InspectionProperty>, val rules: List<InspectionProperty>,
+    val htmlLimit: Int, val css: String, val cssCharacters: Int, val attributes: List<InspectionProperty>, val rules: List<InspectionProperty>,
     val computed: List<InspectionProperty>, val layout: List<InspectionProperty>, val bounds: List<Double>, val scroll: List<Int>,
 )
 
-private enum class ElementView(val label: String) { Attributes("Attributes"), Styles("Styles"), Layout("Layout") }
+private enum class ElementView(val label: String) { Attributes("Attributes"), Styles("Styles"), Layout("Layout"), Markup("Markup") }
 
 private data class MarkupLine(val node: DomNode, val kind: String) {
     val key: String get() = "$kind:${node.id}"
@@ -62,6 +64,17 @@ private fun DomTree.lines(): List<MarkupLine> = buildList {
 
 private const val EDIT_LIMIT = 8192
 
+private fun DomTree.breadcrumbs(): List<DomNode> {
+    val nodes = rows.associateBy(DomNode::id)
+    val path = mutableListOf<DomNode>()
+    var current = selected?.let(nodes::get)
+    while (current != null && path.size <= 100) {
+        path.add(current)
+        current = nodes[current.parent]
+    }
+    return path.asReversed()
+}
+
 @Composable
 internal fun ElementsPanel(
     tree: DomTree?, detail: DomDetails?, ready: Boolean, notice: String, query: String, reveal: Int,
@@ -75,8 +88,11 @@ internal fun ElementsPanel(
     var editor by remember { mutableStateOf("") }
     var original by remember { mutableStateOf("") }
     var applying by remember { mutableStateOf(false) }
+    var editOverflow by remember { mutableStateOf(false) }
     val list = rememberLazyListState()
     val lines = remember(tree) { tree?.lines().orEmpty() }
+    val breadcrumbs = remember(tree) { tree?.breadcrumbs().orEmpty() }
+    val showGutter = LocalDensity.current.fontScale <= 1.3f
     if (!ready) {
         InspectionMessage("Load an HTTPS page to inspect its elements.")
         return
@@ -84,6 +100,12 @@ internal fun ElementsPanel(
     LaunchedEffect(reveal, query) {
         val index = if (query.isBlank()) lines.indexOfFirst { it.kind == "open" && it.node.id == tree?.selected } else 0
         if (index >= 0 && lines.isNotEmpty()) list.scrollToItem(index)
+    }
+    fun startEdit(html: Boolean, value: String) {
+        editor = value
+        original = value
+        editOverflow = false
+        editHtml = html
     }
     Column(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
@@ -94,9 +116,7 @@ internal fun ElementsPanel(
                 Text(if (finding) "Close search" else "Find")
             }
             if (detail != null) {
-                TextButton(onClick = {
-                    editor = detail.html; original = detail.html; editHtml = true
-                }, modifier = Modifier.testTag("elements_edit_html"), enabled = !detail.tag.equals("html", true) &&
+                TextButton(onClick = { startEdit(true, detail.html) }, modifier = Modifier.testTag("elements_edit_html"), enabled = !detail.tag.equals("html", true) &&
                     !detail.htmlTruncated && detail.htmlCharacters <= EDIT_LIMIT) { Text("Edit as HTML") }
                 TextButton(onClick = onReveal) { Text("Show on page") }
                 ElementView.entries.forEach { option ->
@@ -106,19 +126,31 @@ internal fun ElementsPanel(
             }
         }
         if (finding) InspectionSearch(query, onSearch, "Find tag, attribute, or text", "elements_search")
+        if (breadcrumbs.size > 1) {
+            Row(Modifier.horizontalScroll(rememberScrollState()).testTag("elements_breadcrumbs"),
+                verticalAlignment = Alignment.CenterVertically) {
+                breadcrumbs.forEachIndexed { index, node ->
+                    if (index > 0) Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, Modifier.size(16.dp))
+                    TextButton(onClick = { onSelect(node.id) }, enabled = index < breadcrumbs.lastIndex) {
+                        Text(node.tag, style = technicalTextStyle())
+                    }
+                }
+            }
+        }
         LazyColumn(Modifier.fillMaxWidth().weight(1f).testTag("elements_markup"), state = list) {
             items(lines.size, key = { lines[it].key }) { index ->
                 val line = lines[index]
                 val selected = line.node.id == tree?.selected && line.kind == "open"
-                MarkupRow(line, selected, query.isBlank(), onExpand, onSelect)
+                MarkupRow(line, if (showGutter) index + 1 else null, selected, query.isBlank(), onExpand, onSelect)
                 if (selected && detail != null) {
                     if (detail.htmlCharacters > EDIT_LIMIT) InspectionMessage("HTML editing supports up to 8,192 characters per element.")
                     when (view) {
                         ElementView.Attributes -> detail.attributes.forEach { InspectionValue(it.name, it.value) }
                         ElementView.Styles -> {
-                            TextButton(onClick = { editor = detail.css; original = detail.html; editHtml = false }) {
+                            TextButton(onClick = { startEdit(false, detail.css) }, enabled = detail.cssCharacters <= EDIT_LIMIT) {
                                 Text("Edit inline CSS")
                             }
+                            if (detail.cssCharacters > EDIT_LIMIT) InspectionMessage("Inline CSS editing supports up to 8,192 characters per element.")
                             detail.computed.forEach { InspectionValue(it.name, it.value) }
                             if (detail.rules.isNotEmpty()) InspectionMessage("Matched rules from readable stylesheets")
                             detail.rules.forEach { InspectionValue(it.name, it.value) }
@@ -128,6 +160,13 @@ internal fun ElementsPanel(
                             InspectionValue("Box size", detail.bounds.drop(2).joinToString(" × ") + " CSS px")
                             InspectionValue("Scrollable size", detail.scroll.take(2).joinToString(" × ") + " CSS px")
                             detail.layout.forEach { InspectionValue(it.name, it.value) }
+                        }
+                        ElementView.Markup -> {
+                            if (detail.htmlTruncated) InspectionMessage("Showing a preview of ${detail.htmlLimit} characters.")
+                            SelectionContainer {
+                                Text(detail.html, Modifier.fillMaxWidth().padding(8.dp).testTag("elements_markup_preview"),
+                                    style = technicalTextStyle())
+                            }
                         }
                         null -> Unit
                     }
@@ -144,21 +183,23 @@ internal fun ElementsPanel(
         }
     }
     editHtml?.let { html ->
-        val tooLong = editor.length > EDIT_LIMIT
         AlertDialog(
             onDismissRequest = { if (!applying) editHtml = null },
             title = { Text(if (html) "Edit as HTML" else "Edit inline CSS") },
             text = {
-                OutlinedTextField(editor, { editor = it.take(EDIT_LIMIT + 1) }, enabled = !applying,
+                OutlinedTextField(editor, {
+                    editOverflow = it.length > EDIT_LIMIT
+                    if (!editOverflow) editor = it
+                }, enabled = !applying,
                     label = { Text(if (html) "HTML" else "CSS declarations") }, minLines = 3, maxLines = 8,
-                    isError = tooLong, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(),
+                    isError = editOverflow, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(),
                     modifier = Modifier.fillMaxWidth().testTag("browser_element_edit"),
                     supportingText = {
-                        Text(if (tooLong) "Maximum 8,192 characters." else notice)
+                        Text(if (editOverflow) "Maximum 8,192 characters." else notice)
                     })
             },
             confirmButton = {
-                TextButton(enabled = !applying && !tooLong, onClick = {
+                TextButton(enabled = !applying && !editOverflow, onClick = {
                     applying = true
                     onEdit(html, original, editor) { success ->
                         applying = false
@@ -173,7 +214,7 @@ internal fun ElementsPanel(
 
 @Composable
 private fun MarkupRow(
-    line: MarkupLine, selected: Boolean, expandable: Boolean,
+    line: MarkupLine, number: Int?, selected: Boolean, expandable: Boolean,
     onExpand: (DomNode, Boolean) -> Unit, onSelect: (Int) -> Unit,
 ) {
     val node = line.node
@@ -188,9 +229,14 @@ private fun MarkupRow(
     val open = line.kind == "open"
     Row(
         Modifier.fillMaxWidth().background(if (selected) colors.secondaryContainer else colors.surfaceContainerLow)
-            .heightIn(min = 48.dp).padding(start = indent),
+            .heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (number != null) {
+            Text(number.toString(), Modifier.width(32.dp).padding(start = 4.dp),
+                maxLines = 1, style = technicalTextStyle(), color = colors.onSurfaceVariant)
+        }
+        Spacer(Modifier.width(indent))
         if (open && node.children && expandable) {
             IconButton(onClick = { onExpand(node, false) }, modifier = Modifier.size(48.dp).testTag("elements_toggle_${node.id}")) {
                 Icon(if (node.expanded) Icons.Outlined.KeyboardArrowDown else Icons.AutoMirrored.Outlined.KeyboardArrowRight,

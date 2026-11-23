@@ -20,6 +20,16 @@ The first follow-up adds adaptive primary navigation and tab restoration, a Brow
 
 The first branch matrix passed nine Android configurations. API 34 opened the fixture IME and failed to observe text committed to the WebView. The follow-up waits for DOM acknowledgment before dismissing the IME and keeps the acknowledgment visible at small viewport sizes. Run the complete matrix on the follow-up source to verify the correction. [First development matrix](https://github.com/modhack2003/Esuite/actions/runs/45270585786)
 
+Browser work continues with native page find, bounded address editing, Elements line numbers and breadcrumbs, a selectable markup preview, stale CSS edit rejection, and Network source and method filters. Waterfall rows share the same time axis when preserving observations across navigations.
+
+| Plan area | Branch progress |
+| --- | --- |
+| Confirmed defects | Q061, Q211, Q221, Q451, Q511, Q601–Q603, Q631, Q711, Q731, Q741 and Q751 have fixes and regression coverage. The Android end-to-end matrix is separate. |
+| App shell | Adaptive navigation, restored tab state, contextual API return, Browser commands, searchable settings, high contrast and local diagnostics. |
+| Browser and inspector | Page find, dock mirroring, Console filtering and grouped messages, Elements markup and edit consistency, and Network filter and timing changes. |
+| Imports and offline tools | Bounded document picker, explicit import review, selectable imports, Base64URL, hex, URL components, SHA-512 and JSON formatting. |
+| Release acceptance | The remaining feature and quality items, signed upgrade and clean-install checks, and verification on a physical Android device are open. |
+
 ## 1.0.9 Activity and passive review
 
 Activity combines stored HTTP exchanges with an explicitly imported, in-memory Browser Network snapshot. Source labels preserve the distinction between callbacks, timings and captured responses. Site Map uses complete observed paths and exact site scope. Quick response review shares one rule engine with API Lab, Tools and Findings. Review results can attach the selected exchange as immutable encrypted evidence. The device harness covers Browser handoff, Site Map, review, finding save and evidence retention after history clearing. The upgrade baseline is the published 1.0.8 APK.
