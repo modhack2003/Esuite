@@ -4,6 +4,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ScopeAnalysisTest {
+    @Test fun comparisonKeepsResponseProvenanceAndDistinguishesPartialBodies() {
+        val a = Exchange(projectId = "p", identity = "A", request = RequestDraft(), status = 200,
+            responseHeaders = listOf(Header("X-Origin", "first"), Header("x-origin", "second"), Header("Content-Type", "application/json")),
+            response = StoredBody("{\"b\":[1,2],\"a\":null}"))
+        val b = a.copy(identity = "B", responseHeaders = listOf(Header("X-ORIGIN", "second"), Header("x-origin", "first")),
+            response = StoredBody("{\"a\":null,\"b\":[1,2]}"))
+        val result = ResponseComparer.compare(a, b)
+        assertTrue(result.contains("Body: equal"))
+        assertTrue(result.contains("Changed header fields (1): x-origin"))
+        assertTrue(result.contains("Only A (1): content-type"))
+        assertFalse(result.contains("first"))
+        assertTrue(ResponseComparer.compare(a, b.copy(response = StoredBody("{\"b\":[2,1],\"a\":null}"))).contains("Body: different"))
+        assertTrue(ResponseComparer.compare(a, b.copy(response = a.response.copy(truncated = true))).contains("captured previews equal"))
+        assertTrue(ResponseComparer.compare(a, b.copy(status = null)).contains("unavailable for one or both responses"))
+    }
+
     @Test fun exactOriginScopeRejectsHostSuffixesDowngradesUserInfoAndPorts() {
         val scope = ScopePolicy("https://example.test")
         assertTrue(scope.allows("https://example.test/api?a=1"))

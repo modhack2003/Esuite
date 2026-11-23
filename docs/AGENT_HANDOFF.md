@@ -32,6 +32,7 @@ The production-signed upgrade harness now uses the checksum-pinned 1.0.9 APK and
 | App shell | Adaptive navigation, restored tab state, contextual API return, Browser commands, searchable settings, high contrast and local diagnostics. |
 | Browser and inspector | Page find, dock mirroring, Console filtering and grouped messages, Elements markup and edit consistency, and Network filter and timing changes. |
 | Imports and offline tools | Bounded document picker, explicit import review, selectable imports, Base64URL, hex, URL components, SHA-512 and JSON formatting. |
+| API Lab comparison | Header names are matched case-insensitively and repeated fields retain order. Differences list field names without values. Partial capture comparisons are labeled as previews. |
 | Release acceptance | The remaining feature and quality items, signed upgrade and clean-install checks, and verification on a physical Android device are open. |
 
 ## 1.0.9 Activity and passive review
