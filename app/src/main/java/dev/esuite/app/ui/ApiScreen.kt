@@ -6,10 +6,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.esuite.app.AppState
@@ -23,7 +26,7 @@ private enum class ApiSection(val label: String) {
     Request("Request"), Response("Response"), Collection("Saved"), Identity("Session")
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalComposeUiApi::class)
 @Composable
 internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> Unit, onReview: (Exchange) -> Unit) {
     val project = model.currentProject()
@@ -37,7 +40,7 @@ internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> 
     val scope = rememberCoroutineScope()
     val pending by model.drafts.values.collectAsStateWithLifecycle()
     var sectionName by rememberSaveable(project.id) { mutableStateOf(ApiSection.Request.name) }
-    val section = ApiSection.valueOf(sectionName)
+    val section = ApiSection.entries.firstOrNull { it.name == sectionName } ?: ApiSection.Request
     var capacityCheck by remember { mutableStateOf(false) }
     fun show(next: ApiSection) {
         focus.clearFocus()
@@ -112,6 +115,40 @@ internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> 
             TextButton(onClick = { show(ApiSection.Request) }) { Text("Edit request") }
         }
         ApiSection.Collection -> {
+            var rawOpen by remember(project.id) { mutableStateOf(false) }
+            OutlinedButton(onClick = { rawOpen = true }, modifier = Modifier.testTag("api_raw_toggle")) {
+                Text("Import raw HTTP")
+            }
+            if (rawOpen) {
+                val raw = pending[key(Editor.ApiRaw)].orEmpty()
+                var inputError by remember { mutableStateOf<String?>(null) }
+                AlertDialog(
+                    onDismissRequest = { rawOpen = false },
+                    modifier = Modifier.semantics { testTagsAsResourceId = true },
+                    title = { Text("Import raw HTTP") },
+                    text = {
+                        OutlinedTextField(raw, {
+                            inputError = if (model.drafts.trySet(key(Editor.ApiRaw), it)) null else
+                                "The paste exceeds the 262,144-character limit."
+                        }, label = { Text("Raw HTTP/1.x request") }, minLines = 3, maxLines = 8,
+                            isError = inputError != null, supportingText = inputError?.let { message -> { Text(message) } },
+                            keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(),
+                            modifier = Modifier.fillMaxWidth().testTag("api_raw_input"))
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            runCatching { DraftParser.raw(raw, project.origin) }.onSuccess {
+                                model.replaceDraft(it)
+                                rawOpen = false
+                                show(ApiSection.Request)
+                            }.onFailure { inputError = it.message ?: "Check the imported request." }
+                        }, enabled = raw.isNotBlank() && inputError == null, modifier = Modifier.testTag("api_raw_import")) {
+                            Text("Load draft")
+                        }
+                    },
+                    dismissButton = { TextButton(onClick = { rawOpen = false }) { Text("Cancel") } },
+                )
+            }
             val name = pending[key(Editor.ApiSavedName)].orEmpty()
             OutlinedTextField(name, { write(Editor.ApiSavedName, it) }, label = { Text("Saved request name") },
                 singleLine = true, modifier = Modifier.fillMaxWidth().testTag("api_saved_name"))
@@ -142,17 +179,6 @@ internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> 
                     )
                 }
             }
-            val raw = pending[key(Editor.ApiRaw)].orEmpty()
-            var rawOverflow by remember(project.id) { mutableStateOf(false) }
-            OutlinedTextField(raw, { rawOverflow = !model.drafts.trySet(key(Editor.ApiRaw), it) },
-                label = { Text("Raw HTTP/1.x request") }, minLines = 3, maxLines = 8,
-                isError = rawOverflow,
-                supportingText = if (rawOverflow) ({ Text("The paste exceeds the 262,144-character limit. Shorten it and try again.") }) else null,
-                keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("api_raw_input"))
-            OutlinedButton(onClick = {
-                runCatching { DraftParser.raw(raw, project.origin) }.onSuccess { model.replaceDraft(it); show(ApiSection.Request) }
-                    .onFailure { model.message(it.message ?: "Check the imported request") }
-            }, enabled = raw.isNotBlank() && !rawOverflow, modifier = Modifier.testTag("api_raw_import")) { Text("Import to editor") }
         }
         ApiSection.Identity -> {
             IdentityControls(state, model)

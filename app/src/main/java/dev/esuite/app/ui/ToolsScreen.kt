@@ -189,7 +189,7 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel, onReview: (Exchan
                     if (state.projectId == null) Text("Open a site in API Lab to import requests.", color = Amber)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         val importable = input.takeIf { state.projectId != null && inputError == null && !working }.orEmpty()
-                        ToolButton("Import cURL", importable) { stageImport(ImportFormat.Curl) { input } }
+                        ToolButton("Import cURL", importable, Modifier.testTag("tools_prepare_curl")) { stageImport(ImportFormat.Curl) { input } }
                         ToolButton("Import OpenAPI 3 JSON", importable) { stageImport(ImportFormat.OpenApi) { input } }
                         ToolButton("Import HAR", importable) { stageImport(ImportFormat.Har) { input } }
                     }

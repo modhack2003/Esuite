@@ -92,6 +92,7 @@ public class ProductionUiTest extends NativeUiDriver {
         launch();
         openSite("https://example.test");
         click("api_tab_collection");
+        click("api_raw_toggle");
         String body = "first line\r\nsecond line\nthird line";
         enter("api_raw_input", "POST /fixture HTTP/1.1\r\nHost: example.test\r\nX-Label: kept\r\n\r\n" + body);
         click("api_raw_import");
@@ -119,7 +120,8 @@ public class ProductionUiTest extends NativeUiDriver {
         growDock(device.getDisplayHeight() / 9);
         click("tools_tab_import");
         enter("tools_input", "curl --data 'first=one' --data 'second=two' https://example.test/staged");
-        revealUtilityControl(By.text("Import cURL"), true).click();
+        revealUtilityControl(By.res("tools_prepare_curl"), true);
+        click("tools_prepare_curl");
         assertNotNull(device.wait(Until.findObject(By.res("tools_import_preview")), 5000));
         find(By.text("Cancel")).click();
         click("nav_api");
@@ -127,7 +129,8 @@ public class ProductionUiTest extends NativeUiDriver {
         assertFalse(device.hasObject(By.res("api_url").textContains("/staged")));
 
         click("nav_tools");
-        revealUtilityControl(By.text("Import cURL"), true).click();
+        revealUtilityControl(By.res("tools_prepare_curl"), true);
+        click("tools_prepare_curl");
         click("tools_apply_import");
         assertTrue(waitText("tools_import_status", "Draft loaded in API Lab", 5000));
         click("nav_api");
@@ -204,6 +207,7 @@ public class ProductionUiTest extends NativeUiDriver {
         click("open_settings"); assertNotNull(find(By.res("settings_title")));
         click("appearance_tab_light");
         assertTrue(tag("appearance_tab_light").isSelected());
+        enter("settings_search", "version");
         var version = java.util.regex.Pattern.compile("(?m)^\\s*versionName=([^\\r\\n]+)").matcher(
                 device.executeShellCommand("dumpsys package dev.esuite.app"));
         assertTrue("Could not read the installed package version", version.find());
