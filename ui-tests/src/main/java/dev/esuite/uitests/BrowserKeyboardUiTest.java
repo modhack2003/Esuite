@@ -43,8 +43,7 @@ public final class BrowserKeyboardUiTest extends NativeUiDriver {
                 return 'Form ready';
                 """);
         click("console_run");
-        assertTrue("The HTTPS form fixture did not initialize", device.wait(Until.hasObject(
-                By.res("console_messages").descContains("Latest result: Form ready")), 10_000));
+        assertNotNull("The HTTPS form fixture did not initialize", findWebForm());
         click("browser_close_dock");
 
         String previousIme = device.executeShellCommand("settings get secure default_input_method").trim();
@@ -74,12 +73,14 @@ public final class BrowserKeyboardUiTest extends NativeUiDriver {
 
     private void enterInPage(int position, String field, boolean paste) {
         // Chromium exposes placeholders as accessibility hints, which UiAutomator cannot query.
-        UiObject2 webPage = device.wait(Until.findObject(By.clazz("android.webkit.WebView")
-                .hasDescendant(By.clazz("android.widget.EditText"))), 8_000);
+        UiObject2 webPage = findWebForm();
         assertNotNull("Website form is missing", webPage);
         List<UiObject2> fields = webPage.findObjects(By.clazz("android.widget.EditText"));
-        assertTrue("Website editor is missing: " + field, fields.size() > position);
-        fields.get(position).click();
+        // Legacy Chromium exposes a contenteditable element as a generic focusable View.
+        UiObject2 input = paste ? webPage.findObject(By.text("Page editable").focusable(true)) : null;
+        if (input == null && fields.size() > position) input = fields.get(position);
+        assertNotNull("Website editor is missing: " + field, input);
+        input.click();
         UiObject2 key = device.wait(Until.findObject(By.text(paste ? "Paste fixture text" : "Type fixture text")), 8_000);
         assertNotNull("Tapping the website " + field + " field did not open the software keyboard", key);
         key.click();
@@ -87,5 +88,10 @@ public final class BrowserKeyboardUiTest extends NativeUiDriver {
         assertTrue("Keyboard stayed open", device.wait(Until.gone(By.text("Type fixture text")), 5_000));
         assertTrue("The DOM did not receive committed text for " + field,
                 device.wait(Until.hasObject(By.text("Received " + field)), 8_000));
+    }
+
+    private UiObject2 findWebForm() {
+        return device.wait(Until.findObject(By.clazz("android.webkit.WebView")
+                .hasDescendant(By.clazz("android.widget.EditText"))), 10_000);
     }
 }

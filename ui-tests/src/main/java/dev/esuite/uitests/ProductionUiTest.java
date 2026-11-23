@@ -194,8 +194,21 @@ public class ProductionUiTest extends NativeUiDriver {
     }
 
     private void selectBrowserTool(String panel) {
-        click("browser_panel_picker");
-        click("browser_panel_choice_" + panel);
+        String choice = "browser_panel_choice_" + panel;
+        for (int attempt = 0; attempt < 4; attempt++) {
+            if (!device.hasObject(By.res("browser_panel_choices"))) {
+                if (!device.hasObject(By.res("browser_dock"))) click("browser_tools");
+                click("browser_panel_picker");
+            }
+            UiObject2 item = device.wait(Until.findObject(By.res(choice)), 1_000);
+            if (usable(item)) {
+                click(choice);
+                return;
+            }
+            UiObject2 menu = device.findObject(By.res("browser_panel_choices"));
+            if (menu != null) menu.scroll(androidx.test.uiautomator.Direction.DOWN, 0.65f);
+        }
+        throw new AssertionError("Developer Tools choice is missing: " + panel);
     }
 
     private UiObject2 revealUtilityControl(BySelector selector, boolean down) {

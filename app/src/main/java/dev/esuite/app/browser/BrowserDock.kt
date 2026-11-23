@@ -182,7 +182,8 @@ internal fun BrowserInspector(
     var showPanels by remember { mutableStateOf(false) }
     BoxWithConstraints(Modifier.fillMaxSize().background(colors.surfaceContainerLow)) {
         val compactConsole = panel == BrowserTool.Console && maxHeight < 205.dp && WindowInsets.ime.getBottom(LocalDensity.current) > 0
-        val showTabs = maxHeight >= 184.dp && !compactConsole
+        val tabThreshold = if (panel == BrowserTool.Console) 260.dp else 184.dp
+        val showTabs = maxHeight >= tabThreshold && !compactConsole
         Column(Modifier.fillMaxSize()) {
             if (!compactConsole) {
                 DockHeader("Developer Tools", currentUrl?.let(BrowserAddress::https)?.let(BrowserAddress::origin).orEmpty(),
@@ -250,7 +251,7 @@ private fun PanelChooser(selected: BrowserTool, choose: (BrowserTool) -> Unit) {
     val colors = MaterialTheme.colorScheme
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val columnCount = if (maxWidth >= 310.dp) 3 else 2
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 6.dp)
+        Column(Modifier.fillMaxSize().testTag("browser_panel_choices").verticalScroll(rememberScrollState()).padding(horizontal = 6.dp)
             .selectableGroup()) {
             BrowserTool.entries.chunked(columnCount).forEach { row ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
