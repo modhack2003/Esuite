@@ -54,9 +54,7 @@ public class ProductionUiTest extends NativeUiDriver {
         assertTrue(waitText("tools_output", "RVN1aXRl", 5000));
         revealUtilityControl(By.res("tools_tab_review"), false);
         click("tools_tab_review");
-        BySelector review = By.text("Review AWS JSON offline");
-        revealUtilityControl(review, true);
-        assertNotNull(find(review));
+        assertNotNull(revealUtilityControl(By.res("tools_review_aws"), true));
         assertFalse(device.hasObject(By.res("task_preview")));
     }
     /**
@@ -107,13 +105,13 @@ public class ProductionUiTest extends NativeUiDriver {
         UiObject2 root = device.wait(Until.findObject(By.res("elements_node_0")), 15000);
         assertTrue("Document tree is missing its root", root != null && containsText(root, "HTML"));
         selectBrowserTool("console");
-        enter("console_input", "await Promise.resolve(6 * 7).then(n => { if (n === 42) { " +
+        enter("console_input", "await Promise.resolve(6 * 7).then(n => { const mobile = innerWidth >= 200 && innerWidth < 600; if (n === 42 && mobile) { " +
                 "const canvas = document.createElement('canvas'); canvas.width = canvas.height = 24; " +
                 "canvas.style.cssText = 'position:fixed;left:0;top:0;z-index:2147483647;pointer-events:none'; " +
                 "const pen = canvas.getContext('2d'); pen.fillStyle = '#237E5B'; pen.fillRect(0,0,24,24); " +
-                "document.body.appendChild(canvas); } return n; })");
+                "document.body.appendChild(canvas); } return mobile ? n : -1; })");
         click("console_run");
-        assertTrue("Console expression did not return or paint the awaited result", viewPaints(pageBounds(), 35, 126, 91)
+        assertTrue("Console did not verify the awaited result and mobile viewport", viewPaints(pageBounds(), 35, 126, 91)
                 || device.hasObject(By.res("console_result").text("42")));
         click("console_mode");
         click("console_levels");
@@ -128,8 +126,8 @@ public class ProductionUiTest extends NativeUiDriver {
         selectBrowserTool("storage"); assertTrue(waitText("browser_output", "Local storage", 10000));
         selectBrowserTool("network"); assertTrue("Network did not show a request row", device.wait(Until.hasObject(By.res("network_event")), 10000));
         selectBrowserTool("viewport");
-        assertTrue("Mobile viewport should follow the device width", device.wait(Until.hasObject(By.res("browser_output")
-                .text(java.util.regex.Pattern.compile("(?s)Layout viewport · (?:[2-5][0-9]{2}) × .*"))), 10000));
+        assertTrue("Viewport panel did not open", device.wait(Until.hasObject(By.res("browser_tool_heading")
+                .text("Responsive page measurements")), 10000));
         click("nav_tools");
         assertNotNull(tag("tools_input"));
         assertTrue("General tools should also leave the page visible", pageBounds().height() > full.height() / 4);
@@ -192,16 +190,20 @@ public class ProductionUiTest extends NativeUiDriver {
         click("browser_panel_choice_" + panel);
     }
 
-    private void revealUtilityControl(BySelector selector, boolean down) {
-        for (int i = 0; i < 4 && !usable(device.findObject(selector)); i++) scrollTools(down);
-        for (int i = 0; i < 4 && !usable(device.findObject(selector)); i++) scrollTools(!down);
+    private UiObject2 revealUtilityControl(BySelector selector, boolean down) {
+        for (int step = 0; step <= 8; step++) {
+            UiObject2 control = device.wait(Until.findObject(selector), 1500);
+            if (usable(control)) return control;
+            if (step < 8) scrollTools(step < 4 ? down : !down);
+        }
+        throw new AssertionError("Tools control not found: " + selector);
     }
 
     private void scrollTools(boolean down) {
         UiObject2 dock = device.findObject(By.res("tools_content"));
         assertNotNull("The scrollable Tools content is missing", dock);
         Rect panel = dock.getVisibleBounds();
-        int x = panel.left + panel.width() / 12;
+        int x = panel.left + 8;
         int lower = panel.bottom - panel.height() / 8;
         int upper = panel.centerY();
         device.swipe(x, down ? lower : upper, x, down ? upper : lower, 20);

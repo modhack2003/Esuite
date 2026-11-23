@@ -103,7 +103,7 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ToolButton("Decode JWT claims", input) { transform(TokenTools::jwtClaims) }
                         ToolButton("Token sample statistics", input) { transform { TokenTools.sample(it.lines().filter(String::isNotBlank)) } }
-                        ToolButton("Review AWS JSON offline", input) { transform(CloudConfigReview::review) }
+                        ToolButton("Review AWS JSON offline", input, Modifier.testTag("tools_review_aws")) { transform(CloudConfigReview::review) }
                     }
                 }
                 ToolGroup.Checks -> {
@@ -140,6 +140,6 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel) {
 }
 
 @Composable
-private fun ToolButton(label: String, input: String, action: () -> Unit) {
-    OutlinedButton(onClick = action, enabled = input.isNotEmpty()) { Text(label) }
+private fun ToolButton(label: String, input: String, modifier: Modifier = Modifier, action: () -> Unit) {
+    OutlinedButton(onClick = action, enabled = input.isNotEmpty(), modifier = modifier) { Text(label) }
 }
