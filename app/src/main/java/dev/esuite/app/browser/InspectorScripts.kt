@@ -5,6 +5,7 @@ object InspectorScripts {
     val select = """
         (() => {
           if (window.__esuitePicker) document.removeEventListener('click', window.__esuitePicker, true);
+          window.__esuitePickPending = true;
           window.__esuitePicker = function(event) {
             if (!(event.target instanceof Element) || !event.target.style) return;
             event.preventDefault(); event.stopImmediatePropagation();
@@ -12,9 +13,10 @@ object InspectorScripts {
             window.__esuiteElement = event.target; window.__esuiteOutline = event.target.style.outline;
             event.target.style.outline = '2px solid #5BE0D6';
             document.removeEventListener('click', window.__esuitePicker, true);
+            window.__esuitePickPending = false;
           };
           document.addEventListener('click', window.__esuitePicker, true);
-          return 'Tap an element, then press Read selection. The selection click is consumed locally.';
+          return 'Tap an element on the page to inspect it.';
         })()
     """.trimIndent()
     val clearSelection = """
@@ -24,13 +26,56 @@ object InspectorScripts {
             window.__esuiteElement.style.outline = window.__esuiteOutline || '';
           }
           delete window.__esuitePicker; delete window.__esuiteElement; delete window.__esuiteOutline;
+          delete window.__esuiteTree; delete window.__esuitePickPending;
         })()
     """.trimIndent()
+    val pickResult = """
+        window.__esuitePickPending === false ? 'Picked' : 'Waiting'
+    """.trimIndent()
+    val disarmPicker = """
+        (() => { document.removeEventListener('click', window.__esuitePicker, true); delete window.__esuitePickPending; })()
+    """.trimIndent()
     val selection = """
-        (() => { const e=window.__esuiteElement; if(!e || !e.isConnected) return 'No selected element'; const s=getComputedStyle(e);
-          return JSON.stringify({htmlTruncated:e.outerHTML.length>16000,htmlCharacters:e.outerHTML.length,htmlLimit:16000,
-            tag:e.tagName,html:e.outerHTML.slice(0,16000),css:e.style.cssText.slice(0,4000),
-            computed:{display:s.display,color:s.color,background:s.backgroundColor,font:s.font,position:s.position}},null,2);
+        (() => {
+          const e = window.__esuiteElement;
+          if (!e || !e.isConnected) return 'null';
+          const style = getComputedStyle(e);
+          const rect = e.getBoundingClientRect();
+          const computed = names => names.map(name => ({name, value: style.getPropertyValue(name).trim().slice(0, 180)}));
+          const attributes = Array.from(e.attributes).slice(0, 25).map(attr => ({
+            name: attr.name.slice(0, 80),
+            value: /value|nonce|secret|token|password|srcdoc/i.test(attr.name) ? 'Hidden' : attr.value.slice(0, 160)
+          }));
+          const rules = [];
+          let budget = 300;
+          const visit = list => {
+            for (let index = 0; index < list.length && budget > 0 && rules.length < 12; index++) {
+              budget--;
+              const rule = list[index];
+              if (rule.type === 1 && rule.selectorText) {
+                try {
+                  if (e.matches(rule.selectorText)) rules.push({name:rule.selectorText.slice(0, 150), value:rule.style.cssText.slice(0, 360)});
+                } catch (_) { }
+              } else if (rule.type === 4 && matchMedia(rule.conditionText).matches) visit(rule.cssRules);
+              else if (rule.type === 12 && CSS.supports(rule.conditionText)) visit(rule.cssRules);
+            }
+          };
+          for (const sheet of Array.from(document.styleSheets).slice(0, 30)) {
+            if (budget <= 0 || rules.length >= 12) break;
+            try { if (!sheet.disabled && (!sheet.media.mediaText || matchMedia(sheet.media.mediaText).matches)) visit(sheet.cssRules); } catch (_) { }
+          }
+          const html = e.outerHTML;
+          const inline = document.createElement('span').style;
+          inline.cssText = e.style.cssText;
+          inline.outline = window.__esuiteOutline || '';
+          const round = value => Math.round(value * 10) / 10;
+          return JSON.stringify({htmlTruncated:html.length>16000,htmlCharacters:html.length,htmlLimit:16000,
+            tag:e.tagName,html:html.slice(0,16000),css:inline.cssText.slice(0,4000),attributes,rules,
+            computed:computed(['display','position','color','background-color','font-family','font-size','font-weight',
+              'line-height','opacity','visibility','z-index','overflow','box-sizing','justify-content','align-items','gap']),
+            layout:computed(['margin','border-width','padding','width','height','min-width','max-width','min-height','max-height']),
+            bounds:[round(rect.x), round(rect.y), round(rect.width), round(rect.height)],
+            scroll:[e.scrollWidth,e.scrollHeight,e.clientWidth,e.clientHeight]});
         })()
     """.trimIndent()
     val html = """
@@ -92,10 +137,45 @@ object InspectorScripts {
           } catch (e) { return String(e); }
         })()
     """.trimIndent()
-    val documentOutline = """
+    val elementTree = """
         (() => {
-          const rows = Array.from(document.querySelectorAll('html, body, main, nav, article, section, h1, h2, h3, a, button, input')).slice(0, 60);
-          return rows.map(element => element.tagName + (element.id ? '#' + element.id.slice(0, 80) : '')).join('\n') || 'No matching elements';
+          const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_ELEMENT);
+          const nodes = [], rows = [], parents = new Map();
+          let element = walker.currentNode;
+          while (element && rows.length < 160) {
+            const parent = parents.has(element.parentElement) ? parents.get(element.parentElement) : -1;
+            const depth = parent < 0 ? 0 : rows[parent].depth + 1;
+            const classes = (element.getAttribute('class') || '').trim().split(/\s+/).slice(0, 3).map(name => name.slice(0, 36));
+            rows.push({id:rows.length, parent, depth, tag:element.tagName.slice(0,50),
+              name:element.id.slice(0,64), classes:classes.filter(Boolean), children:element.childElementCount});
+            parents.set(element, nodes.length);
+            nodes.push(element);
+            element = walker.nextNode();
+          }
+          window.__esuiteTree = nodes;
+          return JSON.stringify({rows, limited:element !== null});
+        })()
+    """.trimIndent()
+
+    val selectTreeElement = """
+        (() => {
+          const element = window.__esuiteTree && window.__esuiteTree[__ESUITE_NODE__];
+          if (!element || !element.isConnected || !element.style) return 'The element changed. Refresh the tree.';
+          document.removeEventListener('click', window.__esuitePicker, true);
+          if (window.__esuiteElement) window.__esuiteElement.style.outline = window.__esuiteOutline || '';
+          window.__esuiteElement = element;
+          window.__esuiteOutline = element.style.outline;
+          element.style.outline = '2px solid #5BE0D6';
+          return 'Selected';
+        })()
+    """.trimIndent()
+
+    val scrollToElement = """
+        (() => {
+          const element = window.__esuiteElement;
+          if (!element || !element.isConnected) return 'Select an element first.';
+          element.scrollIntoView({block:'center',inline:'nearest'});
+          return 'Element shown on page';
         })()
     """.trimIndent()
 
@@ -116,15 +196,19 @@ object InspectorScripts {
     val networkTiming = """
         (() => {
           const rows = [];
-          for (const item of performance.getEntriesByType('resource').slice(-120).reverse()) {
+          const entries = performance.getEntriesByType('navigation').concat(performance.getEntriesByType('resource').slice(-100));
+          const milliseconds = value => Number.isFinite(value) && value >= 0 ? Math.round(value * 10) / 10 : null;
+          const phase = (start,end) => start > 0 && end >= start ? milliseconds(end-start) : null;
+          for (const item of entries) {
             const url = new URL(item.name, document.baseURI);
             if (url.origin !== location.origin) continue;
-            const status = item.responseStatus ? ' · HTTP ' + item.responseStatus : '';
-            const size = item.transferSize ? ' · ' + item.transferSize + ' B transferred' : '';
-            rows.push(item.initiatorType + ' ' + url.pathname.slice(0, 180) + ' · ' + Math.round(item.duration) + ' ms' + status + size);
-            if (rows.length === 30) break;
+            rows.push({path:url.pathname.slice(0,280), kind:item.entryType==='navigation' ? 'document' : (item.initiatorType || 'other'),
+              status:item.responseStatus || null, start:milliseconds(item.startTime), duration:milliseconds(item.duration),
+              transfer:Number.isFinite(item.transferSize) ? item.transferSize : null, protocol:(item.nextHopProtocol || '').slice(0,24),
+              dns:phase(item.domainLookupStart,item.domainLookupEnd), connect:phase(item.connectStart,item.connectEnd),
+              wait:phase(item.requestStart,item.responseStart), download:phase(item.responseStart,item.responseEnd)});
           }
-          return rows.join('\n');
+          return JSON.stringify(rows);
         })()
     """.trimIndent()
 

@@ -36,12 +36,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import dev.esuite.app.ui.technicalTextStyle
-import dev.esuite.app.ui.TechnicalKeyboard
 import kotlin.math.roundToInt
 
 internal enum class BrowserTool(val label: String, val summary: String) {
     Page("Page", "Page title"),
-    Elements("Elements", "Document outline"),
+    Elements("Elements", "Document tree"),
     Console("Console", "JavaScript console"),
     Network("Network", "Same-origin requests and resource timing"),
     Sources("Sources", "Document stylesheets and scripts"),
@@ -164,19 +163,14 @@ internal fun BrowserInspector(
     choose: (BrowserTool) -> Unit,
     refresh: () -> Unit,
     close: () -> Unit,
-    pick: () -> Unit,
-    selection: () -> Unit,
-    report: () -> Unit,
-    edit: (html: Boolean, code: String) -> Unit,
     openApi: (String) -> Unit,
     openExternally: (String) -> Unit,
+    elements: @Composable () -> Unit,
+    network: @Composable () -> Unit,
     console: @Composable () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
-    var editingHtml by remember { mutableStateOf<Boolean?>(null) }
-    var code by remember { mutableStateOf("") }
     var showPanels by remember { mutableStateOf(false) }
-    LaunchedEffect(currentUrl, panel) { editingHtml = null }
     BoxWithConstraints(Modifier.fillMaxSize().background(colors.surfaceContainerLow)) {
         val compactConsole = panel == BrowserTool.Console && maxHeight < 205.dp && WindowInsets.ime.getBottom(LocalDensity.current) > 0
         Column(Modifier.fillMaxSize()) {
@@ -214,21 +208,14 @@ internal fun BrowserInspector(
                     }
                 }
             }
-            if (panel == BrowserTool.Console) console()
-            else key(panel) {
+            when (panel) {
+                BrowserTool.Console -> console()
+                BrowserTool.Elements -> elements()
+                BrowserTool.Network -> network()
+                else -> key(panel) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(panel.summary, style = MaterialTheme.typography.labelLarge, modifier = Modifier.testTag("browser_tool_heading"))
-                    if (currentUrl != null) when (panel) {
-                        BrowserTool.Elements -> Row(Modifier.horizontalScroll(rememberScrollState())) {
-                            TextButton(onClick = pick) { Text("Pick element") }
-                            TextButton(onClick = selection) { Text("Read selection") }
-                            TextButton(onClick = report) { Text("Document outline") }
-                            TextButton(onClick = { code = ""; editingHtml = false }) { Text("Edit CSS") }
-                            TextButton(onClick = { code = ""; editingHtml = true }) { Text("Replace HTML") }
-                        }
-                        else -> Unit
-                    }
                     SelectionContainer {
                         Text(output.ifBlank { if (currentUrl == null) "Load an HTTPS page to inspect it." else "Reading page…" },
                             Modifier.fillMaxWidth().testTag("browser_output"), style = technicalTextStyle())
@@ -242,21 +229,9 @@ internal fun BrowserInspector(
                         }
                     }
                 }
+                }
             }
         }
-    }
-    editingHtml?.let { html ->
-        AlertDialog(
-            onDismissRequest = { editingHtml = null },
-            title = { Text(if (html) "Replace selected HTML" else "Set inline CSS") },
-            text = {
-                OutlinedTextField(code, { code = it.take(8_192) }, label = { Text(if (html) "Replacement HTML" else "CSS declarations") },
-                    modifier = Modifier.fillMaxWidth().testTag("browser_element_edit"),
-                    keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), minLines = 3, maxLines = 6)
-            },
-            confirmButton = { TextButton(onClick = { edit(html, code); editingHtml = null }) { Text("Apply") } },
-            dismissButton = { TextButton(onClick = { editingHtml = null }) { Text("Cancel") } },
-        )
     }
 }
 

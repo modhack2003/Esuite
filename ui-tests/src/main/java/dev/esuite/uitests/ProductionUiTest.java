@@ -103,7 +103,7 @@ public class ProductionUiTest extends NativeUiDriver {
         growDock(full.height() / 6);
         assertTrue("Dragging the splitter must resize the live page", pageBounds().height() < split.height());
         assertTrue(waitText("browser_output", "Example Domain", 10000));
-        selectBrowserTool("elements"); assertTrue("Document outline is missing the page body", waitText("browser_output", "BODY", 10000));
+        selectBrowserTool("elements"); assertTrue("Document tree is missing its root", waitText("elements_node_0", "HTML", 10000));
         selectBrowserTool("console");
         enter("console_input", "await Promise.resolve(6 * 7).then(n => { if (n === 42) { " +
                 "const canvas = document.createElement('canvas'); canvas.width = canvas.height = 24; " +
@@ -124,7 +124,7 @@ public class ProductionUiTest extends NativeUiDriver {
         assertTrue(waitText("browser_tool_heading", "Cookie names and available flags", 10000));
         assertNotNull(find(By.res("browser_output")));
         selectBrowserTool("storage"); assertTrue(waitText("browser_output", "Local storage", 10000));
-        selectBrowserTool("network"); assertTrue(waitText("browser_output", "Navigation /", 10000));
+        selectBrowserTool("network"); assertTrue("Network did not show a request row", device.wait(Until.hasObject(By.res("network_event")), 10000));
         selectBrowserTool("viewport");
         assertTrue("Mobile viewport should follow the device width", device.wait(Until.hasObject(By.res("browser_output")
                 .text(java.util.regex.Pattern.compile("(?s)Layout viewport · (?:[2-5][0-9]{2}) × .*"))), 10000));

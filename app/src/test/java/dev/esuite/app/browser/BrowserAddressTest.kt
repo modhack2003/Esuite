@@ -27,12 +27,19 @@ class BrowserAddressTest {
         log.add("GET", first)
         log.add("GET", "https://example.test:8443/another-port".toHttpUrl())
         log.add("GET", "https://outside.test/subresource".toHttpUrl())
-        assertEquals(listOf("GET /path"), log.snapshot())
+        assertEquals(listOf("/path"), log.events.value.map { it.path })
         repeat(62) { log.add("GET", first.newBuilder().encodedPath("/item/$it").build()) }
-        assertEquals(60, log.snapshot().size)
-        assertEquals("GET /item/61", log.snapshot().first())
+        assertEquals(60, log.events.value.size)
+        assertEquals("/item/61", log.events.value.first().path)
+        log.add("GET", first, true, RequestEventKind.HttpError, 404)
+        assertEquals(404, log.events.value.first().code)
+        assertTrue(log.events.value.first().mainFrame)
+        assertEquals(RequestEventKind.HttpError, log.events.value.first().kind)
+        log.clear()
+        assertTrue(log.events.value.isEmpty())
+        log.add("GET", first)
         log.page("https://outside.test/".toHttpUrl())
-        assertTrue(log.snapshot().isEmpty())
+        assertTrue(log.events.value.isEmpty())
     }
 
     @Test fun cookieInspectionDisclosesNamesAndKnownFlagsWithoutValues() {

@@ -123,6 +123,11 @@ internal fun BrowserScreen(
     var inspecting by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf(BrowserTool.Page) }
     var output by remember { mutableStateOf("") }
+    var domTree by remember { mutableStateOf<DomTree?>(null) }
+    var domDetails by remember { mutableStateOf<DomDetails?>(null) }
+    var picking by remember { mutableStateOf(false) }
+    var elementNotice by remember { mutableStateOf("") }
+    var timings by remember { mutableStateOf(emptyList<ResourceTiming>()) }
     var document by remember { mutableIntStateOf(0) }
     var inspection by remember { mutableIntStateOf(0) }
     var console by remember { mutableStateOf(emptyList<ConsoleEntry>()) }
@@ -144,6 +149,11 @@ internal fun BrowserScreen(
         consoleDraft = ""
         running = null
         output = ""
+        domTree = null
+        domDetails = null
+        picking = false
+        elementNotice = ""
+        timings = emptyList()
         linkNotice = null
     }
 
@@ -204,15 +214,32 @@ internal fun BrowserScreen(
         return view.takeIf { visible && !rendererGone && !destroyed.get() && error == null && matchesDocument(view.url, current) }
     }
 
-    fun evaluateInspection(script: String, prefix: String = "") {
+    fun evaluateInspection(script: String, report: (String?) -> Unit = {
+        output = it.orEmpty().trim().take(20_000).ifEmpty { "No information returned by this page." }
+    }) {
         val view = activeView() ?: return
         val currentDocument = document
         val request = ++inspection
         view.evaluateJavascript(script) { result ->
             if (document == currentDocument && inspection == request && !destroyed.get()) {
-                output = (prefix + textResult(result).orEmpty()).trim().take(20_000).ifEmpty { "No information returned by this page." }
+                report(textResult(result))
             }
         }
+    }
+
+    fun readElement() = evaluateInspection(InspectorScripts.selection) { result ->
+        domDetails = runCatching { Json.decodeFromString<DomDetails?>(result.orEmpty()) }.getOrNull()
+        elementNotice = if (domDetails == null) "Select an element on the page or in the tree." else ""
+    }
+
+    fun readTree(after: (() -> Unit)? = null) = evaluateInspection(InspectorScripts.elementTree) { result ->
+        domTree = runCatching { Json.decodeFromString<DomTree>(result.orEmpty()) }.getOrNull()
+        if (domTree == null) elementNotice = "The document tree is unavailable. Refresh to try again."
+        after?.invoke()
+    }
+
+    fun readTimings() = evaluateInspection(InspectorScripts.networkTiming) { result ->
+        timings = runCatching { Json.decodeFromString<List<ResourceTiming>>(result.orEmpty()) }.getOrDefault(emptyList())
     }
 
     fun readPanel(selection: BrowserTool) {
@@ -223,11 +250,7 @@ internal fun BrowserScreen(
         if (current == null || activeView() == null) return
         when (selection) {
             BrowserTool.Page -> output = pageTitle.ifBlank { "Untitled page" }
-            BrowserTool.Network -> {
-                val recent = requestLog.snapshot().joinToString("\n").ifEmpty { "No same-origin requests recorded." }
-                output = recent
-                evaluateInspection(InspectorScripts.networkTiming, "$recent\n\nResource timing\n")
-            }
+            BrowserTool.Network -> readTimings()
             BrowserTool.Cookies -> output = runCatching {
                 val cookieManager = CookieManager.getInstance()
                 val rows = if (WebViewFeature.isFeatureSupported(WebViewFeature.GET_COOKIE_INFO)) {
@@ -237,7 +260,7 @@ internal fun BrowserScreen(
                 }
                 rows.joinToString("\n").ifEmpty { "No cookies for this page." }
             }.getOrDefault("Cookie metadata is unavailable from Android System WebView.")
-            BrowserTool.Elements -> evaluateInspection(InspectorScripts.documentOutline)
+            BrowserTool.Elements -> readTree()
             BrowserTool.Storage -> evaluateInspection(InspectorScripts.storageMetadata)
             BrowserTool.Sources -> evaluateInspection(InspectorScripts.sourceFiles)
             BrowserTool.Performance -> evaluateInspection(InspectorScripts.performanceSummary)
@@ -289,9 +312,34 @@ internal fun BrowserScreen(
     LaunchedEffect(visible, inspecting, utilitiesVisible, panel, pageUrl, pageTitle, loading) {
         if (visible && inspecting && !utilitiesVisible) readPanel(panel)
     }
+    LaunchedEffect(visible, inspecting, utilitiesVisible, panel, pageUrl) {
+        if (visible && inspecting && !utilitiesVisible && panel == BrowserTool.Network && pageUrl != null) {
+            while (true) {
+                delay(1500)
+                readTimings()
+            }
+        }
+    }
     LaunchedEffect(panel, inspecting, visible, utilitiesVisible) {
         if (panel != BrowserTool.Elements || !inspecting || !visible || utilitiesVisible) {
             if (!destroyed.get() && !rendererGone && pageUrl != null) browser?.evaluateJavascript(InspectorScripts.clearSelection, null)
+            domTree = null
+            domDetails = null
+            picking = false
+            elementNotice = ""
+        }
+    }
+    LaunchedEffect(picking, document, panel, inspecting, visible, utilitiesVisible) {
+        if (!picking || !inspecting || utilitiesVisible || panel != BrowserTool.Elements) return@LaunchedEffect
+        val view = activeView() ?: return@LaunchedEffect
+        val picked = withTimeoutOrNull(25_000) {
+            while (view.javascript(InspectorScripts.pickResult) != "Picked") delay(250)
+            true
+        } ?: false
+        picking = false
+        if (picked) readElement() else {
+            view.evaluateJavascript(InspectorScripts.disarmPicker, null)
+            elementNotice = "Picker expired. Tap Pick element to try again."
         }
     }
     LaunchedEffect(running) {
@@ -438,7 +486,7 @@ internal fun BrowserScreen(
 
                             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                                 val parsed = BrowserAddress.https(request.url.toString())
-                                if (parsed != null) requestLog.add(request.method, parsed)
+                                if (parsed != null) requestLog.add(request.method, parsed, request.isForMainFrame)
                                 else if (request.isForMainFrame && request.url.toString() != "about:blank") {
                                     return WebResourceResponse("text/plain", "UTF-8", 403, "HTTPS required", emptyMap(),
                                         ByteArrayInputStream("HTTPS is required.".toByteArray()))
@@ -457,7 +505,7 @@ internal fun BrowserScreen(
                                 val preserve = loadTarget == url && pageUrl == null
                                 resetDocument()
                                 requestLog.page(target, preserveExisting = preserve)
-                                requestLog.add("Navigation", target)
+                                requestLog.add("", target, mainFrame = true, kind = RequestEventKind.Navigation)
                                 loadTarget = url
                                 awaitingStart = false
                                 error = null
@@ -488,11 +536,20 @@ internal fun BrowserScreen(
                             }
 
                             override fun onReceivedError(view: WebView, request: WebResourceRequest, problem: WebResourceError) {
+                                BrowserAddress.https(request.url.toString())?.let {
+                                    requestLog.add(request.method, it, request.isForMainFrame, RequestEventKind.LoadError, problem.errorCode)
+                                }
                                 if (!clearing && request.isForMainFrame &&
                                     (matchesDocument(loadTarget, request.url.toString()) || matchesDocument(view.url, request.url.toString()))) {
                                     error = problem.description.toString()
                                     loading = false
                                     updateHistory(view)
+                                }
+                            }
+
+                            override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) {
+                                BrowserAddress.https(request.url.toString())?.let {
+                                    requestLog.add(request.method, it, request.isForMainFrame, RequestEventKind.HttpError, response.statusCode)
                                 }
                             }
 
@@ -553,11 +610,37 @@ internal fun BrowserScreen(
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)) { utilities() }
             } else BrowserInspector(panel, output, pageUrl?.takeIf { error == null }, { panel = it }, { readPanel(panel) },
-                ::toggleInspector, { evaluateInspection(InspectorScripts.select) }, { evaluateInspection(InspectorScripts.selection) },
-                { readPanel(BrowserTool.Elements) }, { html, code ->
-                    val script = if (html) InspectorScripts.html else InspectorScripts.css
-                    evaluateInspection(script.replace("__ESUITE_VALUE__", JsonPrimitive(code).toString()))
-                }, onOpenApi, ::openInSystemBrowser) {
+                ::toggleInspector, onOpenApi, ::openInSystemBrowser,
+                elements = { key(document) {
+                    ElementsPanel(domTree, domDetails, pageUrl != null && error == null, elementNotice,
+                        onPick = {
+                            domDetails = null
+                            evaluateInspection(InspectorScripts.select) {
+                                elementNotice = it.orEmpty()
+                                picking = it != null
+                            }
+                        },
+                        onRead = ::readElement,
+                        onSelect = { node ->
+                            picking = false
+                            domDetails = null
+                            evaluateInspection(InspectorScripts.selectTreeElement.replace("__ESUITE_NODE__", node.toString())) {
+                                if (it == "Selected") readElement() else elementNotice = it.orEmpty()
+                            }
+                        },
+                        onReveal = { evaluateInspection(InspectorScripts.scrollToElement) { elementNotice = it.orEmpty() } },
+                        onEdit = { html, code ->
+                            val script = if (html) InspectorScripts.html else InspectorScripts.css
+                            evaluateInspection(script.replace("__ESUITE_VALUE__", JsonPrimitive(code).toString())) {
+                                if (it == "HTML updated locally") readTree(::readElement)
+                                else if (it == "CSS updated locally") readElement()
+                                else elementNotice = it.orEmpty()
+                            }
+                        })
+                } }, network = { key(document) {
+                    val events by requestLog.events.collectAsState()
+                    NetworkPanel(events, timings, pageUrl != null || loadTarget != null, requestLog::clear)
+                } }) {
                 ConsolePanel(console, consoleDraft, { consoleDraft = it }, scriptMode, { scriptMode = it },
                     activeView() != null, running != null, run = {
                         val origin = pageUrl?.let(BrowserAddress::https)?.let(BrowserAddress::origin)
@@ -584,7 +667,8 @@ private fun matchesDocument(first: String?, second: String?): Boolean {
 }
 
 private fun textResult(value: String?): String? = runCatching {
-    (Json.parseToJsonElement(value ?: return null) as? JsonPrimitive)?.takeIf { it.isString }?.content
+    if (value == null || value.length > 256_000) return null
+    (Json.parseToJsonElement(value) as? JsonPrimitive)?.takeIf { it.isString }?.content
 }.getOrNull()
 
 private suspend fun WebView.javascript(script: String): String? = suspendCancellableCoroutine { continuation ->

@@ -16,19 +16,30 @@ with sync_playwright() as p:
         if '/assets/fixture.js' in route.request.url:
             route.fulfill(body='window.fixtureLoaded = true;', content_type='text/javascript')
         else:
-            route.fulfill(body='''<html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+            route.fulfill(body='''<html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1">
+                <style>#profile { padding: 7px; color: rgb(0, 60, 120) } @media(max-width:1px) { #profile { color: red } }</style></head>
                 <main><h1>Fixture heading</h1><button id="profile" onclick="window.clicked=true">Profile</button></main>
                 <script src="/assets/fixture.js?fixture=private"></script></html>''', content_type="text/html")
     page.route("**/*", serve)
     page.goto("https://example.test/")
     page.evaluate("localStorage.setItem('test', 'value'); sessionStorage.setItem('session', 'one')")
-    outline = page.evaluate(scripts["documentOutline"])
-    assert "HTML" in outline and "BODY" in outline and "BUTTON#profile" in outline
-    assert "window.clicked" not in outline
+    tree = json.loads(page.evaluate(scripts["elementTree"]))
+    rows = tree['rows']
+    button = next(row for row in rows if row['name'] == 'profile')
+    assert rows[0]['tag'] == 'HTML' and any(row['tag'] == 'BODY' for row in rows)
+    assert rows[button['parent']]['tag'] == 'MAIN' and button['depth'] == 3
+    assert 'window.clicked' not in json.dumps(rows)
+    assert page.evaluate(scripts["selectTreeElement"].replace('__ESUITE_NODE__', str(button['id']))) == 'Selected'
+    assert json.loads(page.evaluate(scripts["selection"]))['tag'] == 'BUTTON'
+    page.evaluate('document.querySelector("#profile").remove()')
+    assert 'Refresh the tree' in page.evaluate(scripts["selectTreeElement"].replace('__ESUITE_NODE__', str(button['id'])))
+    page.evaluate("document.querySelector('main').insertAdjacentHTML('beforeend', '<button id=profile onclick=window.clicked=true>Profile</button>')")
     source_list = page.evaluate(scripts["sourceFiles"])
     assert "/assets/fixture.js" in source_list and "private" not in source_list
-    timing = page.evaluate(scripts["networkTiming"])
-    assert "script /assets/fixture.js" in timing and "private" not in timing
+    timing = json.loads(page.evaluate(scripts["networkTiming"]))
+    asset = next(row for row in timing if row['path'] == '/assets/fixture.js')
+    assert asset['kind'] == 'script' and asset['duration'] >= 0 and asset['start'] >= 0
+    assert 'private' not in json.dumps(timing) and any(row['kind'] == 'document' for row in timing)
     assert re.search(r"Timed resources · [1-9][0-9]*", page.evaluate(scripts["performanceSummary"]))
     assert "Viewport declaration · width=device-width" in page.evaluate(scripts["viewportSummary"])
     assert "Secure context · Yes" in page.evaluate(scripts["securitySummary"])
@@ -80,9 +91,15 @@ with sync_playwright() as p:
     assert all(entry["valueTruncated"] for entry in summary["entries"])
     page.evaluate(scripts["select"])
     page.locator("#profile").click()
+    assert page.evaluate(scripts["pickResult"]) == 'Picked'
     selected = json.loads(page.evaluate(scripts["selection"]))
     assert selected["tag"] == "BUTTON" and 'id="profile"' in selected["html"]
     assert selected["htmlTruncated"] is False
+    assert len(selected['bounds']) == 4 and any(row['name'] == 'color' for row in selected['computed'])
+    assert any(row['name'] == 'padding' for row in selected['layout'])
+    assert any(rule['name'] == '#profile' and 'padding: 7px' in rule['value'] for rule in selected['rules'])
+    assert all('color: red' not in rule['value'] for rule in selected['rules'])
+    assert 'outline' not in selected['css'], 'The authored inline CSS should omit the inspector highlight'
     page.locator("#profile").evaluate("e=>e.textContent='x'.repeat(17000)")
     partial = json.loads(page.evaluate(scripts["selection"]))
     assert partial["htmlTruncated"] is True and partial["htmlCharacters"] > 17000
@@ -103,7 +120,7 @@ with sync_playwright() as p:
     page.evaluate(scripts["select"])
     page.locator("#replacement").click()
     page.evaluate(scripts["html"].replace("__ESUITE_VALUE__", json.dumps('text only')))
-    assert page.evaluate(scripts["selection"]) == "No selected element"
+    assert json.loads(page.evaluate(scripts["selection"])) is None
     page.evaluate(scripts["select"])
     page.evaluate(scripts["clearSelection"])
     assert page.evaluate("window.__esuitePicker === undefined")
