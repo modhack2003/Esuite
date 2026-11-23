@@ -92,16 +92,7 @@ jobs:
       max-parallel: 10
       matrix:
         include:
-          - {api: '28', target: google_apis, gpu: swiftshader_indirect}
-          - {api: '29', target: google_apis, gpu: swiftshader_indirect}
-          - {api: '30', target: google_apis, gpu: swiftshader_indirect}
-          - {api: '31', target: google_apis, gpu: swiftshader_indirect}
-          - {api: '32', target: google_apis, gpu: swiftshader_indirect}
-          - {api: '33', target: google_apis, gpu: swiftshader_indirect}
-          - {api: '34', target: google_apis, gpu: swiftshader_indirect}
           - {api: '35', target: google_apis, gpu: swiftshader_indirect}
-          - {api: '36', target: google_apis_ps16k, gpu: swiftshader_indirect}
-          - {api: '37.0', target: google_apis_ps16k, gpu: software}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:

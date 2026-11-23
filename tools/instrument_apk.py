@@ -141,6 +141,7 @@ try:
     command('adb', 'install', unique('**/app/build/outputs/apk/ci/app-release-ci.apk'))
     suite('dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner', 'OptimizedUi', 4, 'dev.esuite.uitests.ProductionUiTest')
     suite('dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner', 'BrowserKeyboard', 1, 'dev.esuite.uitests.BrowserKeyboardUiTest')
+    suite('dev.esuite.uitests/androidx.test.runner.AndroidJUnitRunner', 'BrowserAdaptive', 1, 'dev.esuite.uitests.BrowserAdaptiveUiTest')
     if os.environ.get('ESUITE_REPORTED_SITE') == 'true':
         probe_reported_site()
     subprocess.run(['adb', 'pull', '/sdcard/Android/data/dev.esuite.uitests/files', str(out / 'ui-evidence')], check=False, timeout=30)
