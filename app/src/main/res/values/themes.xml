@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="esuite_launch_background">#071019</color>
+    <color name="esuite_launch_background">#101318</color>
     <style name="Theme.ESuite.Base" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/esuite_launch_background</item>
-        <item name="android:colorAccent">#5BE0D6</item>
+        <item name="android:colorAccent">#ACC3FF</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
     </style>

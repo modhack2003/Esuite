@@ -37,6 +37,7 @@ internal fun SettingsScreen(
     val provider = remember { WebViewCompat.getCurrentWebViewPackage(context)?.versionName }
     var confirmClear by remember { mutableStateOf(false) }
     var erase by remember { mutableStateOf(false) }
+    var showInterLicense by remember { mutableStateOf(false) }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(15.dp),
@@ -75,8 +76,16 @@ internal fun SettingsScreen(
         provider?.let { Text("Android System WebView $it", style = MaterialTheme.typography.bodySmall, color = Muted) }
         Text("Credits", style = MaterialTheme.typography.titleSmall)
         Text("ESuite by Bikram Dey and contributors. MIT license.", style = MaterialTheme.typography.bodyMedium)
+        Text("Inter typeface by the Inter Project Authors. SIL Open Font License.", style = MaterialTheme.typography.bodySmall, color = Muted)
         TextButton(onClick = { links.openUri("https://github.com/modhack2003/Esuite") }) { Text("Project on GitHub") }
         TextButton(onClick = { links.openUri("https://github.com/modhack2003/Esuite/blob/main/LICENSE") }) { Text("MIT license") }
+        TextButton(onClick = { showInterLicense = true }) { Text("Inter license") }
+    }
+    if (showInterLicense) {
+        val license = remember { context.resources.openRawResource(dev.esuite.app.R.raw.inter_ofl).bufferedReader().use { it.readText() } }
+        AlertDialog(onDismissRequest = { showInterLicense = false }, title = { Text("Inter font license") },
+            text = { Text(license, Modifier.verticalScroll(rememberScrollState()), style = MaterialTheme.typography.bodySmall) },
+            confirmButton = { TextButton(onClick = { showInterLicense = false }) { Text("Close") } })
     }
     if (erase) EraseVaultDialog({ erase = false }, model)
     if (confirmClear) AlertDialog(

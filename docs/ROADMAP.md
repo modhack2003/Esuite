@@ -120,3 +120,11 @@ Evidence and exact acceptance: [Vivo 1.0.2 review](reviews/vivo-1.0.2-production
 
 - [x] Implement standalone browsing, in-app inspection, site-based saved data, and appearance and privacy settings.
 - [x] Record native browser and signed upgrade results in the [1.0.5 notes](RELEASE_1.0.5.md).
+
+## 1.0.6 browser tools
+
+- [x] Dock developer and general tools alongside the live page, add drag resizing and support a keyboard shortcut.
+- [x] Implement current-page JavaScript console, element selection and editing, source list, timing, viewport, security and document semantics panels.
+- [x] Enable mobile viewport declarations and make the WebView visible once the page commits. Refresh app startup, palette, typography, and navigation.
+- [ ] Verify the browser changes across the Android matrix and the upgrade from signed 1.0.5. [Release record](RELEASE_1.0.6.md)
+- [ ] Evaluate native browser-engine support for debugger breakpoints, CPU and heap profiling, and richer network inspection.

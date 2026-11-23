@@ -47,13 +47,12 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel) {
         }
     }
 
-    Text("Tools", style = MaterialTheme.typography.headlineSmall)
     WorkspaceTabs(ToolGroup.entries, group, "tools", { it.label }) {
         resetOutput()
         groupName = it.name
     }
     OutlinedTextField(input, { model.drafts.set(inputKey, it); resetOutput() }, label = { Text("Input") },
-        minLines = 4, maxLines = 12, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(),
+        minLines = 2, maxLines = 6, keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(),
         modifier = Modifier.fillMaxWidth().testTag("tools_input"))
     when (group) {
         ToolGroup.Encode -> {

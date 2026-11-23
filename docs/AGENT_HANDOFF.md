@@ -14,6 +14,10 @@ Read this file first, then `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md
 
 Browser opens without a saved site and uses the app-private WebView profile independently of legacy profile support. Activity and Findings open saved records by site. The [1.0.5 notes](RELEASE_1.0.5.md) cover inspector scope, settings and release verification.
 
+## 1.0.6 browser tools
+
+The same native WebView stays visible when the user opens either dock. The inspector adds document tools, a color-coded console for manual JavaScript on the active page, and diagnostics for source resources, site timing, viewport, security and document semantics. The app honors viewport declarations and shows committed content during loading. The [1.0.6 notes](RELEASE_1.0.6.md) record the issue audit, feature scope, and upgrade gate.
+
 ## 1.0.4
 
 See the [1.0.4 release record](RELEASE_1.0.4.md) for workspace changes, performance work and exact-source verification.

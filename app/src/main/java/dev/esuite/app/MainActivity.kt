@@ -1,6 +1,7 @@
 package dev.esuite.app
 
 import android.os.Bundle
+import android.view.KeyEvent
 import android.webkit.WebView
 import androidx.activity.compose.BackHandler
 import android.content.Context
@@ -10,6 +11,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
@@ -17,6 +19,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
@@ -37,9 +40,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -59,6 +64,17 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     // Activity-scoped ViewModel shared with Compose (same ViewModelStore), so onStop can flush it.
     private val model: AppViewModel by viewModels()
+    private var developerToolsShortcut: (() -> Unit)? = null
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        val shortcut = developerToolsShortcut
+        if (keyCode == KeyEvent.KEYCODE_F12 && shortcut != null) {
+            if (event.repeatCount == 0) shortcut()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
@@ -81,7 +97,8 @@ class MainActivity : ComponentActivity() {
             ESuiteTheme(appearance) {
                 ESuiteApp(model, appearance, motion,
                     onAppearance = { appearance = it; preferences.edit().putString("theme", it.name).apply() },
-                    onMotion = { motion = it; preferences.edit().putBoolean("motion", it).apply() })
+                    onMotion = { motion = it; preferences.edit().putBoolean("motion", it).apply() },
+                    onBrowserShortcut = { developerToolsShortcut = it })
             }
         }
     }
@@ -111,19 +128,22 @@ internal fun ESuiteApp(
     motion: Boolean = true,
     onAppearance: (Appearance) -> Unit = {},
     onMotion: (Boolean) -> Unit = {},
+    onBrowserShortcut: ((() -> Unit)?) -> Unit = {},
 ) {
     val state by model.state.collectAsStateWithLifecycle()
     var selectedName by rememberSaveable { mutableStateOf(Screen.Browser.name) }
     var previousName by rememberSaveable { mutableStateOf(Screen.Browser.name) }
     var clearRequest by remember { mutableIntStateOf(0) }
+    var starting by remember { mutableStateOf(true) }
     var browserMessage by remember { mutableStateOf<String?>(null) }
     val screen = Screen.entries.firstOrNull { it.name == selectedName } ?: Screen.Browser
+    val browserVisible = screen == Screen.Browser || screen == Screen.Tools
     val site = state.workspace.projects.firstOrNull { it.id == state.projectId }
     fun navigate(next: Screen) { selectedName = next.name }
     fun settings() { previousName = screen.name; navigate(Screen.Settings) }
     fun closeSettings() { selectedName = previousName }
 
-    BackHandler(enabled = screen != Screen.Browser) {
+    BackHandler(enabled = !browserVisible) {
         if (screen == Screen.Settings) closeSettings() else navigate(Screen.Browser)
     }
     val density = LocalDensity.current
@@ -131,79 +151,102 @@ internal fun ESuiteApp(
     val compact = with(density) { windowSize.height.toDp() < 450.dp }
     val displayLabels = !compact && density.fontScale <= 1.3f && with(density) { windowSize.width.toDp() >= 320.dp }
     val imeVisible = WindowInsets.ime.getBottom(density) > 0
-    Scaffold(
-        modifier = Modifier.semantics { testTagsAsResourceId = true },
-        containerColor = Midnight,
-        contentWindowInsets = WindowInsets.safeDrawing.exclude(WindowInsets.ime),
-        bottomBar = {
-            if (!imeVisible && screen != Screen.Settings) WorkspaceNavigation(screen, compact, displayLabels, ::navigate)
-        },
-    ) { inset ->
-        Column(Modifier.fillMaxSize().padding(inset).consumeWindowInsets(inset).imePadding()) {
-            state.manualRequestLabel?.let { label ->
-                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Sending · $label", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    TextButton(onClick = model::cancelRequest, modifier = Modifier.testTag("cancel_running_request")) { Text("Cancel") }
+    Box(Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier.semantics { testTagsAsResourceId = true },
+            containerColor = Midnight,
+            contentWindowInsets = WindowInsets.safeDrawing.exclude(WindowInsets.ime),
+            bottomBar = {
+                if (!starting && !imeVisible && screen != Screen.Settings) PrimaryNavigation(screen, compact, displayLabels) {
+                    navigate(if (it == Screen.Tools && screen == Screen.Tools) Screen.Browser else it)
                 }
-            }
-            Box(Modifier.fillMaxSize()) {
-                BrowserScreen(
-                    visible = screen == Screen.Browser,
-                    motion = motion,
-                    clearRequest = clearRequest,
-                    onSettings = ::settings,
-                    onDataCleared = { cleared ->
-                        val cleanup = BrowserProfiles.clearAllEsuiteOwned()
-                        browserMessage = when {
-                            !cleared -> "Browser data couldn’t be cleared. Check Android System WebView."
-                            cleanup.pending.isNotEmpty() -> "Browsing data cleared. Restart ESuite to finish removing legacy profiles."
-                            else -> "Browsing data cleared."
-                        }
-                    },
-                    onOpenApi = {
-                        model.openSite(it)
-                        navigate(Screen.Api)
-                    },
-                )
-                if (screen != Screen.Browser) {
-                    AnimatedContent(
-                        targetState = screen,
-                        modifier = Modifier.fillMaxSize(),
-                        transitionSpec = {
-                            if (motion) fadeIn(tween(150)) togetherWith fadeOut(tween(100))
-                            else EnterTransition.None togetherWith ExitTransition.None
+            },
+        ) { inset ->
+            Column(Modifier.fillMaxSize().padding(inset).consumeWindowInsets(inset).imePadding()) {
+                state.manualRequestLabel?.let { label ->
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Sending · $label", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        TextButton(onClick = model::cancelRequest, modifier = Modifier.testTag("cancel_running_request")) { Text("Cancel") }
+                    }
+                }
+                Box(Modifier.fillMaxSize()) {
+                    BrowserScreen(
+                        visible = browserVisible,
+                        motion = motion,
+                        clearRequest = clearRequest,
+                        utilitiesVisible = screen == Screen.Tools,
+                        closeUtilities = { navigate(Screen.Browser) },
+                        onReady = { starting = false },
+                        onShortcut = onBrowserShortcut,
+                        onSettings = ::settings,
+                        onDataCleared = { cleared ->
+                            val cleanup = BrowserProfiles.clearAllEsuiteOwned()
+                            browserMessage = when {
+                                !cleared -> "Browser data couldn’t be cleared. Check Android System WebView."
+                                cleanup.pending.isNotEmpty() -> "Browsing data cleared. Restart ESuite to finish removing legacy profiles."
+                                else -> "Browsing data cleared."
+                            }
                         },
-                        label = "Primary navigation",
-                    ) { destination ->
-                        Surface(Modifier.fillMaxSize(), color = Midnight) {
-                            when {
-                                destination == Screen.Settings -> SettingsScreen(state, model, appearance, motion,
-                                    onAppearance, onMotion, { browserMessage = "Clearing browsing data…"; clearRequest++ },
-                                    browserMessage, ::closeSettings)
-                                !state.ready && destination != Screen.Tools -> SavedDataState(state, ::settings)
-                                destination == Screen.Findings -> key(state.projectId) {
-                                    FindingsScreen(state, model, site) { navigate(Screen.Api) }
-                                }
-                                destination == Screen.Traffic -> key(state.projectId) {
-                                    TrafficScreen(state, model, site) { navigate(Screen.Api) }
-                                }
-                                else -> {
-                                    val pageScroll = key(destination, state.projectId) { rememberScrollState() }
-                                    val scope = rememberCoroutineScope()
-                                    Column(Modifier.fillMaxSize().verticalScroll(pageScroll).padding(16.dp),
-                                        verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                                        if (destination == Screen.Api) {
+                        onOpenApi = {
+                            model.openSite(it)
+                            navigate(Screen.Api)
+                        },
+                        utilities = { ToolsScreen(state, model) },
+                    )
+                    if (!browserVisible) {
+                        AnimatedContent(
+                            targetState = screen,
+                            modifier = Modifier.fillMaxSize(),
+                            transitionSpec = {
+                                if (motion) fadeIn(tween(150)) togetherWith fadeOut(tween(100))
+                                else EnterTransition.None togetherWith ExitTransition.None
+                            },
+                            label = "Primary navigation",
+                        ) { destination ->
+                            Surface(Modifier.fillMaxSize(), color = Midnight) {
+                                when {
+                                    destination == Screen.Settings -> SettingsScreen(state, model, appearance, motion,
+                                        onAppearance, onMotion, { browserMessage = "Clearing browsing data…"; clearRequest++ },
+                                        browserMessage, ::closeSettings)
+                                    !state.ready -> SavedDataState(state, ::settings)
+                                    destination == Screen.Findings -> key(state.projectId) {
+                                        FindingsScreen(state, model, site) { navigate(Screen.Api) }
+                                    }
+                                    destination == Screen.Traffic -> key(state.projectId) {
+                                        TrafficScreen(state, model, site) { navigate(Screen.Api) }
+                                    }
+                                    else -> {
+                                        val pageScroll = key(destination, state.projectId) { rememberScrollState() }
+                                        val scope = rememberCoroutineScope()
+                                        Column(Modifier.fillMaxSize().verticalScroll(pageScroll).padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                             WorkspaceStatus(site, state)
                                             SitePicker(state, site, model, allowNew = true)
                                             if (site != null) ApiScreen(state, model) { scope.launch { pageScroll.scrollTo(0) } }
-                                        } else ToolsScreen(state, model)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
+            }
+        }
+        AnimatedVisibility(starting, enter = EnterTransition.None,
+            exit = if (motion) fadeOut(tween(160)) else ExitTransition.None) { LaunchScreen() }
+    }
+}
+
+@Composable
+private fun LaunchScreen() {
+    Surface(Modifier.fillMaxSize().testTag("app_launch"), color = Midnight) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(painterResource(R.drawable.esuite_splash_mark), null, Modifier.size(88.dp), tint = Color.Unspecified)
+                Text("ESuite", style = MaterialTheme.typography.headlineMedium)
+                Text("Starting browser", style = MaterialTheme.typography.bodySmall, color = Muted)
+                LinearProgressIndicator(Modifier.width(112.dp).padding(top = 5.dp))
             }
         }
     }
@@ -221,27 +264,28 @@ private fun SavedDataState(state: AppState, settings: () -> Unit) {
     }
 }
 
-@Composable private fun WorkspaceNavigation(screen: Screen, compact: Boolean, displayLabels: Boolean, navigate: (Screen) -> Unit) {
+@Composable private fun PrimaryNavigation(screen: Screen, compact: Boolean, displayLabels: Boolean, navigate: (Screen) -> Unit) {
     val destinations = Screen.entries.filter { it != Screen.Settings }
-    if (compact) {
-        Row(Modifier.fillMaxWidth().navigationBarsPadding().selectableGroup()) {
-            destinations.forEach { target ->
-                Box(Modifier.weight(1f).heightIn(min = 48.dp).testTag("nav_${target.name.lowercase()}")
-                    .selectable(screen == target, role = Role.Tab, onClick = { navigate(target) }), contentAlignment = Alignment.Center) {
-                    Icon(target.icon, contentDescription = target.label, tint = if (screen == target) Signal else Muted)
+    val colors = MaterialTheme.colorScheme
+    Surface(color = colors.surfaceContainerLow) {
+        Column(Modifier.navigationBarsPadding()) {
+            HorizontalDivider(color = colors.outlineVariant)
+            Row(Modifier.fillMaxWidth().padding(horizontal = 3.dp, vertical = 2.dp).selectableGroup()) {
+                destinations.forEach { target ->
+                    val selected = screen == target
+                    Column(Modifier.weight(1f).heightIn(min = if (compact) 48.dp else 55.dp)
+                        .testTag("nav_${target.name.lowercase()}")
+                        .selectable(selected, role = Role.Tab, onClick = { navigate(target) }),
+                        verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(Modifier.size(42.dp, 28.dp).background(if (selected) colors.primaryContainer else Color.Transparent,
+                            MaterialTheme.shapes.small), contentAlignment = Alignment.Center) {
+                            Icon(target.icon, contentDescription = if (displayLabels) null else target.label, modifier = Modifier.size(19.dp),
+                                tint = if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant)
+                        }
+                        if (displayLabels) Text(target.label, color = if (selected) Signal else Muted,
+                            style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
-            }
-        }
-    } else {
-        NavigationBar(containerColor = Midnight) {
-            destinations.forEach { target ->
-                NavigationBarItem(
-                    modifier = Modifier.testTag("nav_${target.name.lowercase()}"),
-                    selected = screen == target,
-                    onClick = { navigate(target) },
-                    icon = { Icon(target.icon, contentDescription = if (displayLabels) null else target.label) },
-                    label = if (displayLabels) ({ Text(target.label, maxLines = 1) }) else null,
-                )
             }
         }
     }
