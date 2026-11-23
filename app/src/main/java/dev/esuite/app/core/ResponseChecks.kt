@@ -1,6 +1,7 @@
 package dev.esuite.app.core
 
 import java.util.Locale
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 internal enum class ResponseCheck(val label: String, val summary: String) {
     Quick("Quick response review", "Review headers, cookie flags, cache policy, and CORS without sending requests."),
@@ -13,7 +14,7 @@ internal enum class ResponseCheck(val label: String, val summary: String) {
 internal enum class CheckStatus(val label: String) { Present("Present"), Review("Review"), Unavailable("Unavailable") }
 internal data class CheckItem(val name: String, val status: CheckStatus, val detail: String, val ruleId: String = "")
 
-internal const val RESPONSE_RULE_VERSION = 1
+internal const val RESPONSE_RULE_VERSION = 2
 internal const val MAX_REVIEW_EXCHANGES = 20
 
 internal fun Exchange.hasReviewableResponse(): Boolean =
@@ -31,6 +32,8 @@ internal object ResponseChecks {
     private const val MAX_HEADER_TEXT = 65_536
     private val fieldName = Regex("[!#$%&'*+.^_`|~0-9A-Za-z-]+")
     private val statusLine = Regex("HTTP/[0-9.]+\\s+[1-5][0-9]{2}(?:\\s+.*)?", RegexOption.IGNORE_CASE)
+    private val ageDigits = Regex("[0-9]+")
+    private val cookieValue = Regex("[\\x21\\x23-\\x2B\\x2D-\\x3A\\x3C-\\x5B\\x5D-\\x7E]*")
     private val cookieName = Regex("[!#$%&'*+.^_`|~0-9A-Za-z-]{1,100}")
 
     fun run(check: ResponseCheck, input: String): List<CheckItem> = run(check, parseHeaders(input))
@@ -56,11 +59,11 @@ internal object ResponseChecks {
             ResponseCheck.Headers -> buildList {
                 val hsts = values("strict-transport-security").firstOrNull().orEmpty()
                 val age = hsts.split(';').map(String::trim).firstOrNull { it.substringBefore('=').trim().equals("max-age", true) }
-                    ?.substringAfter('=', "")?.trim()?.removeSurrounding("\"")?.toLongOrNull()
+                    ?.substringAfter('=', "")?.trim()?.removeSurrounding("\"")?.takeIf(ageDigits::matches)?.toLongOrNull()
                 add(when {
                     hsts.isBlank() -> CheckItem("strict-transport-security", CheckStatus.Review, "No HSTS header in the supplied response. Review for HTTPS deployments.")
                     age == 0L -> CheckItem("strict-transport-security", CheckStatus.Review, "HSTS max-age is zero and clears the host’s cached HSTS policy.")
-                    age == null || age < 0 -> CheckItem("strict-transport-security", CheckStatus.Review, "The HSTS header has no valid max-age directive.")
+                    age == null -> CheckItem("strict-transport-security", CheckStatus.Review, "The HSTS header has no valid max-age directive.")
                     else -> CheckItem("strict-transport-security", CheckStatus.Present, "HSTS max-age is $age seconds. Review host coverage for this deployment.")
                 })
                 if (values("content-type").any { it.substringBefore(';').trim().equals("text/html", true) } || "content-security-policy" in headers) {
@@ -73,7 +76,12 @@ internal object ResponseChecks {
             }
             ResponseCheck.Cookies -> values("set-cookie").mapIndexed { index, cookie ->
                 val parts = cookie.split(';', limit = 40)
-                val name = parts.first().substringBefore('=').trim().takeIf(cookieName::matches) ?: "Cookie ${index + 1}"
+                val pair = parts.first().trim()
+                val name = pair.substringBefore('=').trim().takeIf(cookieName::matches)
+                val value = pair.substringAfter('=', "").trim().removeSurrounding("\"")
+                if (name == null || '=' !in pair || !cookieValue.matches(value)) {
+                    return@mapIndexed CheckItem("Cookie ${index + 1}", CheckStatus.Review, "The line does not begin with a valid cookie name-value pair.")
+                }
                 val flags = parts.drop(1).associate { it.substringBefore('=').trim().lowercase(Locale.ROOT) to it.substringAfter('=', "").trim() }
                 val missing = buildList {
                     if ("secure" !in flags) add("Secure absent")
@@ -86,10 +94,14 @@ internal object ResponseChecks {
                     missing.joinToString(" · ").ifEmpty { "Secure, HttpOnly and a recognized SameSite value are declared." })
             }.ifEmpty { listOf(CheckItem("Set-Cookie", CheckStatus.Unavailable, "The supplied headers contain no Set-Cookie lines.")) }
             ResponseCheck.Cache -> {
-                val directives = values("cache-control").flatMap { it.split(',') }.map { it.substringBefore('=').trim().lowercase(Locale.ROOT) }.toSet()
+                val fields = values("cache-control").flatMap(::splitCacheDirectives)
+                val directives = fields.groupBy { it.substringBefore('=').trim().lowercase(Locale.ROOT) }
                 listOf(when {
                     "no-store" in directives -> CheckItem("Cache-Control", CheckStatus.Present, "The response declares no-store.")
-                    "private" in directives -> CheckItem("Cache-Control", CheckStatus.Present, "The response restricts storage by shared caches.")
+                    directives["private"].orEmpty().any { '=' !in it } ->
+                        CheckItem("Cache-Control", CheckStatus.Present, "The response restricts storage by shared caches.")
+                    "private" in directives ->
+                        CheckItem("Cache-Control", CheckStatus.Review, "Qualified private restricts the named fields. Review whether the remaining response can be stored by shared caches.")
                     "public" in directives || "s-maxage" in directives -> CheckItem("Cache-Control", CheckStatus.Review, "The response permits shared caching. Verify that its contents are suitable for reuse across users.")
                     "no-cache" in directives -> CheckItem("Cache-Control", CheckStatus.Review, "Stored responses require revalidation before reuse.")
                     else -> CheckItem("Cache-Control", CheckStatus.Unavailable, "No explicit shared-cache or storage restriction is present in the supplied headers.")
@@ -105,6 +117,7 @@ internal object ResponseChecks {
                     origins.single() == "*" && credentials -> CheckItem("Credentials", CheckStatus.Review, "Browsers reject credentialed reads that use the wildcard origin.")
                     origins.single() == "*" -> CheckItem("Allowed origin", CheckStatus.Review, "The response allows cross-origin reads for requests without credentials. Review which data the response exposes.")
                     origins.single() == "null" -> CheckItem("Allowed origin", CheckStatus.Review, "The response allows the opaque null origin. Verify the intended clients.")
+                    !isSerializedOrigin(origins.single()) -> CheckItem("Allowed origin", CheckStatus.Review, "The value is not a valid serialized HTTP or HTTPS origin. Use a scheme and host with an optional non-default port.")
                     !vary -> CheckItem("Cache variation", CheckStatus.Review, "Verify cache variation if allowed origins are selected dynamically. No Vary: Origin is declared.")
                     else -> CheckItem("Cache variation", CheckStatus.Present, "The response declares a specific allowed origin and varies by Origin.")
                 })
@@ -113,6 +126,29 @@ internal object ResponseChecks {
             val field = if (check == ResponseCheck.Cookies) "flags" else item.name.lowercase(Locale.ROOT).replace(' ', '-')
             item.copy(ruleId = "${check.name.lowercase(Locale.ROOT)}.$field")
         }
+    }
+
+    private fun isSerializedOrigin(value: String): Boolean {
+        val parsed = value.toHttpUrlOrNull() ?: return false
+        return value == parsed.newBuilder().encodedPath("/").query(null).fragment(null).build().toString().removeSuffix("/")
+    }
+
+    private fun splitCacheDirectives(value: String): List<String> = buildList {
+        var quoted = false
+        var escaped = false
+        var start = 0
+        value.forEachIndexed { index, char ->
+            when {
+                escaped -> escaped = false
+                quoted && char == '\\' -> escaped = true
+                char == '"' -> quoted = !quoted
+                char == ',' && !quoted -> {
+                    add(value.substring(start, index))
+                    start = index + 1
+                }
+            }
+        }
+        add(value.substring(start))
     }
 
     private fun parseHeaders(input: String): List<Header> {

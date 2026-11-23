@@ -143,12 +143,16 @@ internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> 
                 }
             }
             val raw = pending[key(Editor.ApiRaw)].orEmpty()
-            OutlinedTextField(raw, { write(Editor.ApiRaw, it) }, label = { Text("Raw HTTP/1.x request") }, minLines = 3, maxLines = 8,
-                keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth())
+            var rawOverflow by remember(project.id) { mutableStateOf(false) }
+            OutlinedTextField(raw, { rawOverflow = !model.drafts.trySet(key(Editor.ApiRaw), it) },
+                label = { Text("Raw HTTP/1.x request") }, minLines = 3, maxLines = 8,
+                isError = rawOverflow,
+                supportingText = if (rawOverflow) ({ Text("The paste exceeds the 262,144-character limit. Shorten it and try again.") }) else null,
+                keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("api_raw_input"))
             OutlinedButton(onClick = {
                 runCatching { DraftParser.raw(raw, project.origin) }.onSuccess { model.replaceDraft(it); show(ApiSection.Request) }
                     .onFailure { model.message(it.message ?: "Check the imported request") }
-            }, enabled = raw.isNotBlank()) { Text("Import to editor") }
+            }, enabled = raw.isNotBlank() && !rawOverflow, modifier = Modifier.testTag("api_raw_import")) { Text("Import to editor") }
         }
         ApiSection.Identity -> {
             IdentityControls(state, model)

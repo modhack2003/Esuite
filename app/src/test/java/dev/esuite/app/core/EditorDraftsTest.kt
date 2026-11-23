@@ -16,6 +16,21 @@ class EditorDraftsTest {
     private val projectA = "project-a"
     private val projectB = "project-b"
 
+    @Test fun draftLimitsPreserveUnicodeAndRejectOversizedEditsWithoutReplacingPreviousInput() {
+        val drafts = EditorDrafts()
+        val key = DraftKey.of(projectA, Editor.BrowserScript, "A")
+        repeat(25) { index ->
+            val prefix = "A".repeat(index) + "x".repeat(key.editor.valueChars - 1 - index)
+            val exact = prefix.dropLast(1) + "🧪"
+            assertTrue(drafts.trySet(key, exact))
+            assertEquals(exact, drafts.text(key))
+            assertFalse(drafts.trySet(key, prefix + "🧪"))
+            assertEquals(exact, drafts.text(key))
+            drafts.set(key, prefix + "🧪")
+            assertEquals(prefix, drafts.text(key))
+        }
+    }
+
     @Test fun oneEditorsTextSurvivesArbitraryWritesToOtherEditors() {
         val drafts = EditorDrafts()
         val random = Random(0x2DA)

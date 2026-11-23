@@ -4,6 +4,8 @@ import kotlinx.serialization.json.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 object ApiImports {
+    const val COLLECTION_BYTES = 2 * 1024 * 1024
+
     private fun words(input: String): List<String> {
         require(input.length <= Limits.REQUEST_BYTES) { "Import too large" }
         val out = mutableListOf<String>(); val token = StringBuilder(); var quote: Char? = null; var escape = false; var started = false
@@ -24,24 +26,45 @@ object ApiImports {
     }
     fun curl(input: String, origin: String): RequestDraft {
         val args = words(input); require(args.firstOrNull() == "curl") { "Expected a cURL command" }
-        var method = "GET"; var explicitMethod = false; var url = ""; var body = ""; val headers = mutableListOf<Header>(); var i = 1
+        var method: String? = null
+        var url: String? = null
+        var binary = false
+        val data = mutableListOf<String>()
+        val headers = mutableListOf<Header>()
+        var i = 1
+        fun destination(value: String) {
+            require(url == null) { "Only one URL is supported" }
+            url = value
+        }
         while (i < args.size) {
             val arg = args[i++]
             fun next(): String { require(i < args.size) { "Missing value for $arg" }; return args[i++] }
             when (arg) {
-                "-X", "--request" -> { method = next().uppercase(); explicitMethod = true }
+                "-X", "--request" -> method = next().uppercase()
                 "-H", "--header" -> headers += DraftParser.headers(next())
-                "-d", "--data", "--data-raw", "--data-binary" -> { body = next(); require(!body.startsWith('@')) { "File-backed cURL bodies are not imported" }; if (!explicitMethod) method = "POST" }
-                "--url" -> url = next()
+                "-d", "--data", "--data-raw", "--data-binary" -> {
+                    val value = next()
+                    val nextBinary = arg == "--data-binary"
+                    require(!binary && (!nextBinary || data.isEmpty())) { "Use --data-binary as the only data option" }
+                    require(arg == "--data-raw" || !value.startsWith('@')) { "File-backed cURL bodies are not imported" }
+                    data += value
+                    binary = nextBinary
+                }
+                "--url" -> destination(next())
                 "-b", "--cookie" -> { val value = next(); require(value.contains('=')) { "Only literal cookies are supported" }; headers += Header("Cookie", value) }
-                else -> { require(arg.startsWith("https://") || arg.startsWith("http://")) { "Unsupported cURL option: $arg" }; require(url.isEmpty()) { "Only one URL is supported" }; url = arg }
+                else -> {
+                    require(arg.startsWith("https://") || arg.startsWith("http://")) { "Unsupported cURL option: $arg" }
+                    destination(arg)
+                }
             }
         }
-        ScopePolicy(origin).requireAllowed(url)
-        return RequestDraft(method, url, headers, body).also(DraftParser::validate)
+        val target = requireNotNull(url) { "Enter a URL to import" }
+        ScopePolicy(origin).requireAllowed(target)
+        return RequestDraft(method ?: if (data.isEmpty()) "GET" else "POST", target, headers, data.joinToString("&"))
+            .also(DraftParser::validate)
     }
     fun openApi(input: String, project: Project): List<SavedRequest> {
-        require(input.toByteArray().size <= 2 * 1024 * 1024) { "Specification exceeds 2 MiB" }
+        require(input.toByteArray().size <= COLLECTION_BYTES) { "Specification exceeds 2 MiB" }
         val root = Json.parseToJsonElement(input).jsonObject
         require(root["openapi"]?.jsonPrimitive?.content?.startsWith("3.") == true) { "Expected OpenAPI 3 JSON (YAML is not supported yet)" }
         val policy = ScopePolicy(project.origin)
@@ -63,7 +86,7 @@ object ApiImports {
         return output
     }
     fun har(input: String, project: Project): List<SavedRequest> {
-        require(input.toByteArray().size <= 2 * 1024 * 1024) { "HAR exceeds 2 MiB" }
+        require(input.toByteArray().size <= COLLECTION_BYTES) { "HAR exceeds 2 MiB" }
         val entries = Json.parseToJsonElement(input).jsonObject["log"]?.jsonObject?.get("entries")?.jsonArray ?: error("Expected HAR log.entries")
         require(entries.size <= 200) { "HAR entry limit exceeded (200)" }
         val scope = ScopePolicy(project.origin)

@@ -4,6 +4,52 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ResponseChecksTest {
+    @Test fun malformedCookiePairsDoNotPassTheFlagReview() {
+        repeat(25) { index ->
+            val flags = "Secure; HttpOnly; SameSite=Strict"
+            val malformed = ResponseChecks.run(ResponseCheck.Cookies, "Set-Cookie: entry$index; $flags").single()
+            assertEquals(CheckStatus.Review, malformed.status)
+            assertTrue(malformed.detail.contains("name-value"))
+            val removedValue = ResponseChecks.run(ResponseCheck.Cookies, "Set-Cookie: entry$index=; $flags").single()
+            assertEquals(CheckStatus.Present, removedValue.status)
+        }
+    }
+
+    @Test fun hstsRequiresUnsignedDigitsAndAllowsQuotedDigits() {
+        repeat(25) { index ->
+            val age = index + 1
+            fun review(value: String) = ResponseChecks.run(ResponseCheck.Headers,
+                "Strict-Transport-Security: max-age=$value").first()
+            assertEquals(CheckStatus.Review, review("+$age").status)
+            assertEquals(CheckStatus.Review, review("-$age").status)
+            assertEquals(CheckStatus.Present, review("\"$age\"").status)
+        }
+    }
+
+    @Test fun qualifiedPrivateIsFieldSpecificAndQuotedCommasStayInsideTheFieldList() {
+        repeat(25) { index ->
+            val qualified = ResponseChecks.run(ResponseCheck.Cache,
+                "Cache-Control: max-age=$index, private=\"X-Note, X-Detail\"").single()
+            assertEquals(CheckStatus.Review, qualified.status)
+            assertTrue(qualified.detail.contains("named fields"))
+            val quoted = ResponseChecks.run(ResponseCheck.Cache,
+                "Cache-Control: max-age=$index, private=\"X-Note, no-store\"").single()
+            assertEquals(CheckStatus.Review, quoted.status)
+        }
+    }
+
+    @Test fun explicitCorsOriginMustBeSerializedBeforeVariationIsReviewed() {
+        repeat(25) { index ->
+            val origin = "https://site$index.test:8443"
+            fun review(value: String) = ResponseChecks.run(ResponseCheck.Cors,
+                "Access-Control-Allow-Origin: $value\nVary: Origin").single()
+            assertEquals(CheckStatus.Present, review(origin).status)
+            listOf("/path", "/", "?q=one", "#part").forEach { suffix ->
+                assertEquals(CheckStatus.Review, review(origin + suffix).status)
+            }
+        }
+    }
+
     @Test fun pastedHeadersStopAtTheBodyAndKeepDuplicateCookies() {
         val result = ResponseChecks.run(ResponseCheck.Cookies, """
             HTTP/1.1 200 OK

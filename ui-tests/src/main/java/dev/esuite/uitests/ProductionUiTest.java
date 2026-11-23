@@ -88,12 +88,25 @@ public class ProductionUiTest extends NativeUiDriver {
                 waitText("finding_title", "Retained draft title", 3000));
     }
 
+    @Test public void rawHttpImportKeepsTheBodyAndOpensAnUnsentDraft() throws Exception {
+        launch();
+        openSite("https://example.test");
+        click("api_tab_collection");
+        String body = "first line\r\nsecond line\nthird line";
+        enter("api_raw_input", "POST /fixture HTTP/1.1\r\nHost: example.test\r\nX-Label: kept\r\n\r\n" + body);
+        click("api_raw_import");
+        assertTrue(waitText("api_url", "https://example.test/fixture", 5000));
+        assertTrue(waitText("api_body", body, 5000));
+        assertTrue(waitText("api_headers", "X-Label: kept", 5000));
+    }
+
     @Test public void browserOpensWithoutASavedSiteAndInspectsTheCurrentPage() throws Exception {
         launch();
         assertNotNull(find(By.res("browser_url")));
         assertFalse(device.hasObject(By.res("project_name")));
         enter("browser_url", "example.com"); click("browser_go");
-        assertTrue("The live WebView never became visible", device.wait(Until.hasObject(By.clazz("android.webkit.WebView")), 45000));
+        assertTrue("The live WebView never committed the fixture page",
+                device.wait(Until.hasObject(By.text("Example Domain")), 45000));
         Rect full = pageBounds();
         click("browser_tools");
         Rect split = pageBounds();

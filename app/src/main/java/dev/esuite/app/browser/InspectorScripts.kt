@@ -21,6 +21,8 @@ object InspectorScripts {
         (() => {
           document.removeEventListener('click', window.__esuitePicker, true);
           if (window.__esuiteHighlight) {
+            window.__esuiteHighlight.resizeObserver?.disconnect();
+            window.__esuiteHighlight.removalObserver.disconnect();
             window.__esuiteHighlight.node.remove();
             window.removeEventListener('scroll', window.__esuiteHighlight.update, true);
             window.removeEventListener('resize', window.__esuiteHighlight.update);
@@ -49,12 +51,26 @@ object InspectorScripts {
               node.style.left = rect.left + 'px'; node.style.top = rect.top + 'px';
               node.style.width = rect.width + 'px'; node.style.height = rect.height + 'px';
             };
-            window.__esuiteHighlight = {node, update};
+            const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(update) : null;
+            const removalObserver = new MutationObserver(() => {
+              if (window.__esuiteElement?.isConnected) return;
+              resizeObserver?.disconnect();
+              update();
+            });
+            removalObserver.observe(document.documentElement, {childList:true,subtree:true});
+            window.__esuiteHighlight = {node, update, resizeObserver, removalObserver, observed:null};
             document.documentElement.appendChild(node);
             window.addEventListener('scroll', update, true);
             window.addEventListener('resize', update);
           }
-          window.__esuiteHighlight.update();
+          const highlight = window.__esuiteHighlight;
+          const selected = window.__esuiteElement;
+          if (highlight.observed !== selected) {
+            highlight.resizeObserver?.disconnect();
+            if (selected?.isConnected) highlight.resizeObserver?.observe(selected);
+            highlight.observed = selected;
+          }
+          highlight.update();
         })()
     """.trimIndent()
     val selection = """
@@ -90,9 +106,13 @@ object InspectorScripts {
           if (overlay && e.contains(overlay)) overlay.remove();
           const html = e.outerHTML;
           if (overlay && !overlay.isConnected) document.documentElement.appendChild(overlay);
+          const htmlLimit = 16000;
+          const htmlTruncated = html.length > htmlLimit;
+          const lastUnit = html.charCodeAt(htmlLimit - 1);
+          const previewEnd = htmlTruncated && lastUnit >= 0xd800 && lastUnit <= 0xdbff ? htmlLimit - 1 : htmlLimit;
           const round = value => Math.round(value * 10) / 10;
-          return JSON.stringify({htmlTruncated:html.length>16000,htmlCharacters:html.length,htmlLimit:16000,
-            tag:e.tagName,html:html.slice(0,16000),css:(e.getAttribute('style') || '').slice(0,4000),attributes,rules,
+          return JSON.stringify({htmlTruncated,htmlCharacters:html.length,htmlLimit,
+            tag:e.tagName,html:html.slice(0,previewEnd),css:(e.getAttribute('style') || '').slice(0,4000),attributes,rules,
             computed:computed(['display','position','color','background-color','font-family','font-size','font-weight',
               'line-height','opacity','visibility','z-index','overflow','box-sizing','justify-content','align-items','gap']),
             layout:computed(['margin','border-width','padding','width','height','min-width','max-width','min-height','max-height']),

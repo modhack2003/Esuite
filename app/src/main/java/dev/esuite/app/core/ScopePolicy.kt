@@ -22,6 +22,7 @@ class ScopePolicy(origin: String) {
 }
 
 object DraftParser {
+    private val bodySeparator = Regex("\\r?\\n\\r?\\n")
     private val token = Regex("[!#$%&'*+.^_`|~0-9A-Za-z-]+")
     fun headers(text: String): List<Header> = text.lineSequence().filter { it.isNotBlank() }.map { line ->
         val index = line.indexOf(':'); require(index > 0) { "Headers must use Name: value" }
@@ -40,7 +41,7 @@ object DraftParser {
     }
     /** Import the actual HTTP message, with the project origin supplying relative request targets. */
     fun raw(text: String, origin: String): RequestDraft {
-        val parts = text.replace("\r\n", "\n").split("\n\n", limit = 2)
+        val parts = text.split(bodySeparator, limit = 2)
         val lines = parts[0].lines(); val first = lines.first().split(' ', limit = 3)
         require(first.size == 3 && first[2] in setOf("HTTP/1.0", "HTTP/1.1")) { "Expected METHOD target HTTP/1.1" }
         val policy = ScopePolicy(origin)

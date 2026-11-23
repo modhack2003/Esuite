@@ -66,9 +66,16 @@ class EditorDrafts {
 
     fun text(key: DraftKey, fallback: String = ""): String = mutable.value[key] ?: fallback
 
+    /** Reject an oversized edit so the caller can report it without replacing the prior draft. */
+    fun trySet(key: DraftKey, value: String): Boolean {
+        if (value.length > key.editor.valueChars) return false
+        set(key, value)
+        return true
+    }
+
     fun set(key: DraftKey, value: String) = publish {
         it.remove(key) // Re-insert so iteration order stays least-recently-written first.
-        it[key] = value.take(key.editor.valueChars)
+        it[key] = value.atCharacterBoundary(key.editor.valueChars)
         while (it.size > MAX_ENTRIES) it.remove(it.keys.first())
     }
 
@@ -80,7 +87,7 @@ class EditorDrafts {
     fun transform(projectId: String?, editors: Collection<Editor>, block: (String) -> String) = publish { map ->
         editors.forEach { editor ->
             val key = DraftKey(projectId, editor)
-            map[key]?.let { map[key] = block(it).take(editor.valueChars) }
+            map[key]?.let { map[key] = block(it).atCharacterBoundary(editor.valueChars) }
         }
     }
 
@@ -101,4 +108,10 @@ class EditorDrafts {
         const val VALUE_CHARS = 64 * 1024
         val MAX_ENTRIES = Editor.entries.size * 20
     }
+}
+
+private fun String.atCharacterBoundary(limit: Int): String {
+    if (length <= limit) return this
+    val splitPair = this[limit - 1].isHighSurrogate() && this[limit].isLowSurrogate()
+    return substring(0, if (splitPair) limit - 1 else limit)
 }

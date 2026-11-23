@@ -2,9 +2,9 @@ package dev.esuite.app.core
 
 import dev.esuite.app.browser.BrowserLogSnapshot
 import dev.esuite.app.browser.BrowserRequestEvent
-import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.DecimalStyle
 import java.util.Locale
 
 internal enum class ObservationSource(val label: String) {
@@ -49,8 +49,8 @@ internal fun activityRecords(site: Project, workspace: Workspace, imported: Brow
 internal fun siteMap(records: List<ActivityRecord>): Map<Endpoint, List<ActivityRecord>> =
     records.filterNot(ActivityRecord::clipped).groupBy { Endpoint(it.origin, it.path, it.method) }
 
-private val observationDate = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss z", Locale.getDefault()).withZone(ZoneId.systemDefault())
-internal fun observedAt(timestamp: Long): String = observationDate.format(Instant.ofEpochMilli(timestamp))
+internal fun observationDateFormatter(locale: Locale = Locale.getDefault(), zone: ZoneId = ZoneId.systemDefault()): DateTimeFormatter =
+    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss z", locale).withDecimalStyle(DecimalStyle.of(locale)).withZone(zone)
 
 internal const val ACTIVITY_PREVIEW_BYTES = 8 * 1024
 

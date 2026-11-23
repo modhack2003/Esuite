@@ -10,6 +10,12 @@ Read this file first, then `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md
 - No analytics, hosted AI, remote workers, automatic evidence uploads or external callback collectors. The design services received synthetic data only.
 - The React prototype is a synthetic design reference. Native features must be assessed from Kotlin source and tests.
 
+## 1.1.0 development
+
+The release branch starts with the 13 defects reproduced in the 1.0.9 stress audit. The fixes cover exact raw HTTP bodies, cURL data and destination handling, bounded OpenAPI and HAR file imports, Unicode-safe drafts and markup previews, live inspector bounds, Activity time zone and locale changes, and corrected offline response review. The response-review engine records rule version 2 for new reviews. Existing findings retain the versions and evidence they were saved with.
+
+The audit ran 1,220 additional cases against 1.0.9 and observed 925 passes and 295 failing variants across the 13 defects. The development branch has JVM regression cases and Chromium inspector scenarios for the fixes, plus an independent Android raw import test. The full 1.1.0 feature and quality catalog, candidate Android matrix, same-signer upgrade from 1.0.9, and physical-device checks are release gates.
+
 ## 1.0.9 Activity and passive review
 
 Activity combines stored HTTP exchanges with an explicitly imported, in-memory Browser Network snapshot. Source labels preserve the distinction between callbacks, timings and captured responses. Site Map uses complete observed paths and exact site scope. Quick response review shares one rule engine with API Lab, Tools and Findings. Review results can attach the selected exchange as immutable encrypted evidence. The device harness covers Browser handoff, Site Map, review, finding save and evidence retention after history clearing. The upgrade baseline is the published 1.0.8 APK.

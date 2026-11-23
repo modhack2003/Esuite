@@ -124,10 +124,27 @@ with sync_playwright() as p:
     assert selected["tag"] == "BUTTON" and 'id="profile"' in selected["html"]
     assert selected["htmlTruncated"] is False
     assert len(selected['bounds']) == 4 and any(row['name'] == 'color' for row in selected['computed'])
+    page.evaluate(scripts["highlightSelection"])
+    for width in range(240, 250):
+        page.locator("#profile").evaluate("(element, width) => element.style.width = width + 'px'", width)
+        page.wait_for_function("""() => {
+            const actual = window.__esuiteElement.getBoundingClientRect().width;
+            return window.__esuiteHighlight.node.getBoundingClientRect().width === actual;
+        }""", timeout=2000)
+    page.locator("#profile").evaluate("element => element.style.removeProperty('width')")
     assert any(row['name'] == 'padding' for row in selected['layout'])
     assert any(rule['name'] == '#profile' and 'padding: 7px' in rule['value'] for rule in selected['rules'])
     assert all('color: red' not in rule['value'] for rule in selected['rules'])
     assert 'outline' not in selected['css'], 'The authored inline CSS should omit the inspector highlight'
+    for index in range(10):
+        page.locator("#profile").evaluate("""(element, index) => {
+            element.textContent = '';
+            const opening = element.outerHTML.indexOf('</button>');
+            element.textContent = 'a'.repeat(index) + 'x'.repeat(15999 - opening - index) + '🧪';
+        }""", index)
+        clipped = json.loads(page.evaluate(scripts["selection"]))
+        assert clipped["htmlTruncated"] and len(clipped["html"]) == clipped["htmlLimit"] - 1
+        assert clipped["html"][-1] == "x", "The markup preview must omit a split surrogate pair"
     page.locator("#profile").evaluate("e=>e.textContent='x'.repeat(17000)")
     partial = json.loads(page.evaluate(scripts["selection"]))
     assert partial["htmlTruncated"] is True and partial["htmlCharacters"] > 17000

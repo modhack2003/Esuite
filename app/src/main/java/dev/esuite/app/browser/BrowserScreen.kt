@@ -155,6 +155,7 @@ internal fun BrowserScreen(
     }
 
     fun resetDocument() {
+        if (!destroyed.get() && !rendererGone && pageUrl != null) browser?.evaluateJavascript(InspectorScripts.clearSelection, null)
         document++
         pageUrl = null
         pageTitle = ""

@@ -92,10 +92,12 @@ class MainActivity : ComponentActivity() {
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
             }
             ESuiteTheme(appearance) {
-                ESuiteApp(model, appearance, motion,
-                    onAppearance = { appearance = it; preferences.edit().putString("theme", it.name).apply() },
-                    onMotion = { motion = it; preferences.edit().putBoolean("motion", it).apply() },
-                    onBrowserShortcut = { developerToolsShortcut = it })
+                ObservationDates {
+                    ESuiteApp(model, appearance, motion,
+                        onAppearance = { appearance = it; preferences.edit().putString("theme", it.name).apply() },
+                        onMotion = { motion = it; preferences.edit().putBoolean("motion", it).apply() },
+                        onBrowserShortcut = { developerToolsShortcut = it })
+                }
             }
         }
     }

@@ -328,7 +328,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
                     message("cURL imported. Review it in API Lab.")
                 }
             } catch (failure: IllegalArgumentException) {
-                message(failure.message ?: "Check the imported cURL")
+                if (ResultAttribution.accepts(context, currentContext())) message(failure.message ?: "Check the imported cURL")
             }
         }
     }
