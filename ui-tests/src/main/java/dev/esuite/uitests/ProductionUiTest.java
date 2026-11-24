@@ -109,7 +109,7 @@ public class ProductionUiTest extends NativeUiDriver {
         launch();
         openCommandSearch().setText("VERSION");
         assertTrue(device.wait(Until.gone(By.res("command_app_browser")), 5000));
-        click("command_app_settings");
+        clickExposedControl("command_app_settings");
         enter("settings_search", "license");
         assertTrue(waitText("settings_version", "Version", 5000));
         assertFalse(device.hasObject(By.res("settings_clear_browser")));
@@ -158,7 +158,7 @@ public class ProductionUiTest extends NativeUiDriver {
         openCommandSearch().setText("/find");
         assertTrue("Exact /find should remove the /findings prefix match",
                 device.wait(Until.gone(By.res("command_app_findings")), 5000));
-        click("command_app_find");
+        clickExposedControl("command_app_find");
         // Exercise the on-screen Close action with the Find field still focused.
         requireExposedControl("browser_find_query").setText("Example");
         assertTrue("Find in page did not report matching text",
@@ -243,6 +243,11 @@ public class ProductionUiTest extends NativeUiDriver {
         UiObject2 control = device.wait(Until.findObject(By.res(name)), 5000);
         assertNotNull("Expected " + name + " in the foreground, found " + device.getCurrentPackageName(), control);
         return control;
+    }
+
+    private void clickExposedControl(String name) {
+        click(name, () -> requireExposedControl(name), control ->
+                control != null && control.isEnabled() && !control.getVisibleBounds().isEmpty());
     }
 
     private Rect pageBounds() {
