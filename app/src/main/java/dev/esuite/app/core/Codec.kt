@@ -114,9 +114,11 @@ object Codec {
         require(input.length % 2 == 0) { "Use two hexadecimal digits per byte." }
         return ByteArray(input.length / 2) { index -> hexByte(input, index * 2) }
     }
-    private fun ByteArray.hex(): String = buildString(size * 2) {
-        for (byte in this@hex) {
-            val value = byte.toInt() and 0xff
+    private fun ByteArray.hex(): String = encodeHex(this, 0, size)
+
+    internal fun encodeHex(bytes: ByteArray, start: Int, end: Int): String = buildString((end - start) * 2) {
+        for (index in start until end) {
+            val value = bytes[index].toInt() and 0xff
             append(hexDigits[value ushr 4])
             append(hexDigits[value and 0x0f])
         }

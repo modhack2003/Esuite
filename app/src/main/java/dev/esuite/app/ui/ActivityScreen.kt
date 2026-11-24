@@ -270,7 +270,7 @@ private fun ActivityDetail(row: ActivityRecord, modifier: Modifier, close: () ->
                     Text("No captured HTTP response is available.")
                 } else {
                     ActivityHeaders(exchange.responseHeaders)
-                    ActivityBody(exchange.response.value, exchange.response.truncated, "Response body · ${exchange.response.encoding}")
+                    ResponseBodyPanel(exchange.response, exchange.responseHeaders, previewBytes = ACTIVITY_PREVIEW_BYTES)
                 }
             }
         }

@@ -37,6 +37,11 @@ public class AssessmentUiTest extends NativeUiDriver {
         click("api_send");
         top();
         assertTrue("HTTPS response did not arrive", waitText("workspace_status", "HTTP 200", 45000));
+        if (android.os.Build.VERSION.SDK_INT == 35) {
+            click("response_body_tab_hex");
+            assertTrue("The response body should render offset-based hex", waitText("response_body_content", "00000000", 8000));
+            click("response_body_tab_captured");
+        }
         click("nav_traffic");
         click("activity_tab_history");
         activityControl(By.res("activity_select_review")).click();

@@ -96,21 +96,15 @@ internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> 
                 Text(ResultAttribution.label(exchange, project.origin), style = MaterialTheme.typography.bodySmall, color = Muted)
                 val responseTitle = "${exchange.status ?: "Error"} · ${exchange.durationMs} ms · ${exchange.response.encoding}"
                 val headerText = remember(exchange.responseHeaders) { exchange.responseHeaders.asEditorText() }
-                val preview = remember(exchange.id) { exchange.response.value.take(48_000) }
-                var fullBody by remember(exchange.id) { mutableStateOf(false) }
                 if (exchange.hasReviewableResponse()) {
                     OutlinedButton(onClick = { onReview(exchange) }, modifier = Modifier.testTag("api_review_response")) {
                         Text("Check response headers")
                     }
                 }
                 Panel(responseTitle, exchange.error ?: headerText.ifBlank { "No response headers" })
-                if (exchange.response.value.isNotEmpty()) {
-                    Panel("Response body", if (fullBody) exchange.response.value else preview)
-                    if (preview.length < exchange.response.value.length && !fullBody) {
-                        TextButton(onClick = { fullBody = true }) { Text("Show full captured body") }
-                    }
+                if (exchange.response.value.isNotEmpty() || exchange.response.truncated) {
+                    key(exchange.id) { ResponseBodyPanel(exchange.response, exchange.responseHeaders, previewBytes = 48 * 1024) }
                 }
-                if (exchange.response.truncated) Text("Capture limit reached. Response body is partial.", color = Amber)
             }
             TextButton(onClick = { show(ApiSection.Request) }) { Text("Edit request") }
         }
