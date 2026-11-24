@@ -6,6 +6,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -38,6 +39,8 @@ internal fun NetworkPanel(state: BrowserNetworkState, filters: NetworkFilters, u
 ) {
     val origin = state.origin
     var selected by remember(origin) { mutableStateOf<String?>(null) }
+    val listPosition = rememberLazyListState()
+    LaunchedEffect(filters.expanded) { if (filters.expanded) listPosition.scrollToItem(0) }
     val methods = remember(state.rows, filters.method) {
         (state.rows.mapNotNull(BrowserRequestEvent::method) + listOfNotNull(filters.method?.takeIf(String::isNotEmpty))).distinct().sorted()
     }
@@ -68,11 +71,11 @@ internal fun NetworkPanel(state: BrowserNetworkState, filters: NetworkFilters, u
                         tint = if (filters.active) colors.primary else LocalContentColor.current)
                 }
             }
-            LazyColumn(Modifier.fillMaxWidth().weight(1f).testTag("network_rows")) {
-                if (state.rows.isNotEmpty()) item {
-                    TextButton(onClick = onOpenActivity, modifier = Modifier.testTag("network_open_activity")) { Text("Open in Activity") }
+            LazyColumn(Modifier.fillMaxWidth().weight(1f).testTag("network_rows"), state = listPosition) {
+                if (filters.expanded) item(key = "search") {
+                    InspectionSearch(filters.query, { update(filters.copy(query = it)) }, "Filter network observations", "network_search")
                 }
-                item {
+                item(key = "summary") {
                     val total = if (knownTransfer) " · ${bytes(transfer)} measured" else ""
                     val paused = if (state.recording) "" else " · Paused"
                     val filtered = if (filters.active) " · Filtered" else ""
@@ -80,8 +83,10 @@ internal fun NetworkPanel(state: BrowserNetworkState, filters: NetworkFilters, u
                         Modifier.testTag("network_summary"))
                     if (state.rows.size == NETWORK_ROW_LIMIT) InspectionMessage("Network keeps the latest $NETWORK_ROW_LIMIT observations.")
                 }
+                if (state.rows.isNotEmpty()) item(key = "activity") {
+                    TextButton(onClick = onOpenActivity, modifier = Modifier.testTag("network_open_activity")) { Text("Open in Activity") }
+                }
                 if (filters.expanded) item {
-                    InspectionSearch(filters.query, { update(filters.copy(query = it)) }, "Filter network observations", "network_search")
                     InspectionMessage("Combine method:GET with status-code:4xx. Filter further with resource-type:script, source:timing or path:/assets. Start a term with - to exclude it.")
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         ResourceType.entries.forEach { type ->
@@ -236,7 +241,7 @@ private fun NetworkDetails(row: BrowserRequestEvent, origin: String?, close: () 
     OutlinedTextField(text, { update(it.atCharacterBoundary(240)) }, label = { Text(label) }, singleLine = true,
         modifier = Modifier.fillMaxWidth().testTag(tag), keyboardOptions = TechnicalKeyboard.copy(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
-        trailingIcon = { if (text.isNotEmpty()) TextButton(onClick = { update("") }) { Text("Clear") } })
+        trailingIcon = { if (text.isNotEmpty()) TextButton(onClick = { update("") }, modifier = Modifier.testTag("${tag}_clear")) { Text("Clear") } })
 }
 
 @Composable internal fun InspectionMessage(message: String, modifier: Modifier = Modifier) {

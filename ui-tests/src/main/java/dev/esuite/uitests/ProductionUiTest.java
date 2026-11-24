@@ -111,7 +111,7 @@ public class ProductionUiTest extends NativeUiDriver {
 
     @Test public void browserCommandsCanFindSettingsAndReturnToTheBrowser() throws Exception {
         launch();
-        openCommandSearch().setText("VERSION");
+        openCommandSearch("VERSION");
         assertTrue(device.wait(Until.gone(By.res("command_app_browser")), 5000));
         clickExposedControl("command_app_settings");
         enter("settings_search", "license");
@@ -155,16 +155,16 @@ public class ProductionUiTest extends NativeUiDriver {
         launch();
         assertNotNull(find(By.res("browser_url")));
         assertFalse(device.hasObject(By.res("project_name")));
-        tag("browser_url").setText("example.com");
+        enterExposedText("browser_url", "example.com");
         clickExposedControl("browser_go");
         assertTrue("The live WebView never committed the fixture page",
                 device.wait(Until.hasObject(By.text("Example Domain")), 45000));
-        openCommandSearch().setText("/find");
+        openCommandSearch("/find");
         assertTrue("Exact /find should remove the /findings prefix match",
                 device.wait(Until.gone(By.res("command_app_findings")), 5000));
         clickExposedControl("command_app_find");
         // Exercise the on-screen Close action with the Find field still focused.
-        requireExposedControl("browser_find_query").setText("Example");
+        enterExposedText("browser_find_query", "Example");
         assertTrue("Find in page did not report matching text",
                 device.wait(Until.hasObject(By.res("browser_find_count").textStartsWith("1 of ")), 5000));
         clickExposedControl("browser_close_find");
@@ -241,9 +241,9 @@ public class ProductionUiTest extends NativeUiDriver {
         checkpoint("browser-standalone");
     }
 
-    private UiObject2 openCommandSearch() {
+    private void openCommandSearch(String query) {
         clickExposedControl("open_app_commands");
-        return requireExposedControl("command_search");
+        enterExposedText("command_search", query);
     }
 
     private UiObject2 requireExposedControl(String name) {
@@ -254,24 +254,42 @@ public class ProductionUiTest extends NativeUiDriver {
     }
 
     private void clickExposedControl(String name) {
-        click(name, () -> requireExposedControl(name), control ->
+        click(name, () -> {
+            if (!device.wait(Until.hasObject(By.res(name).enabled(true)), 5000)) {
+                fail("Expected an enabled " + name + " in " + device.getCurrentPackageName());
+            }
+        }, control ->
                 control != null && control.isEnabled() && !control.getVisibleBounds().isEmpty());
+    }
+
+    private void enterExposedText(String name, String value) {
+        clickExposedControl(name);
+        BySelector edited = By.res(name).text(value);
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                requireExposedControl(name).setText(value);
+                if (device.wait(Until.hasObject(edited), 1500)) return;
+            } catch (androidx.test.uiautomator.StaleObjectException ignored) {
+                // Reacquire the focused field after the window or keyboard lays out again.
+            }
+        }
+        fail("The " + name + " field did not retain the test input. Foreground package: " + device.getCurrentPackageName());
     }
 
     private void checkNetworkFilterSurvivesPanelSwitch() {
         clickExposedControl("network_filters");
-        requireExposedControl("network_search").setText("path:/esuite-native-filter-mismatch");
+        enterExposedText("network_search", "path:/esuite-native-filter-mismatch");
+        clickExposedControl("network_filters");
         BySelector empty = By.res("network_summary").textStartsWith("0 of ");
         assertTrue("The missing path should hide the observed rows", device.wait(Until.hasObject(empty), 5000));
-        clickExposedControl("network_filters");
         selectBrowserTool("viewport");
         selectBrowserTool("network");
         assertTrue("Network lost the filter when switching Developer Tools panels", device.wait(Until.hasObject(empty), 5000));
         clickExposedControl("network_filters");
-        requireExposedControl("network_search").setText("");
-        assertTrue("Clearing the search should restore the observed rows", device.wait(Until.gone(empty), 5000));
+        clickExposedControl("network_search_clear");
+        assertTrue("The search term was not cleared", device.wait(Until.gone(By.res("network_search_clear")), 5000));
         clickExposedControl("network_filters");
-        assertTrue(device.wait(Until.hasObject(By.res("network_event")), 5000));
+        assertTrue("Clearing the search should restore the observed rows", device.wait(Until.hasObject(By.res("network_event")), 5000));
     }
 
     private Rect pageBounds() {
