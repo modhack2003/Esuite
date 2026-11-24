@@ -8,6 +8,7 @@ import androidx.test.uiautomator.BySelector;
 import androidx.test.uiautomator.UiDevice;
 import androidx.test.uiautomator.UiObject2;
 import androidx.test.uiautomator.Until;
+import java.util.function.Predicate;
 import org.junit.Test;
 import org.junit.Before;
 import org.junit.Assume;
@@ -90,19 +91,23 @@ public abstract class NativeUiDriver {
         } catch(Exception error) { throw new AssertionError("Could not retain critical UI action evidence",error); }
     }
     protected void click(String name) {
+        click(name, () -> tag(name), this::usable);
+    }
+
+    protected void click(String name, Runnable reveal, Predicate<UiObject2> isVisible) {
         for (int attempt=0;attempt<5;attempt++) {
             try {
-                tag(name); // May scroll. Wait AFTER this lookup so a fling cannot swallow the click.
+                reveal.run(); // Wait after scrolling so a fling cannot swallow the click.
                 device.waitForIdle(2000);
                 UiObject2 current=device.findObject(By.res(name));
-                if(!usable(current)) continue;
+                if(!isVisible.test(current)) continue;
                 android.graphics.Rect before=current.getVisibleBounds();
                 android.os.SystemClock.sleep(250);
                 current=device.findObject(By.res(name));
-                if(!usable(current) || !before.equals(current.getVisibleBounds())) continue;
+                if(!isVisible.test(current) || !before.equals(current.getVisibleBounds())) continue;
                 actionEvidence(name);
                 current=device.findObject(By.res(name));
-                if(!usable(current) || !before.equals(current.getVisibleBounds())) continue;
+                if(!isVisible.test(current) || !before.equals(current.getVisibleBounds())) continue;
                 current.click();
                 device.waitForIdle(1000);
                 actionEvidence(name);

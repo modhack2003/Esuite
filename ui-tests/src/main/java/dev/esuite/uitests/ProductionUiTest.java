@@ -5,6 +5,7 @@ import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Rect;
 import android.os.SystemClock;
+import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.uiautomator.By;
 import androidx.test.uiautomator.BySelector;
 import androidx.test.uiautomator.UiObject2;
@@ -120,8 +121,7 @@ public class ProductionUiTest extends NativeUiDriver {
         growDock(device.getDisplayHeight() / 9);
         click("tools_tab_import");
         enter("tools_input", "curl --data 'first=one' --data 'second=two' https://example.test/staged");
-        revealUtilityControl(By.res("tools_prepare_curl"), true);
-        click("tools_prepare_curl");
+        clickUtilityControl("tools_prepare_curl");
         assertNotNull(device.wait(Until.findObject(By.res("tools_import_preview")), 5000));
         find(By.text("Cancel")).click();
         click("nav_api");
@@ -129,8 +129,7 @@ public class ProductionUiTest extends NativeUiDriver {
         assertFalse(device.hasObject(By.res("api_url").textContains("/staged")));
 
         click("nav_tools");
-        revealUtilityControl(By.res("tools_prepare_curl"), true);
-        click("tools_prepare_curl");
+        clickUtilityControl("tools_prepare_curl");
         click("tools_apply_import");
         assertTrue(waitText("tools_import_status", "Draft loaded in API Lab", 5000));
         click("nav_api");
@@ -282,6 +281,30 @@ public class ProductionUiTest extends NativeUiDriver {
             if (step < 8) scrollTools(step < 4 ? down : !down);
         }
         throw new AssertionError("Tools control not found: " + selector);
+    }
+
+    private void clickUtilityControl(String name) {
+        BySelector selector = By.res(name);
+        click(name, () -> revealUtilityAction(selector), this::utilityActionVisible);
+    }
+
+    private void revealUtilityAction(BySelector selector) {
+        for (int step = 0; step < 8; step++) {
+            if (utilityActionVisible(device.findObject(selector))) return;
+            scrollTools(step < 4);
+            device.waitForIdle(1000);
+        }
+        assertTrue("Action is outside the Tools viewport: " + selector, utilityActionVisible(device.findObject(selector)));
+    }
+
+    private boolean utilityActionVisible(UiObject2 button) {
+        UiObject2 content = device.findObject(By.res("tools_content"));
+        if (!usable(button) || content == null) return false;
+        Rect bounds = button.getVisibleBounds();
+        Rect viewport = content.getVisibleBounds();
+        int targetHeight = (int) (40 * InstrumentationRegistry.getInstrumentation()
+                .getContext().getResources().getDisplayMetrics().density);
+        return button.isEnabled() && bounds.height() >= targetHeight && viewport.contains(bounds);
     }
 
     private void scrollTools(boolean down) {
