@@ -118,6 +118,10 @@ public class ProductionUiTest extends NativeUiDriver {
         launch();
         openCommandSearch("VERSION");
         assertTrue(device.wait(Until.gone(By.res("command_app_browser")), 5000));
+        if (android.os.Build.VERSION.SDK_INT == 35) {
+            clickExposedControl("pin_command_app_settings");
+            assertTrue("Settings command should become pinned", device.wait(Until.hasObject(By.desc("Unpin Open Settings")), 5000));
+        }
         clickExposedControl("command_app_settings");
         enter("settings_search", "license");
         assertTrue(waitText("settings_version", "Version", 5000));
@@ -128,6 +132,14 @@ public class ProductionUiTest extends NativeUiDriver {
         device.pressBack();
         assertNotNull(tag("browser_url"));
         launch();
+        if (android.os.Build.VERSION.SDK_INT == 35) {
+            clickExposedControl("open_app_commands");
+            assertTrue("The pin should survive process restart", device.wait(Until.hasObject(By.desc("Unpin Open Settings")), 5000));
+            clickExposedControl("pin_command_app_settings");
+            assertTrue("Removing the pin should reveal the retained recent command", device.wait(Until.hasObject(By.text("Recent")), 5000));
+            assertNotNull(requireExposedControl("command_app_settings"));
+            clickExposedControl("close_command_palette");
+        }
         click("open_settings");
         enter("settings_search", "UTC");
         assertTrue("The UTC preference should survive restart", tag("settings_timestamps_utc").isChecked());

@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -52,6 +53,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.content.edit
 import dev.esuite.app.browser.BrowserProfiles
 import dev.esuite.app.browser.BrowserLogSnapshot
 import dev.esuite.app.browser.BrowserScreen
@@ -119,10 +121,10 @@ class MainActivity : ComponentActivity() {
             ESuiteTheme(appearance) {
                 ObservationDates(useUtc) {
                     ESuiteApp(model, appearance, motion,
-                        onAppearance = { appearance = it; preferences.edit().putString("theme", it.name).apply() },
-                        onMotion = { motion = it; preferences.edit().putBoolean("motion", it).apply() },
+                        onAppearance = { appearance = it; preferences.edit { putString("theme", it.name) } },
+                        onMotion = { motion = it; preferences.edit { putBoolean("motion", it) } },
                         useUtcTimestamps = useUtc,
-                        onUtcTimestamps = { useUtc = it; preferences.edit().putBoolean("timestamps_utc", it).apply() },
+                        onUtcTimestamps = { useUtc = it; preferences.edit { putBoolean("timestamps_utc", it) } },
                         onBrowserShortcut = { browserShortcut = it },
                         onCommandShortcut = { commandShortcut = it })
                 }
@@ -158,6 +160,8 @@ private enum class AppCommand(val label: String, val aliases: String, val screen
     Review("Review latest response", "/review passive checks response headers"),
 }
 
+private val appCommandIds = AppCommand.entries.map { it.name }.toSet()
+
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 internal fun ESuiteApp(
@@ -186,9 +190,22 @@ internal fun ESuiteApp(
     var review by remember { mutableStateOf<ReviewLaunch?>(null) }
     var finding by remember { mutableStateOf<FindingSeed?>(null) }
     var commands by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val commandPreferences = remember(context) { context.applicationContext.getSharedPreferences("app_commands", Context.MODE_PRIVATE) }
+    var commandUsage by remember(commandPreferences) {
+        mutableStateOf(CommandUsage.restore(commandPreferences.getString("pinned", "").orEmpty(),
+            commandPreferences.getString("recent", "").orEmpty(), appCommandIds))
+    }
     val screen = Screen.entries.firstOrNull { it.name == selectedName } ?: Screen.Browser
     val browserVisible = screen == Screen.Browser || screen == Screen.Tools
     val site = state.workspace.projects.firstOrNull { it.id == state.projectId }
+    fun saveCommandUsage(next: CommandUsage) {
+        commandUsage = next
+        commandPreferences.edit {
+            putString("pinned", next.pinned.joinToString(","))
+            putString("recent", next.recent.joinToString(","))
+        }
+    }
     fun navigate(next: Screen) {
         if (screen == Screen.Api && next != Screen.Settings && next != Screen.Api) requestReturnName = null
         selectedName = next.name
@@ -353,14 +370,20 @@ internal fun ESuiteApp(
         if (commands) {
             val latest = latestReviewableResponse(state.workspace, state.projectId, state.identity)
             SearchCommands(
-                items = AppCommand.entries.filter { it != AppCommand.Review || latest != null },
+                items = commandUsage.order(AppCommand.entries.filter { it != AppCommand.Review || latest != null }) { it.name },
                 id = { "app_${it.name.lowercase()}" },
                 label = AppCommand::label,
                 search = { "${it.label} ${it.aliases}" },
                 dialogTag = "app_command_palette",
                 close = { commands = false },
+                controls = CommandControls(
+                    pinned = { it.name in commandUsage.pinned },
+                    recent = { it.name in commandUsage.recent },
+                    togglePin = { saveCommandUsage(commandUsage.togglePin(it.name, appCommandIds)) },
+                ),
             ) { command ->
                 commands = false
+                saveCommandUsage(commandUsage.record(command.name, appCommandIds))
                 if (command == AppCommand.Find) findInPageRequest++
                 when (val target = command.screen) {
                     null -> latest?.let { openReview(listOf(it), ResponseCheck.Quick) }

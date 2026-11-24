@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.style.TextOverflow
@@ -17,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.esuite.app.AppViewModel
+import dev.esuite.app.R
 import dev.esuite.app.browser.BrowserLogSnapshot
 import dev.esuite.app.core.*
 import kotlinx.coroutines.Dispatchers
@@ -63,6 +65,8 @@ internal fun CommandPalette(close: () -> Unit, choose: (AssessmentCommand) -> Un
     )
 }
 
+internal data class CommandControls<T>(val pinned: (T) -> Boolean, val recent: (T) -> Boolean, val togglePin: (T) -> Unit)
+
 @Composable
 internal fun <T> SearchCommands(
     items: List<T>,
@@ -71,26 +75,50 @@ internal fun <T> SearchCommands(
     search: (T) -> String,
     dialogTag: String,
     close: () -> Unit,
+    controls: CommandControls<T>? = null,
     choose: (T) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
     val matching = matchingCommands(items, query, search)
+    val hasGroups = query.isBlank() && controls != null && matching.any { controls.pinned(it) || controls.recent(it) }
+    val groups: Map<String?, List<T>> = if (hasGroups && controls != null) matching.groupBy {
+        when {
+            controls.pinned(it) -> "Pinned"
+            controls.recent(it) -> "Recent"
+            else -> "All commands"
+        }
+    } else mapOf(null to matching)
     WorkflowDialog("Commands", close, dialogTag, fitKeyboard = true) {
         LazyColumn(Modifier.weight(1f).testTag("command_list")) {
             item {
-                OutlinedTextField(query, { query = it.take(80) }, label = { Text("Find a command") }, singleLine = true,
+                OutlinedTextField(query, { query = it.atCharacterBoundary(80) }, label = { Text("Find a command") }, singleLine = true,
                     keyboardOptions = TechnicalKeyboard.copy(imeAction = ImeAction.Go),
                     keyboardActions = KeyboardActions(onGo = { matching.singleOrNull()?.let(choose) }),
                     modifier = Modifier.fillMaxWidth().testTag("command_search"))
             }
             if (matching.isEmpty()) item { Text("No commands match.") }
-            items(matching, key = id) { command ->
-                TextButton(onClick = { choose(command) }, modifier = Modifier.fillMaxWidth().testTag("command_${id(command)}")) {
-                    Text(label(command), Modifier.fillMaxWidth())
+            groups.forEach { (group, choices) ->
+                if (group != null) item(key = "group:$group") {
+                    Text(group, Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.titleSmall)
+                }
+                items(choices, key = id) { command ->
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { choose(command) }, modifier = Modifier.weight(1f).testTag("command_${id(command)}")) {
+                            Text(label(command), Modifier.fillMaxWidth())
+                        }
+                        if (controls != null) {
+                            val pinned = controls.pinned(command)
+                            IconToggleButton(pinned, { controls.togglePin(command) }, modifier = Modifier.testTag("pin_command_${id(command)}")) {
+                                Icon(painterResource(R.drawable.ic_bookmark_outline),
+                                    contentDescription = "${if (pinned) "Unpin" else "Pin"} ${label(command)}",
+                                    tint = if (pinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
                 }
             }
         }
-        TextButton(onClick = close, modifier = Modifier.align(Alignment.End)) { Text("Close") }
+        TextButton(onClick = close, modifier = Modifier.align(Alignment.End).testTag("close_command_palette")) { Text("Close") }
     }
 }
 
