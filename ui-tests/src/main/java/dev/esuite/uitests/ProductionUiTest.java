@@ -152,7 +152,7 @@ public class ProductionUiTest extends NativeUiDriver {
         assertNotNull(find(By.res("browser_url")));
         assertFalse(device.hasObject(By.res("project_name")));
         tag("browser_url").setText("example.com");
-        click("browser_go");
+        clickExposedControl("browser_go");
         assertTrue("The live WebView never committed the fixture page",
                 device.wait(Until.hasObject(By.text("Example Domain")), 45000));
         openCommandSearch().setText("/find");
@@ -163,7 +163,10 @@ public class ProductionUiTest extends NativeUiDriver {
         requireExposedControl("browser_find_query").setText("Example");
         assertTrue("Find in page did not report matching text",
                 device.wait(Until.hasObject(By.res("browser_find_count").textStartsWith("1 of ")), 5000));
-        click("browser_close_find");
+        clickExposedControl("browser_close_find");
+        assertTrue("Closing Find in page should keep the loaded page in the foreground",
+                device.wait(Until.hasObject(By.text("Example Domain")), 5000));
+        assertTrue("Find in page is still open", device.wait(Until.gone(By.res("browser_find_query")), 5000));
         Rect full = pageBounds();
         click("browser_tools");
         Rect split = pageBounds();
@@ -234,7 +237,7 @@ public class ProductionUiTest extends NativeUiDriver {
     }
 
     private UiObject2 openCommandSearch() {
-        click("open_app_commands");
+        clickExposedControl("open_app_commands");
         return requireExposedControl("command_search");
     }
 
