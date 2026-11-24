@@ -19,7 +19,8 @@ class SelectedObservationReportTest {
             response = StoredBody("private-response", truncated = true), completeness = "private-description")
         val foreignExchange = exchange.copy(id = "foreign-evidence", projectId = otherProject.id)
         val finding = Finding(projectId = project.id, title = "private title", detail = "private note",
-            evidenceIds = listOf(exchange.id, "missing", foreignExchange.id), evidence = listOf(exchange, foreignExchange))
+            evidenceIds = listOf(exchange.id, "missing", foreignExchange.id), evidence = listOf(exchange, foreignExchange),
+            triage = FindingTriage(FindingSeverity.High, FindingConfidence.Medium, FindingStatus.Retest))
         val otherFinding = finding.copy(id = "other-note", projectId = otherProject.id)
         val workspace = Workspace(projects = listOf(project, otherProject), findings = listOf(finding, otherFinding))
 
@@ -29,6 +30,8 @@ class SelectedObservationReportTest {
         assertFalse(report.contains(otherFinding.id))
         val fields = Json.parseToJsonElement(report).jsonObject
         assertEquals(finding.id, fields.getValue("observationId").jsonPrimitive.content)
+        val triage = fields.getValue("triage").jsonObject.mapValues { it.value.jsonPrimitive.content }
+        assertEquals(mapOf("severity" to "High", "confidence" to "Medium", "status" to "Ready for retest"), triage)
         val evidence = fields.getValue("evidence").jsonArray.map { it.jsonObject }
         assertEquals("OTHER", evidence[0].getValue("method").jsonPrimitive.content)
         assertEquals("Other", evidence[0].getValue("source").jsonPrimitive.content)
@@ -39,6 +42,7 @@ class SelectedObservationReportTest {
 
         val markdown = requireNotNull(ReportExporter.selectedObservationMarkdown(workspace, project.id, finding.id))
         assertTrue(markdown.startsWith("# ESuite observation"))
+        assertTrue(markdown.contains("Status · Ready for retest"))
         assertTrue(markdown.contains("Clipped"))
         assertTrue(markdown.contains("| missing | Missing |"))
         assertFalse(markdown.contains("private"))

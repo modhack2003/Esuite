@@ -495,9 +495,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
             return false
         }
         return admitDurable("Observation added. Check the save status for confirmation.") { workspace ->
-            require(title.isNotBlank() && title.length <= 200 && detail.isNotBlank() && detail.length <= 16000) {
-                "Use a title between 1 and 200 characters and notes between 1 and 16,000 characters."
-            }
+            validateFindingText(title, detail)
             require(workspace.findings.size < Limits.FINDINGS) { "Observation limit reached. Remove a saved observation before adding one." }
             require(workspace.findings.none { it.id == findingId }) { "This observation was already added." }
             require(evidence.size <= Limits.HISTORY && evidence.map(Exchange::id).distinct().size == evidence.size) {
@@ -515,6 +513,30 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
             workspace.copy(findings = listOf(finding) + workspace.findings)
         }
     }
+
+    suspend fun editFinding(original: Finding, title: String, detail: String, triage: FindingTriage): Boolean {
+        val site = currentProject() ?: return false
+        return admitDurable("Observation updated. Check the save status for confirmation.") { workspace ->
+            validateFindingText(title, detail)
+            val current = requireNotNull(workspace.findings.firstOrNull { it.id == original.id && it.projectId == site.id }) {
+                "This observation is no longer available in the current site."
+            }
+            require(current.title == original.title && current.detail == original.detail && current.triage == original.triage) {
+                "The observation changed. Close the editor and reopen it to review the latest version."
+            }
+            workspace.copy(findings = workspace.findings.map {
+                if (it.id == current.id) current.copy(title = title, detail = detail, triage = triage) else it
+            })
+        }
+    }
+
+    private fun validateFindingText(title: String, detail: String) {
+        require(title.isNotBlank() && title.length <= Limits.FINDING_TITLE_CHARS &&
+            detail.isNotBlank() && detail.length <= Limits.FINDING_NOTE_CHARS) {
+            "Use a title between 1 and 200 characters and notes between 1 and 16,000 characters."
+        }
+    }
+
     fun deleteSavedRequest(id: String) { mutable.update { it.copy(workspace = it.workspace.copy(savedRequests = it.workspace.savedRequests.filterNot { r -> r.id == id })) }; persistDurable() }
     fun deleteFinding(id: String) { mutable.update { it.copy(workspace = it.workspace.copy(findings = it.workspace.findings.filterNot { f -> f.id == id })) }; persistDurable() }
 

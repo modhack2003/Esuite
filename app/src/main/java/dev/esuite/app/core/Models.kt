@@ -30,7 +30,28 @@ import java.util.UUID
     val state: String = "Observation", val timestamp: Long = System.currentTimeMillis(),
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val evidenceRequestBodies: Map<String, EvidenceRequestBody> = emptyMap(),
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val triage: FindingTriage = FindingTriage(),
 )
+
+@Serializable data class FindingTriage(
+    val severity: FindingSeverity = FindingSeverity.Unrated,
+    val confidence: FindingConfidence = FindingConfidence.Unrated,
+    val status: FindingStatus = FindingStatus.Open,
+)
+
+@Serializable enum class FindingSeverity(val label: String) {
+    Unrated("Unrated"), Informational("Informational"), Low("Low"), Medium("Medium"), High("High"), Critical("Critical"),
+}
+
+@Serializable enum class FindingConfidence(val label: String) {
+    Unrated("Unrated"), Low("Low"), Medium("Medium"), High("High"),
+}
+
+@Serializable enum class FindingStatus(val label: String) {
+    Open("Open"), Investigating("Investigating"), Retest("Ready for retest"), Resolved("Resolved"),
+}
+
 @Serializable
 enum class EvidenceRequestBody { Complete, Clipped, Unknown, Unavailable }
 @Serializable data class SavedRequest(val id: String = UUID.randomUUID().toString(), val projectId: String, val name: String, val draft: RequestDraft)
@@ -47,6 +68,8 @@ object Limits {
     const val RESPONSE_BYTES = 256 * 1024
     const val HISTORY = 100
     const val FINDINGS = 200
+    const val FINDING_TITLE_CHARS = 200
+    const val FINDING_NOTE_CHARS = 16_000
     const val EVIDENCE_BYTES = 16 * 1024
     const val VAULT_BYTES = 32 * 1024 * 1024
 }

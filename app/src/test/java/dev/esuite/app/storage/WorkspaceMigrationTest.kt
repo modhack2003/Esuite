@@ -91,6 +91,7 @@ class WorkspaceMigrationTest {
                 evidenceIds = listOf(source.id), evidence = listOf(snapshot))))
         val serialized = json.encodeToString(old)
         assertFalse(serialized.contains("evidenceRequestBodies"))
+        assertFalse(serialized.contains("\"triage\""))
 
         val migrated = WorkspaceSchema.migrate(serialized)
         assertEquals(old.copy(version = 4), migrated)
@@ -105,7 +106,8 @@ class WorkspaceMigrationTest {
         val current = Workspace(projects = listOf(p), exchanges = listOf(snapshot),
             findings = listOf(Finding(id = "f-v3", projectId = p.id, title = "t", detail = "d",
                 evidenceIds = listOf(snapshot.id), evidence = listOf(snapshot), timestamp = 4_000L,
-                evidenceRequestBodies = mapOf(snapshot.id to EvidenceRequestBody.Complete))))
+                evidenceRequestBodies = mapOf(snapshot.id to EvidenceRequestBody.Complete),
+                triage = FindingTriage(FindingSeverity.High, FindingConfidence.Medium, FindingStatus.Retest))))
         val document = VaultCipher.open(VaultCipher.seal(json.encodeToString(current).toByteArray(), key), key).toString(Charsets.UTF_8)
         assertEquals(current, WorkspaceSchema.migrate(document))
     }

@@ -51,7 +51,8 @@ internal fun FindingsScreen(state: AppState, model: AppViewModel, project: Proje
     val visible = remember(findings, filter) {
         val query = filter.trim()
         if (query.isEmpty()) findings else findings.filter { finding ->
-            finding.title.contains(query, ignoreCase = true) || finding.detail.contains(query, ignoreCase = true)
+            finding.title.contains(query, ignoreCase = true) || finding.detail.contains(query, ignoreCase = true) ||
+                finding.triage.summary().contains(query, ignoreCase = true)
         }
     }
 
@@ -124,6 +125,7 @@ internal fun FindingsScreen(state: AppState, model: AppViewModel, project: Proje
                         Text(finding.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(finding.detail, style = MaterialTheme.typography.bodySmall, color = Muted,
                             maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        if (finding.triage != FindingTriage()) Text(finding.triage.summary(), style = MaterialTheme.typography.labelMedium)
                         if (finding.evidenceIds.isNotEmpty()) {
                             val missing = EvidenceRetention.missing(finding).size
                             val label = when (missing) {
@@ -154,6 +156,11 @@ internal fun FindingsScreen(state: AppState, model: AppViewModel, project: Proje
 
     findings.firstOrNull { it.id == selectedId }?.let { finding ->
         var remove by remember(finding.id) { mutableStateOf(false) }
+        var editing by remember(finding.id) { mutableStateOf(false) }
+        if (editing) {
+            EditFindingDialog(finding, model) { editing = false }
+            return@let
+        }
         AlertDialog(
             onDismissRequest = { selectedId = null },
             title = { Text("Observation") },
@@ -161,6 +168,9 @@ internal fun FindingsScreen(state: AppState, model: AppViewModel, project: Proje
                 Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Panel(finding.title, finding.detail)
+                    Text("Recorded ${observedAt(finding.timestamp)}", style = MaterialTheme.typography.bodySmall)
+                    Text(finding.triage.summary(), style = MaterialTheme.typography.labelMedium)
+                    OutlinedButton(onClick = { editing = true }, modifier = Modifier.testTag("finding_edit")) { Text("Edit observation") }
                     FindingEvidence(finding, evidenceOptions,
                         replay = { evidenceId -> if (model.replayFindingEvidence(finding.id, evidenceId)) openApi() },
                         remove = { evidenceId -> model.removeEvidence(finding.id, evidenceId) },
@@ -181,6 +191,81 @@ internal fun FindingsScreen(state: AppState, model: AppViewModel, project: Proje
             confirmButton = { TextButton(onClick = { remove = false; selectedId = null; model.deleteFinding(finding.id) }) { Text("Remove") } },
             dismissButton = { TextButton(onClick = { remove = false }) { Text("Keep") } },
         )
+    }
+}
+
+private fun FindingTriage.summary(): String = buildList {
+    add(status.label)
+    if (severity != FindingSeverity.Unrated) add("${severity.label} severity")
+    if (confidence != FindingConfidence.Unrated) add("${confidence.label} confidence")
+}.joinToString(" · ")
+
+@Composable
+private fun EditFindingDialog(finding: Finding, model: AppViewModel, close: () -> Unit) {
+    val original = remember(finding.id) { finding }
+    var title by remember { mutableStateOf(original.title) }
+    var detail by remember { mutableStateOf(original.detail) }
+    var triage by remember { mutableStateOf(original.triage) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var titleOverflow by remember { mutableStateOf(false) }
+    var noteOverflow by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val validTitle = !titleOverflow && title.isNotBlank() && title.length <= Limits.FINDING_TITLE_CHARS
+    val validDetail = !noteOverflow && detail.isNotBlank() && detail.length <= Limits.FINDING_NOTE_CHARS
+    WorkflowDialog("Edit observation", close = { if (!saving) close() }, tag = "finding_edit_dialog") {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(title, {
+                titleOverflow = it.length > Limits.FINDING_TITLE_CHARS
+                if (!titleOverflow) title = it
+                error = null
+            }, label = { Text("Observation title") }, isError = !validTitle, enabled = !saving, singleLine = true,
+                modifier = Modifier.fillMaxWidth().testTag("finding_edit_title"))
+            OutlinedTextField(detail, {
+                noteOverflow = it.length > Limits.FINDING_NOTE_CHARS
+                if (!noteOverflow) detail = it
+                error = null
+            }, label = { Text("Notes") }, isError = !validDetail, enabled = !saving, minLines = 2, maxLines = 8,
+                modifier = Modifier.fillMaxWidth().testTag("finding_edit_notes"))
+            if (!validTitle || !validDetail) Text("Use 1–200 characters for the title and 1–16,000 for notes.",
+                color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            FindingTriageMenu("Severity", FindingSeverity.entries, triage.severity, FindingSeverity::label, !saving) {
+                triage = triage.copy(severity = it)
+            }
+            FindingTriageMenu("Confidence", FindingConfidence.entries, triage.confidence, FindingConfidence::label, !saving) {
+                triage = triage.copy(confidence = it)
+            }
+            FindingTriageMenu("Status", FindingStatus.entries, triage.status, FindingStatus::label, !saving) {
+                triage = triage.copy(status = it)
+            }
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = close, enabled = !saving) { Text("Cancel") }
+            Button(onClick = {
+                saving = true
+                error = null
+                scope.launch {
+                    try {
+                        if (model.editFinding(original, title, detail, triage)) close()
+                        else error = model.state.value.message.ifBlank { "The observation could not be updated." }
+                    } finally { saving = false }
+                }
+            }, enabled = validTitle && validDetail && !saving, modifier = Modifier.testTag("finding_edit_save")) {
+                Text(if (saving) "Saving…" else "Save changes")
+            }
+        }
+    }
+}
+
+@Composable
+private fun <T> FindingTriageMenu(title: String, options: List<T>, selected: T, label: (T) -> String, enabled: Boolean, choose: (T) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(onClick = { expanded = true }, enabled = enabled) { Text("$title · ${label(selected)}") }
+        DropdownMenu(expanded, { expanded = false }) {
+            options.forEach { option -> DropdownMenuItem(text = { Text(label(option)) }, onClick = { choose(option); expanded = false }) }
+        }
     }
 }
 

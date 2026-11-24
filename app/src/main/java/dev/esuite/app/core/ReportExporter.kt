@@ -43,6 +43,11 @@ object ReportExporter {
             appendLine("- Origin · ${markdownText(report.getValue("origin").jsonPrimitive.content)}")
             appendLine("- Observation ID · ${markdownText(report.getValue("observationId").jsonPrimitive.content)}")
             appendLine("- Recorded at · ${Instant.ofEpochMilli(report.getValue("recordedAtEpochMs").jsonPrimitive.long)}")
+            report["triage"]?.jsonObject?.let { triage ->
+                appendLine("- Severity · ${markdownText(triage.getValue("severity").jsonPrimitive.content)}")
+                appendLine("- Confidence · ${markdownText(triage.getValue("confidence").jsonPrimitive.content)}")
+                appendLine("- Status · ${markdownText(triage.getValue("status").jsonPrimitive.content)}")
+            }
             appendLine()
             appendLine("## Evidence")
             appendLine()
@@ -82,6 +87,11 @@ object ReportExporter {
             put("origin", project.origin)
             put("observationId", finding.id)
             put("recordedAtEpochMs", finding.timestamp)
+            if (finding.triage != FindingTriage()) put("triage", buildJsonObject {
+                put("severity", finding.triage.severity.label)
+                put("confidence", finding.triage.confidence.label)
+                put("status", finding.triage.status.label)
+            })
             put("evidence", buildJsonArray {
                 finding.evidenceIds.forEach { id ->
                     val snapshot = snapshots[id]

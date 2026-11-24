@@ -74,6 +74,15 @@ class DeviceBoundaryTest {
                 assertFalse(model.restoreFindingEvidence(finding.id, long.id))
                 assertEquals(finding, model.state.value.workspace.findings.single())
 
+                val triage = FindingTriage(FindingSeverity.Medium, FindingConfidence.High, FindingStatus.Retest)
+                assertTrue(model.editFinding(finding, "Updated title", "Updated notes", triage))
+                val updated = finding.copy(title = "Updated title", detail = "Updated notes", triage = triage)
+                assertEquals(updated, model.state.value.workspace.findings.single())
+                assertFalse(model.editFinding(finding, "Stale title", "Stale notes", FindingTriage()))
+                assertEquals(updated, model.state.value.workspace.findings.single())
+                assertTrue(model.saveWorkspace())
+                assertEquals(updated, model.state.value.persistedWorkspace?.findings?.single())
+
                 model.clearHistory()
                 model.replaceDraft(RequestDraft(url = site.origin + "/keep"))
                 assertFalse(model.replayFindingEvidence(finding.id, long.id))
