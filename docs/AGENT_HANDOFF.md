@@ -60,6 +60,8 @@ The Network checkpoint showed a clipped filter field in the small Android dock. 
 
 The compact follow-up still lost the Network filter field or clear action during keyboard changes and put Open in Activity against the viewport edge. A dedicated dialog now stages edits until Apply. Network keeps its full list in the dock and has an always-positioned Open in Activity toolbar action that enables when observations are available. The native checks exercise apply, panel switching, clearing and the Activity handoff. [Compact follow-up](https://github.com/modhack2003/Esuite/actions/runs/45370137855)
 
+The Android 10 filter-dialog failure hierarchy showed the keyboard occupying the Apply button region. The tap added a character to the search text. The filter and finding-edit dialogs now size their scrolling body within the keyboard insets and keep actions outside that scroll. [Filter dialog checkpoint](https://github.com/modhack2003/Esuite/actions/runs/45373915872)
+
 ## 1.0.9 Activity and passive review
 
 Activity combines stored HTTP exchanges with an explicitly imported, in-memory Browser Network snapshot. Source labels preserve the distinction between callbacks, timings and captured responses. Site Map uses complete observed paths and exact site scope. Quick response review shares one rule engine with API Lab, Tools and Findings. Review results can attach the selected exchange as immutable encrypted evidence. The device harness covers Browser handoff, Site Map, review, finding save and evidence retention after history clearing. The upgrade baseline is the published 1.0.8 APK.

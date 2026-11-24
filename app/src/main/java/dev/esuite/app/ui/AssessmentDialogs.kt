@@ -30,15 +30,23 @@ internal enum class AssessmentCommand(val shortcut: String, val label: String) {
 
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
-internal fun WorkflowDialog(title: String, close: () -> Unit, tag: String, content: @Composable ColumnScope.() -> Unit) {
-    Dialog(onDismissRequest = close, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.widthIn(max = 720.dp).fillMaxWidth(.96f).fillMaxHeight(.92f)
+internal fun WorkflowDialog(title: String, close: () -> Unit, tag: String, fitKeyboard: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val frame = if (fitKeyboard) Modifier.widthIn(max = 520.dp).heightIn(max = 560.dp) else Modifier.widthIn(max = 720.dp)
+    val surface: @Composable () -> Unit = {
+        Surface(frame.fillMaxWidth(.96f).fillMaxHeight(.92f)
             .semantics { testTagsAsResourceId = true }.testTag(tag), shape = MaterialTheme.shapes.large) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(title, style = MaterialTheme.typography.titleLarge)
                 content()
             }
         }
+    }
+    Dialog(onDismissRequest = close, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = !fitKeyboard)) {
+        if (fitKeyboard) {
+            Box(Modifier.fillMaxSize().safeDrawingPadding().imePadding(), contentAlignment = Alignment.Center) { surface() }
+        } else surface()
     }
 }
 

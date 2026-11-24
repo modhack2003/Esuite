@@ -24,13 +24,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.esuite.app.R
 import dev.esuite.app.ui.TechnicalKeyboard
+import dev.esuite.app.ui.WorkflowDialog
 import dev.esuite.app.core.atCharacterBoundary
 import dev.esuite.app.ui.observedAt
 import dev.esuite.app.ui.technicalTextStyle
@@ -143,32 +142,31 @@ internal fun NetworkPanel(state: BrowserNetworkState, filters: NetworkFilters, u
     }
 }
 
-@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 private fun NetworkFilterDialog(initial: NetworkFilters, observedMethods: List<String>, close: () -> Unit, apply: (NetworkFilters) -> Unit) {
     var filters by remember { mutableStateOf(initial) }
     val methods = remember(observedMethods, initial.method) {
         (observedMethods + listOfNotNull(initial.method?.takeIf(String::isNotEmpty))).distinct().sorted()
     }
-    AlertDialog(onDismissRequest = close, modifier = Modifier.semantics { testTagsAsResourceId = true }.testTag("network_filter_dialog"),
-        title = { Text("Network filters") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                InspectionSearch(filters.query, { filters = filters.copy(query = it) }, "Filter network observations", "network_search")
-                InspectionMessage("Combine method:GET with status-code:4xx. Filter further with resource-type:script, source:timing or path:/assets. Start a term with - to exclude it.")
-                NetworkFilterChoices(ResourceType.entries, filters.type, ResourceType::label) { filters = filters.copy(type = it) }
-                NetworkFilterChoices(StatusFilter.entries, filters.status, StatusFilter::label) { filters = filters.copy(status = it) }
-                NetworkFilterChoices(NetworkSource.entries, filters.source, NetworkSource::label) { filters = filters.copy(source = it) }
-                NetworkFilterChoices(listOf(null) + methods + "", filters.method, {
-                    when (it) { null -> "All methods"; "" -> "Method unavailable"; else -> it }
-                }) { filters = filters.copy(method = it) }
-                NetworkFilterChoices(NetworkOrder.entries, filters.order, NetworkOrder::label) { filters = filters.copy(order = it) }
-                FilterChip(filters.waterfall, { filters = filters.copy(waterfall = !filters.waterfall) }, { Text("Waterfall") })
-                ResetNetworkFilters { filters = filters.reset() }
-            }
-        },
-        confirmButton = { Button(onClick = { apply(filters) }, modifier = Modifier.testTag("network_apply_filters")) { Text("Apply") } },
-        dismissButton = { TextButton(onClick = close) { Text("Cancel") } })
+    WorkflowDialog("Network filters", close, "network_filter_dialog", fitKeyboard = true) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            InspectionSearch(filters.query, { filters = filters.copy(query = it) }, "Filter network observations", "network_search")
+            InspectionMessage("Combine method:GET with status-code:4xx. Filter further with resource-type:script, source:timing or path:/assets. Start a term with - to exclude it.")
+            NetworkFilterChoices(ResourceType.entries, filters.type, ResourceType::label) { filters = filters.copy(type = it) }
+            NetworkFilterChoices(StatusFilter.entries, filters.status, StatusFilter::label) { filters = filters.copy(status = it) }
+            NetworkFilterChoices(NetworkSource.entries, filters.source, NetworkSource::label) { filters = filters.copy(source = it) }
+            NetworkFilterChoices(listOf(null) + methods + "", filters.method, {
+                when (it) { null -> "All methods"; "" -> "Method unavailable"; else -> it }
+            }) { filters = filters.copy(method = it) }
+            NetworkFilterChoices(NetworkOrder.entries, filters.order, NetworkOrder::label) { filters = filters.copy(order = it) }
+            FilterChip(filters.waterfall, { filters = filters.copy(waterfall = !filters.waterfall) }, { Text("Waterfall") })
+            ResetNetworkFilters { filters = filters.reset() }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = close) { Text("Cancel") }
+            Button(onClick = { apply(filters) }, modifier = Modifier.testTag("network_apply_filters")) { Text("Apply") }
+        }
+    }
 }
 
 @Composable

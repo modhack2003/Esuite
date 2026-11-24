@@ -213,7 +213,7 @@ private fun EditFindingDialog(finding: Finding, model: AppViewModel, close: () -
     val scope = rememberCoroutineScope()
     val validTitle = !titleOverflow && title.isNotBlank() && title.length <= Limits.FINDING_TITLE_CHARS
     val validDetail = !noteOverflow && detail.isNotBlank() && detail.length <= Limits.FINDING_NOTE_CHARS
-    WorkflowDialog("Edit observation", close = { if (!saving) close() }, tag = "finding_edit_dialog") {
+    WorkflowDialog("Edit observation", close = { if (!saving) close() }, tag = "finding_edit_dialog", fitKeyboard = true) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(title, {
                 titleOverflow = it.length > Limits.FINDING_TITLE_CHARS
