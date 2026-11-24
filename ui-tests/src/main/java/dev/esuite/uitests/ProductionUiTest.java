@@ -107,8 +107,7 @@ public class ProductionUiTest extends NativeUiDriver {
 
     @Test public void browserCommandsCanFindSettingsAndReturnToTheBrowser() throws Exception {
         launch();
-        click("open_app_commands");
-        tag("command_search").setText("VERSION");
+        openCommandSearch().setText("VERSION");
         assertTrue(device.wait(Until.gone(By.res("command_app_browser")), 5000));
         click("command_app_settings");
         enter("settings_search", "license");
@@ -152,16 +151,16 @@ public class ProductionUiTest extends NativeUiDriver {
         launch();
         assertNotNull(find(By.res("browser_url")));
         assertFalse(device.hasObject(By.res("project_name")));
-        enter("browser_url", "example.com"); click("browser_go");
+        tag("browser_url").setText("example.com");
+        click("browser_go");
         assertTrue("The live WebView never committed the fixture page",
                 device.wait(Until.hasObject(By.text("Example Domain")), 45000));
-        click("open_app_commands");
-        tag("command_search").setText("/find");
+        openCommandSearch().setText("/find");
         assertTrue("Exact /find should remove the /findings prefix match",
                 device.wait(Until.gone(By.res("command_app_findings")), 5000));
         click("command_app_find");
         // Exercise the on-screen Close action with the Find field still focused.
-        tag("browser_find_query").setText("Example");
+        requireExposedControl("browser_find_query").setText("Example");
         assertTrue("Find in page did not report matching text",
                 device.wait(Until.hasObject(By.res("browser_find_count").textStartsWith("1 of ")), 5000));
         click("browser_close_find");
@@ -232,6 +231,18 @@ public class ProductionUiTest extends NativeUiDriver {
         click("browser_go");
         assertNotNull(find(By.textContains("Enter an HTTPS address")));
         checkpoint("browser-standalone");
+    }
+
+    private UiObject2 openCommandSearch() {
+        click("open_app_commands");
+        return requireExposedControl("command_search");
+    }
+
+    private UiObject2 requireExposedControl(String name) {
+        // These fields have fixed positions. Scrolling the app or system edge would change the state under test.
+        UiObject2 control = device.wait(Until.findObject(By.res(name)), 5000);
+        assertNotNull("Expected " + name + " in the foreground, found " + device.getCurrentPackageName(), control);
+        return control;
     }
 
     private Rect pageBounds() {
