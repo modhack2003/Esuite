@@ -75,7 +75,7 @@ internal fun <T> SearchCommands(
 ) {
     var query by remember { mutableStateOf("") }
     val matching = matchingCommands(items, query, search)
-    WorkflowDialog("Commands", close, dialogTag) {
+    WorkflowDialog("Commands", close, dialogTag, fitKeyboard = true) {
         LazyColumn(Modifier.weight(1f).testTag("command_list")) {
             item {
                 OutlinedTextField(query, { query = it.take(80) }, label = { Text("Find a command") }, singleLine = true,

@@ -102,8 +102,12 @@ public class ProductionUiTest extends NativeUiDriver {
         openSite("https://example.test");
         click("api_tab_collection");
         click("api_raw_toggle");
+        enterExposedText("api_raw_input", "Invalid request");
+        clickExposedControl("api_raw_import");
+        assertTrue("Invalid input should stay editable in the import dialog", device.wait(Until.hasObject(By.res("api_raw_error")), 5000));
+        assertTrue(device.hasObject(By.res("api_raw_dialog")));
         String body = "first line\r\nsecond line\nthird line";
-        requireExposedControl("api_raw_input").setText("POST /fixture HTTP/1.1\r\nHost: example.test\r\nX-Label: kept\r\n\r\n" + body);
+        enterExposedText("api_raw_input", "POST /fixture HTTP/1.1\r\nHost: example.test\r\nX-Label: kept\r\n\r\n" + body);
         clickExposedControl("api_raw_import");
         assertTrue(waitText("api_url", "https://example.test/fixture", 5000));
         assertTrue(waitText("api_body", body, 5000));
