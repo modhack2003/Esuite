@@ -1,5 +1,7 @@
 package dev.esuite.uitests;
 
+import android.os.SystemClock;
+
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.uiautomator.By;
 import androidx.test.uiautomator.UiObject2;
@@ -71,7 +73,7 @@ public final class BrowserKeyboardUiTest extends NativeUiDriver {
         }
     }
 
-    private void enterInPage(int position, String field, boolean paste) {
+    private void enterInPage(int position, String field, boolean paste) throws Exception {
         // Chromium exposes placeholders as accessibility hints, which UiAutomator cannot query.
         UiObject2 webPage = findWebForm();
         assertNotNull("Website form is missing", webPage);
@@ -81,11 +83,21 @@ public final class BrowserKeyboardUiTest extends NativeUiDriver {
         if (input == null && fields.size() > position) input = fields.get(position);
         assertNotNull("Website editor is missing: " + field, input);
         input.click();
-        UiObject2 key = device.wait(Until.findObject(By.text(paste ? "Paste fixture text" : "Type fixture text")), 8_000);
-        assertNotNull("Tapping the website " + field + " field did not open the software keyboard", key);
+        String keyLabel = paste ? "Paste fixture text" : "Type fixture text";
+        assertTrue("Tapping the website " + field + " field did not open the software keyboard",
+                device.wait(Until.hasObject(By.text(keyLabel)), 8_000));
+        device.waitForIdle(2_000);
+        // Wait out the IME window transition and reacquire the key at its settled position.
+        SystemClock.sleep(250);
+        UiObject2 key = device.wait(Until.findObject(By.text(keyLabel).clickable(true)), 5_000);
+        assertNotNull("Keyboard action was not available for " + field, key);
         key.click();
-        assertTrue("The DOM did not receive committed text for " + field,
-                device.wait(Until.hasObject(By.text("Received " + field)), 8_000));
+        if (!device.wait(Until.hasObject(By.text("Received " + field)), 15_000)) {
+            checkpoint("website-ime-commit-" + field);
+            String connectionState = device.executeShellCommand("logcat -d -t 30 -s ESuiteFixtureIme:I");
+            fail("The DOM did not report committed text for " + field + " on " + device.getCurrentPackageName()
+                    + "\n" + connectionState);
+        }
         device.pressBack();
         assertTrue("Keyboard stayed open", device.wait(Until.gone(By.text("Type fixture text")), 5_000));
     }

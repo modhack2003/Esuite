@@ -42,6 +42,8 @@ The raw-import branch checkpoint passed eight Android configurations, including 
 
 The dock follow-up passed APIs 29 and 32. API 33's page-find test returned to the launcher with an empty crash buffer. Browser now handles Back while the Find bar or dock is active, and the test exercises the on-screen Close action with the Find field focused. On API 36, two fixture servers failed to resolve localhost. Those debug tests now bind to the numeric IPv4 loopback address. [Dock harness follow-up](https://github.com/modhack2003/Esuite/actions/runs/45326195304)
 
+The evidence checkpoint exposed another launcher return after opening Find on API 34. The test now selects the filtered command without using Back to dismiss its keyboard. The WebView IME test also missed the DOM acknowledgment on API 32, although the failure hierarchy showed the exact committed text. The API 33 hierarchy showed an empty field. The harness now waits for the IME window to settle and captures the field and fixture input connection status if the exact acknowledgment is missing. [Evidence checkpoint](https://github.com/modhack2003/Esuite/actions/runs/45327199423)
+
 ## 1.0.9 Activity and passive review
 
 Activity combines stored HTTP exchanges with an explicitly imported, in-memory Browser Network snapshot. Source labels preserve the distinction between callbacks, timings and captured responses. Site Map uses complete observed paths and exact site scope. Quick response review shares one rule engine with API Lab, Tools and Findings. Review results can attach the selected exchange as immutable encrypted evidence. The device harness covers Browser handoff, Site Map, review, finding save and evidence retention after history clearing. The upgrade baseline is the published 1.0.8 APK.

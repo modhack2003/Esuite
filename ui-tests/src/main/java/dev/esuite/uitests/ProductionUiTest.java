@@ -108,7 +108,8 @@ public class ProductionUiTest extends NativeUiDriver {
     @Test public void browserCommandsCanFindSettingsAndReturnToTheBrowser() throws Exception {
         launch();
         click("open_app_commands");
-        enter("command_search", "VERSION");
+        tag("command_search").setText("VERSION");
+        assertTrue(device.wait(Until.gone(By.res("command_app_browser")), 5000));
         click("command_app_settings");
         enter("settings_search", "license");
         assertTrue(waitText("settings_version", "Version", 5000));
@@ -155,7 +156,8 @@ public class ProductionUiTest extends NativeUiDriver {
         assertTrue("The live WebView never committed the fixture page",
                 device.wait(Until.hasObject(By.text("Example Domain")), 45000));
         click("open_app_commands");
-        enter("command_search", "/find");
+        tag("command_search").setText("/find");
+        assertTrue(device.wait(Until.gone(By.res("command_app_browser")), 5000));
         click("command_app_find");
         // Exercise the on-screen Close action with the Find field still focused.
         tag("browser_find_query").setText("Example");
