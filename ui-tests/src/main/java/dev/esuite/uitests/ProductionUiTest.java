@@ -157,7 +157,8 @@ public class ProductionUiTest extends NativeUiDriver {
                 device.wait(Until.hasObject(By.text("Example Domain")), 45000));
         click("open_app_commands");
         tag("command_search").setText("/find");
-        assertTrue(device.wait(Until.gone(By.res("command_app_browser")), 5000));
+        assertTrue("Exact /find should remove the /findings prefix match",
+                device.wait(Until.gone(By.res("command_app_findings")), 5000));
         click("command_app_find");
         // Exercise the on-screen Close action with the Find field still focused.
         tag("browser_find_query").setText("Example");

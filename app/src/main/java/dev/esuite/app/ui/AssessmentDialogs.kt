@@ -66,8 +66,7 @@ internal fun <T> SearchCommands(
     choose: (T) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
-    val terms = query.trim().split(Regex("\\s+"))
-    val matching = items.filter { command -> terms.all { search(command).contains(it, ignoreCase = true) } }
+    val matching = matchingCommands(items, query, search)
     WorkflowDialog("Commands", close, dialogTag) {
         LazyColumn(Modifier.weight(1f).testTag("command_list")) {
             item {
