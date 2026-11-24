@@ -107,7 +107,7 @@ public class ProductionUiTest extends NativeUiDriver {
         assertTrue("Invalid input should stay editable in the import dialog", device.wait(Until.hasObject(By.res("api_raw_error")), 5000));
         assertTrue(device.hasObject(By.res("api_raw_dialog")));
         String body = "first line\r\nsecond line\nthird line";
-        enterExposedText("api_raw_input", "POST /fixture HTTP/1.1\r\nHost: example.test\r\nX-Label: kept\r\n\r\n" + body);
+        replaceExposedText("api_raw_input", "POST /fixture HTTP/1.1\r\nHost: example.test\r\nX-Label: kept\r\n\r\n" + body);
         clickExposedControl("api_raw_import");
         assertTrue(waitText("api_url", "https://example.test/fixture", 5000));
         assertTrue(waitText("api_body", body, 5000));
@@ -143,6 +143,27 @@ public class ProductionUiTest extends NativeUiDriver {
         click("open_settings");
         enter("settings_search", "UTC");
         assertTrue("The UTC preference should survive restart", tag("settings_timestamps_utc").isChecked());
+        if (android.os.Build.VERSION.SDK_INT == 35) verifyResumeLastTab();
+    }
+
+    private void verifyResumeLastTab() throws Exception {
+        enter("settings_search", "Resume last tab");
+        click("settings_resume_tab");
+        assertTrue(tag("settings_resume_tab").isChecked());
+        try {
+            device.pressBack();
+            click("nav_tools");
+            assertNotNull(tag("tools_input"));
+            launch();
+            assertTrue("Tools did not return after the process restart", device.wait(Until.hasObject(By.res("tools_input")), 8000));
+            assertTrue(tag("nav_tools").isSelected());
+        } finally {
+            click("open_settings");
+            enter("settings_search", "Resume last tab");
+            if (tag("settings_resume_tab").isChecked()) click("settings_resume_tab");
+        }
+        launch();
+        assertFalse("Tools opened with the preference off", device.hasObject(By.res("tools_input")));
     }
 
     @Test public void curlPreviewRequiresConfirmationBeforeReplacingTheRequest() throws Exception {
@@ -247,7 +268,7 @@ public class ProductionUiTest extends NativeUiDriver {
                 device.wait(Until.hasObject(By.res("browser_panel_picker")), 5000));
         selectBrowserTool("page"); click("browser_open_api");
         assertTrue(waitText("api_url", "https://example.com/", 15000));
-        click("nav_browser");
+        click("api_return_to_origin");
         assertTrue(waitText("browser_url", "https://example.com/", 10000));
         click("open_settings"); assertNotNull(find(By.res("settings_title")));
         click("appearance_tab_light");
@@ -289,6 +310,10 @@ public class ProductionUiTest extends NativeUiDriver {
 
     private void enterExposedText(String name, String value) {
         clickExposedControl(name);
+        replaceExposedText(name, value);
+    }
+
+    private void replaceExposedText(String name, String value) {
         BySelector edited = By.res(name).text(value);
         for (int attempt = 0; attempt < 3; attempt++) {
             try {

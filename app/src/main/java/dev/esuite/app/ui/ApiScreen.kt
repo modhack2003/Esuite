@@ -10,6 +10,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.esuite.app.AppState
@@ -108,25 +111,28 @@ internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> 
             TextButton(onClick = { show(ApiSection.Request) }) { Text("Edit request") }
         }
         ApiSection.Collection -> {
-            var rawOpen by remember(project.id) { mutableStateOf(false) }
+            var rawOpen by rememberSaveable(project.id) { mutableStateOf(false) }
             OutlinedButton(onClick = { rawOpen = true }, modifier = Modifier.testTag("api_raw_toggle")) {
                 Text("Import raw HTTP")
             }
             if (rawOpen) {
                 val rawKey = key(Editor.ApiRaw)
                 val raw = pending[rawKey].orEmpty()
-                var inputError by remember { mutableStateOf<String?>(null) }
+                var inputError by rememberSaveable { mutableStateOf<String?>(null) }
                 var importing by remember { mutableStateOf(false) }
                 WorkflowDialog("Import raw HTTP", { if (!importing) rawOpen = false }, "api_raw_dialog", fitKeyboard = true) {
-                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         OutlinedTextField(raw, {
                             inputError = if (model.drafts.trySet(rawKey, it)) null else
                                 "The paste exceeds the 262,144-character limit."
                         }, label = { Text("Raw HTTP/1.x request") }, minLines = 3, maxLines = 8,
                             enabled = !importing, isError = inputError != null,
-                            supportingText = inputError?.let { message -> { Text(message, Modifier.testTag("api_raw_error")) } },
                             keyboardOptions = TechnicalKeyboard, textStyle = technicalTextStyle(),
                             modifier = Modifier.fillMaxWidth().testTag("api_raw_input"))
+                        inputError?.let { message ->
+                            Text(message, modifier = Modifier.testTag("api_raw_error").semantics { liveRegion = LiveRegionMode.Polite },
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        }
                     }
                     if (importing) LinearProgressIndicator(Modifier.fillMaxWidth())
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {

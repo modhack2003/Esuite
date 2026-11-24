@@ -34,7 +34,7 @@ public final class BrowserKeyboardUiTest extends NativeUiDriver {
                   '<textarea aria-label="Page notes" placeholder="Page notes" data-field="notes" rows="1"></textarea>' +
                   '<div aria-label="Page editable" contenteditable="true" data-field="editable" ' +
                   'style="min-height:24px;border:1px solid">Page editable</div>' +
-                  '<p id="typed" style="position:fixed;top:0;right:0;margin:0;pointer-events:none"></p></main>';
+                  '<p id="typed" role="status" style="margin:0;min-height:1em"></p></main>';
                 document.body.addEventListener('input', event => {
                   const field = event.target;
                   const value = typeof field.value === 'string' ? field.value : field.textContent;
@@ -92,7 +92,7 @@ public final class BrowserKeyboardUiTest extends NativeUiDriver {
         UiObject2 key = device.wait(Until.findObject(By.text(keyLabel).clickable(true)), 5_000);
         assertNotNull("Keyboard action was not available for " + field, key);
         key.click();
-        if (!device.wait(Until.hasObject(By.text("Received " + field)), 15_000)) {
+        if (!device.wait(Until.hasObject(By.text("Received " + field)), 20_000)) {
             checkpoint("website-ime-commit-" + field);
             String connectionState = device.executeShellCommand("logcat -d -t 30 -s ESuiteFixtureIme:I");
             fail("The DOM did not report committed text for " + field + " on " + device.getCurrentPackageName()

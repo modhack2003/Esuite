@@ -25,6 +25,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Settings
@@ -106,12 +107,17 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
         val preferences = getSharedPreferences("appearance", Context.MODE_PRIVATE)
+        val navigation = getSharedPreferences("navigation", Context.MODE_PRIVATE)
+        val initialScreen = Screen.entries.firstOrNull {
+            navigation.getBoolean("resume_tab", false) && it != Screen.Settings && it.name == navigation.getString("last_tab", null)
+        } ?: Screen.Browser
         setContent {
             var appearance by remember {
                 mutableStateOf(Appearance.entries.firstOrNull { it.name == preferences.getString("theme", null) } ?: Appearance.Dark)
             }
             var motion by remember { mutableStateOf(preferences.getBoolean("motion", true)) }
             var useUtc by remember { mutableStateOf(preferences.getBoolean("timestamps_utc", false)) }
+            var resumeTab by remember { mutableStateOf(navigation.getBoolean("resume_tab", false)) }
             val dark = isDark(appearance)
             SideEffect {
                 val color = android.graphics.Color.TRANSPARENT
@@ -125,6 +131,18 @@ class MainActivity : ComponentActivity() {
                         onMotion = { motion = it; preferences.edit { putBoolean("motion", it) } },
                         useUtcTimestamps = useUtc,
                         onUtcTimestamps = { useUtc = it; preferences.edit { putBoolean("timestamps_utc", it) } },
+                        initialScreen = initialScreen,
+                        resumeTab = resumeTab,
+                        onResumeTab = { enabled, screen ->
+                            resumeTab = enabled
+                            navigation.edit {
+                                putBoolean("resume_tab", enabled)
+                                if (enabled) putString("last_tab", screen.name) else remove("last_tab")
+                            }
+                        },
+                        onPrimaryScreen = { screen ->
+                            if (resumeTab) navigation.edit { putString("last_tab", screen.name) }
+                        },
                         onBrowserShortcut = { browserShortcut = it },
                         onCommandShortcut = { commandShortcut = it })
                 }
@@ -172,13 +190,17 @@ internal fun ESuiteApp(
     onMotion: (Boolean) -> Unit = {},
     useUtcTimestamps: Boolean = false,
     onUtcTimestamps: (Boolean) -> Unit = {},
+    initialScreen: Screen = Screen.Browser,
+    resumeTab: Boolean = false,
+    onResumeTab: (Boolean, Screen) -> Unit = { _, _ -> },
+    onPrimaryScreen: (Screen) -> Unit = {},
     onBrowserShortcut: (((BrowserShortcut) -> Unit)?) -> Unit = {},
     onCommandShortcut: ((() -> Unit)?) -> Unit = {},
 ) {
     val state by model.state.collectAsStateWithLifecycle()
     val primaryState = key(state.projectId) { rememberSaveableStateHolder() }
-    var selectedName by rememberSaveable { mutableStateOf(Screen.Browser.name) }
-    var previousName by rememberSaveable { mutableStateOf(Screen.Browser.name) }
+    var selectedName by rememberSaveable { mutableStateOf(initialScreen.name) }
+    var previousName by rememberSaveable { mutableStateOf(initialScreen.name) }
     var requestRouteId by rememberSaveable { mutableIntStateOf(0) }
     var requestReturnName by rememberSaveable { mutableStateOf<String?>(null) }
     var findInPageRequest by remember { mutableIntStateOf(0) }
@@ -196,7 +218,9 @@ internal fun ESuiteApp(
         mutableStateOf(CommandUsage.restore(commandPreferences.getString("pinned", "").orEmpty(),
             commandPreferences.getString("recent", "").orEmpty(), appCommandIds))
     }
-    val screen = Screen.entries.firstOrNull { it.name == selectedName } ?: Screen.Browser
+    val screen = Screen.entries.firstOrNull { it.name == selectedName } ?: initialScreen
+    val settingsOrigin = Screen.entries.firstOrNull { it.name == previousName && it != Screen.Settings } ?: Screen.Browser
+    val requestOrigin = Screen.entries.firstOrNull { it.name == requestReturnName && it != Screen.Settings }
     val browserVisible = screen == Screen.Browser || screen == Screen.Tools
     val site = state.workspace.projects.firstOrNull { it.id == state.projectId }
     fun saveCommandUsage(next: CommandUsage) {
@@ -207,8 +231,10 @@ internal fun ESuiteApp(
         }
     }
     fun navigate(next: Screen) {
+        if (next == screen) return
         if (screen == Screen.Api && next != Screen.Settings && next != Screen.Api) requestReturnName = null
         selectedName = next.name
+        if (next != Screen.Settings) onPrimaryScreen(next)
     }
     fun openApiRequest() {
         requestRouteId++
@@ -216,7 +242,7 @@ internal fun ESuiteApp(
         navigate(Screen.Api)
     }
     fun settings() { if (screen != Screen.Settings) { previousName = screen.name; navigate(Screen.Settings) } }
-    fun closeSettings() { selectedName = previousName }
+    fun closeSettings() { selectedName = settingsOrigin.name }
     fun openReview(exchanges: List<Exchange>, template: ResponseCheck) {
         val target = model.currentProject() ?: return
         val current = model.state.value.workspace
@@ -244,10 +270,9 @@ internal fun ESuiteApp(
     }
 
     BackHandler(enabled = !browserVisible) {
-        val requestReturn = Screen.entries.firstOrNull { it.name == requestReturnName }
         when {
             screen == Screen.Settings -> closeSettings()
-            screen == Screen.Api && requestReturn != null -> navigate(requestReturn)
+            screen == Screen.Api && requestOrigin != null -> navigate(requestOrigin)
             else -> navigate(Screen.Browser)
         }
     }
@@ -326,6 +351,7 @@ internal fun ESuiteApp(
                                         when {
                                             destination == Screen.Settings -> SettingsScreen(state, model, appearance, motion,
                                                 onAppearance, onMotion, useUtcTimestamps, onUtcTimestamps,
+                                                resumeTab, { onResumeTab(it, settingsOrigin) },
                                                 { browserMessage = "Clearing browsing data…"; clearRequest++ },
                                                 browserMessage, ::closeSettings)
                                             !state.ready -> SavedDataState(state, ::settings)
@@ -340,6 +366,13 @@ internal fun ESuiteApp(
                                                 val scope = rememberCoroutineScope()
                                                 Column(Modifier.fillMaxSize().verticalScroll(pageScroll).padding(16.dp),
                                                     verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                                    requestOrigin?.let { origin ->
+                                                        TextButton(onClick = { navigate(origin) }, modifier = Modifier.testTag("api_return_to_origin")) {
+                                                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                            Spacer(Modifier.width(8.dp))
+                                                            Text("Return to ${origin.label}")
+                                                        }
+                                                    }
                                                     WorkspaceStatus(site, state)
                                                     SitePicker(state, site, model, allowNew = true)
                                                     if (site != null) ApiScreen(state, model, { scope.launch { pageScroll.scrollTo(0) } }) {

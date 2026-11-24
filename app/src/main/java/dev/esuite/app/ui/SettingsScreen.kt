@@ -25,6 +25,7 @@ import dev.esuite.app.BuildConfig
 
 private enum class SettingsSection(val title: String, val terms: String) {
     Appearance("Appearance", "theme system light dark high contrast animation motion reset"),
+    Navigation("Navigation", "startup last tab resume launch browser"),
     Timestamps("Timestamps", "timezone time zone UTC local dates Activity observations"),
     Shortcuts("Keyboard shortcuts", "browser address find page devtools commands ctrl command hardware F12"),
     Browsing("Browsing data", "webview history cookies storage clear browser"),
@@ -46,6 +47,8 @@ internal fun SettingsScreen(
     setMotion: (Boolean) -> Unit,
     useUtcTimestamps: Boolean,
     setUtcTimestamps: (Boolean) -> Unit,
+    resumeTab: Boolean,
+    setResumeTab: (Boolean) -> Unit,
     clearBrowser: () -> Unit,
     browserMessage: String?,
     onBack: () -> Unit,
@@ -97,6 +100,16 @@ internal fun SettingsScreen(
                         TextButton(onClick = { confirmAppearanceReset = true }, enabled = appearance != Appearance.Dark || !motion) {
                             Text("Restore appearance defaults")
                         }
+                    }
+                    SettingsSection.Navigation -> {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Resume last tab", Modifier.weight(1f))
+                            Switch(checked = resumeTab, onCheckedChange = setResumeTab,
+                                modifier = Modifier.testTag("settings_resume_tab")
+                                    .semantics { contentDescription = "Resume last tab" })
+                        }
+                        Text(if (resumeTab) "ESuite reopens your last tab." else "ESuite opens the Browser.",
+                            style = MaterialTheme.typography.bodySmall, color = Muted)
                     }
                     SettingsSection.Timestamps -> {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
