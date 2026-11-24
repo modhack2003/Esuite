@@ -62,6 +62,9 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel, onReview: (Exchan
     var output by remember(inputKey) { mutableStateOf("") }
     var outputClipped by remember(inputKey) { mutableStateOf(false) }
     var inputError by remember(inputKey) { mutableStateOf<String?>(null) }
+    var toolError by remember(inputKey) { mutableStateOf<String?>(null) }
+    var previousInput by remember(inputKey, state.identity) { mutableStateOf<String?>(null) }
+    var byteConversionOpen by remember(inputKey, state.identity) { mutableStateOf(false) }
     var documentRequest by remember { mutableStateOf<Pair<ImportFormat, RequestContext>?>(null) }
     var preview by remember { mutableStateOf<ImportPreview?>(null) }
     var importStatus by remember(inputKey) { mutableStateOf<String?>(null) }
@@ -75,11 +78,12 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel, onReview: (Exchan
         working = false
         output = ""
         outputClipped = false
+        toolError = null
         checkResults = emptyList()
         preview = null
         importStatus = null
     }
-    fun <T> runTool(action: suspend () -> T, failed: (String) -> Unit = { output = it }, done: (T) -> Unit) {
+    fun <T> runTool(action: suspend () -> T, failed: (String) -> Unit = { toolError = it }, done: (T) -> Unit) {
         resetOutput()
         working = true
         worker = scope.launch {
@@ -129,6 +133,7 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel, onReview: (Exchan
     LaunchedEffect(inputKey, state.identity) { resetOutput() }
 
     val contentScroll = key(group) { rememberScrollState() }
+    val transformable = input.takeIf { inputError == null && !working }.orEmpty()
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
             WorkspaceTabs(ToolGroup.entries, group, "tools", { it.label }) {
@@ -153,8 +158,12 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel, onReview: (Exchan
             }
             OutlinedTextField(input, {
                 resetOutput()
-                inputError = if (model.drafts.trySet(inputKey, it)) null else
-                    "Paste exceeds the 262,144-character editor limit. Use a file for larger OpenAPI or HAR documents."
+                if (model.drafts.trySet(inputKey, it)) {
+                    previousInput = null
+                    inputError = null
+                } else {
+                    inputError = "Input exceeds the 262,144-character editor limit. Use a file for larger OpenAPI or HAR documents."
+                }
             }, label = { Text(if (group == ToolGroup.Checks) "Response headers" else "Input") },
                 isError = inputError != null,
                 supportingText = inputError?.let { message -> { Text(message) } },
@@ -162,26 +171,36 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel, onReview: (Exchan
                 modifier = Modifier.fillMaxWidth().testTag("tools_input"))
             when (group) {
                 ToolGroup.Encode -> {
+                    previousInput?.let { oldInput ->
+                        TextButton(onClick = {
+                            model.drafts.set(inputKey, oldInput)
+                            previousInput = null
+                            inputError = null
+                            resetOutput()
+                        }, modifier = Modifier.testTag("tools_undo_input")) { Text("Undo input replacement") }
+                    }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ToolButton("Base64 encode", input) { transform(Codec::base64Encode) }
-                        ToolButton("Base64 decode", input) { transform(Codec::base64Decode) }
-                        ToolButton("URL encode", input) { transform(Codec::formEncode) }
-                        ToolButton("URL decode", input) { transform(Codec::formDecode) }
-                        ToolButton("SHA-256", input) { transform(Codec::sha256) }
+                        ToolButton("Base64 encode", transformable) { transform(Codec::base64Encode) }
+                        ToolButton("Base64 decode", transformable) { transform(Codec::base64Decode) }
+                        ToolButton("URL encode", transformable) { transform(Codec::formEncode) }
+                        ToolButton("URL decode", transformable) { transform(Codec::formDecode) }
+                        ToolButton("SHA-256", transformable) { transform(Codec::sha256) }
                     }
                     TextButton(onClick = { advancedEncode = !advancedEncode }, modifier = Modifier.testTag("tools_advanced_encode")) {
                         Text(if (advancedEncode) "Hide more transformations" else "More transformations")
                     }
                     if (advancedEncode) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ToolButton("Base64URL encode", input) { transform(Codec::base64UrlEncode) }
-                        ToolButton("Base64URL decode", input) { transform(Codec::base64UrlDecode) }
-                        ToolButton("Hex encode", input) { transform(Codec::hexEncode) }
-                        ToolButton("Hex decode", input) { transform(Codec::hexDecode) }
-                        ToolButton("URL component encode", input) { transform(Codec::componentEncode) }
-                        ToolButton("URL component decode", input) { transform(Codec::componentDecode) }
-                        ToolButton("SHA-512", input) { transform(Codec::sha512) }
-                        ToolButton("Format JSON", input) { transform { Codec.formatJson(it, compact = false) } }
-                        ToolButton("Minify JSON", input) { transform { Codec.formatJson(it, compact = true) } }
+                        ToolButton("Base64URL encode", transformable) { transform(Codec::base64UrlEncode) }
+                        ToolButton("Base64URL decode", transformable) { transform(Codec::base64UrlDecode) }
+                        ToolButton("Hex encode", transformable) { transform(Codec::hexEncode) }
+                        ToolButton("Hex decode", transformable) { transform(Codec::hexDecode) }
+                        ToolButton("Convert bytes", transformable.takeUnless(String::isBlank).orEmpty(),
+                            Modifier.testTag("tools_convert_bytes")) { byteConversionOpen = true }
+                        ToolButton("URL component encode", transformable) { transform(Codec::componentEncode) }
+                        ToolButton("URL component decode", transformable) { transform(Codec::componentDecode) }
+                        ToolButton("SHA-512", transformable) { transform(Codec::sha512) }
+                        ToolButton("Format JSON", transformable) { transform { Codec.formatJson(it, compact = false) } }
+                        ToolButton("Minify JSON", transformable) { transform { Codec.formatJson(it, compact = true) } }
                     }
                 }
                 ToolGroup.Import -> {
@@ -209,15 +228,15 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel, onReview: (Exchan
                 }
                 ToolGroup.Review -> {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ToolButton("Decode JWT claims", input) { transform(TokenTools::jwtClaims) }
-                        ToolButton("Token sample statistics", input) { transform { TokenTools.sample(it.lines().filter(String::isNotBlank)) } }
-                        ToolButton("Review AWS JSON offline", input, Modifier.testTag("tools_review_aws")) { transform(CloudConfigReview::review) }
+                        ToolButton("Decode JWT claims", transformable) { transform(TokenTools::jwtClaims) }
+                        ToolButton("Token sample statistics", transformable) { transform { TokenTools.sample(it.lines().filter(String::isNotBlank)) } }
+                        ToolButton("Review AWS JSON offline", transformable, Modifier.testTag("tools_review_aws")) { transform(CloudConfigReview::review) }
                     }
                 }
                 ToolGroup.Checks -> {
                     val latest = latestReviewableResponse(state.workspace, state.projectId, state.identity)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(enabled = input.isNotBlank() && !working, modifier = Modifier.testTag("run_response_check"), onClick = {
+                        Button(enabled = transformable.isNotBlank(), modifier = Modifier.testTag("run_response_check"), onClick = {
                             val chosen = template
                             runTool({ ResponseChecks.run(chosen, input) }) { checkResults = it }
                         }) { Text("Check pasted headers") }
@@ -230,13 +249,31 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel, onReview: (Exchan
                 }
             }
             if (working) LinearProgressIndicator(Modifier.fillMaxWidth())
+            toolError?.let { message ->
+                Text(message, Modifier.testTag("tools_error").semantics { liveRegion = LiveRegionMode.Polite },
+                    color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
             if (output.isNotEmpty()) {
                 OutlinedTextField(output, {}, readOnly = true, label = { Text(if (outputClipped) "Result preview" else "Result") },
                     supportingText = if (outputClipped) ({ Text("Showing the first 65,536 characters. Use a smaller input to view the full result.") }) else null,
                     minLines = 2, maxLines = 12,
                     textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("tools_output"))
+                if (group == ToolGroup.Encode && !outputClipped) {
+                    OutlinedButton(onClick = {
+                        previousInput = input
+                        model.drafts.set(inputKey, output)
+                        resetOutput()
+                        scope.launch { contentScroll.scrollTo(0) }
+                    }, modifier = Modifier.testTag("tools_use_result")) { Text("Use result as input") }
+                }
             }
             DraftNotice()
+        }
+    }
+    if (byteConversionOpen) {
+        ByteConversionDialog(close = { byteConversionOpen = false }) { from, to ->
+            byteConversionOpen = false
+            transform { Codec.convertBytes(it, from, to) }
         }
     }
     preview?.let { selected ->
@@ -247,6 +284,31 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel, onReview: (Exchan
             ) { importStatus = it }
         }
     }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ByteConversionDialog(close: () -> Unit, convert: (ByteEncoding, ByteEncoding) -> Unit) {
+    var from by remember { mutableStateOf(ByteEncoding.Base64) }
+    var to by remember { mutableStateOf(ByteEncoding.Hex) }
+    AlertDialog(onDismissRequest = close, title = { Text("Convert bytes") }, text = {
+        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Input encoding", style = MaterialTheme.typography.labelLarge)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ByteEncoding.entries.forEach { encoding ->
+                    FilterChip(from == encoding, { from = encoding }, { Text(encoding.label) })
+                }
+            }
+            Text("Output encoding", style = MaterialTheme.typography.labelLarge)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ByteEncoding.entries.forEach { encoding ->
+                    FilterChip(to == encoding, { to = encoding }, { Text(encoding.label) })
+                }
+            }
+        }
+    }, confirmButton = {
+        Button(onClick = { convert(from, to) }, enabled = from != to) { Text("Convert") }
+    }, dismissButton = { TextButton(onClick = close) { Text("Cancel") } })
 }
 
 @Composable

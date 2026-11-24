@@ -28,6 +28,25 @@ class CodecTest {
         }
     }
 
+    @Test fun conversionPreservesByteSequencesThatCannotBeDecodedAsText() {
+        assertEquals("AP+A", Codec.convertBytes("00 FF\n80", ByteEncoding.Hex, ByteEncoding.Base64))
+        assertEquals("AP-A", Codec.convertBytes("AP+\nA", ByteEncoding.Base64, ByteEncoding.Base64Url))
+        assertEquals("00ff80", Codec.convertBytes("AP-A", ByteEncoding.Base64Url, ByteEncoding.Hex))
+        assertEquals("ff", Codec.convertBytes("/w==", ByteEncoding.Base64, ByteEncoding.Hex))
+    }
+
+    @Test fun byteConversionChecksEncodingAndInputLimits() {
+        for (value in listOf("a", "0g", "０Ｆ")) {
+            assertThrows(IllegalArgumentException::class.java) { Codec.convertBytes(value, ByteEncoding.Hex, ByteEncoding.Base64) }
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            Codec.convertBytes("AP+A", ByteEncoding.Base64Url, ByteEncoding.Hex)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            Codec.convertBytes(" ".repeat(Limits.REQUEST_BYTES + 1), ByteEncoding.Hex, ByteEncoding.Base64)
+        }
+    }
+
     @Test fun jsonFormattingIgnoresBracketsAndEscapedQuotesInsideStrings() {
         val compact = """{"nested":[1e-20,{"text":"\"[{]"}],"large":123456789012345678901}"""
         val pretty = Codec.formatJson(compact, compact = false)

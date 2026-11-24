@@ -56,6 +56,10 @@ public class ProductionUiTest extends NativeUiDriver {
         find(encode).click();
         revealUtilityControl(By.res("tools_output"), true);
         assertTrue(waitText("tools_output", "RVN1aXRl", 5000));
+        clickUtilityControl("tools_use_result");
+        assertTrue("The full result should become the next input", waitText("tools_input", "RVN1aXRl", 5000));
+        clickUtilityControl("tools_undo_input");
+        assertTrue("Undo should restore the prior input", waitText("tools_input", "ESuite", 5000));
         revealUtilityControl(By.res("tools_tab_review"), false);
         click("tools_tab_review");
         assertNotNull(revealUtilityControl(By.res("tools_review_aws"), true));
@@ -98,8 +102,8 @@ public class ProductionUiTest extends NativeUiDriver {
         click("api_tab_collection");
         click("api_raw_toggle");
         String body = "first line\r\nsecond line\nthird line";
-        enter("api_raw_input", "POST /fixture HTTP/1.1\r\nHost: example.test\r\nX-Label: kept\r\n\r\n" + body);
-        click("api_raw_import");
+        requireExposedControl("api_raw_input").setText("POST /fixture HTTP/1.1\r\nHost: example.test\r\nX-Label: kept\r\n\r\n" + body);
+        clickExposedControl("api_raw_import");
         assertTrue(waitText("api_url", "https://example.test/fixture", 5000));
         assertTrue(waitText("api_body", body, 5000));
         assertTrue(waitText("api_headers", "X-Label: kept", 5000));

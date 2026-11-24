@@ -8,6 +8,8 @@ import java.security.MessageDigest
 import java.util.Base64
 import kotlinx.serialization.json.Json
 
+internal enum class ByteEncoding(val label: String) { Base64("Base64"), Base64Url("Base64URL"), Hex("Hex") }
+
 /** Pure local transformations. No network, persistence or Android dependencies. */
 object Codec {
     private const val hexDigits = "0123456789abcdef"
@@ -17,9 +19,21 @@ object Codec {
     fun base64UrlEncode(input: String): String = Base64.getUrlEncoder().withoutPadding().encodeToString(input.toByteArray(Charsets.UTF_8))
     fun base64UrlDecode(input: String): String = utf8(Base64.getUrlDecoder().decode(input))
     fun hexEncode(input: String): String = input.toByteArray(Charsets.UTF_8).hex()
-    fun hexDecode(input: String): String {
-        require(input.length % 2 == 0) { "Use two hexadecimal digits per byte." }
-        return utf8(ByteArray(input.length / 2) { index -> hexByte(input, index * 2) })
+    fun hexDecode(input: String): String = utf8(hexBytes(input))
+
+    internal fun convertBytes(input: String, from: ByteEncoding, to: ByteEncoding): String {
+        require(input.length <= Limits.REQUEST_BYTES) { "Shorten the input before converting it." }
+        val compact = input.filterNot(Char::isWhitespace)
+        val bytes = when (from) {
+            ByteEncoding.Base64 -> Base64.getDecoder().decode(compact)
+            ByteEncoding.Base64Url -> Base64.getUrlDecoder().decode(compact)
+            ByteEncoding.Hex -> hexBytes(compact)
+        }
+        return when (to) {
+            ByteEncoding.Base64 -> Base64.getEncoder().encodeToString(bytes)
+            ByteEncoding.Base64Url -> Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+            ByteEncoding.Hex -> bytes.hex()
+        }
     }
 
     /** Form URL encoding: spaces become '+'. This is not URL path normalization. */
@@ -95,6 +109,11 @@ object Codec {
 
     private fun digest(input: String, algorithm: String): String =
         MessageDigest.getInstance(algorithm).digest(input.toByteArray(StandardCharsets.UTF_8)).hex()
+
+    private fun hexBytes(input: String): ByteArray {
+        require(input.length % 2 == 0) { "Use two hexadecimal digits per byte." }
+        return ByteArray(input.length / 2) { index -> hexByte(input, index * 2) }
+    }
     private fun ByteArray.hex(): String = buildString(size * 2) {
         for (byte in this@hex) {
             val value = byte.toInt() and 0xff
