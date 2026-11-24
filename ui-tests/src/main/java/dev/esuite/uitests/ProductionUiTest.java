@@ -5,6 +5,7 @@ import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Rect;
 import android.os.SystemClock;
+import android.view.KeyEvent;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.uiautomator.By;
 import androidx.test.uiautomator.BySelector;
@@ -171,6 +172,14 @@ public class ProductionUiTest extends NativeUiDriver {
         assertTrue("Closing Find in page should keep the loaded page in the foreground",
                 device.wait(Until.hasObject(By.text("Example Domain")), 5000));
         assertTrue("Find in page is still open", device.wait(Until.gone(By.res("browser_find_query")), 5000));
+        if (android.os.Build.VERSION.SDK_INT == 35) {
+            assertTrue(device.pressKeyCode(KeyEvent.KEYCODE_L, KeyEvent.META_CTRL_ON));
+            assertTrue("Ctrl+L should focus the address bar", device.wait(Until.hasObject(By.res("browser_url").focused(true)), 5000));
+            assertTrue(device.pressKeyCode(KeyEvent.KEYCODE_F, KeyEvent.META_CTRL_ON));
+            assertTrue("Ctrl+F should open and focus Find in page", device.wait(Until.hasObject(By.res("browser_find_query").focused(true)), 5000));
+            clickExposedControl("browser_close_find");
+            assertTrue(device.wait(Until.gone(By.res("browser_find_query")), 5000));
+        }
         Rect full = pageBounds();
         click("browser_tools");
         Rect split = pageBounds();

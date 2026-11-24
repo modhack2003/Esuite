@@ -26,6 +26,7 @@ import dev.esuite.app.BuildConfig
 private enum class SettingsSection(val title: String, val terms: String) {
     Appearance("Appearance", "theme system light dark high contrast animation motion reset"),
     Timestamps("Timestamps", "timezone time zone UTC local dates Activity observations"),
+    Shortcuts("Keyboard shortcuts", "browser address find page devtools commands ctrl command hardware F12"),
     Browsing("Browsing data", "webview history cookies storage clear browser"),
     Sites("Saved site data", "vault encryption copy export report site save restore remove erase"),
     About("About ESuite", "version build release credits license Inter MIT GitHub support diagnostics webview");
@@ -106,6 +107,12 @@ internal fun SettingsScreen(
                         }
                         Text(if (useUtcTimestamps) "Observations display UTC." else "Observations display the device’s local time.",
                             style = MaterialTheme.typography.bodySmall, color = Muted)
+                    }
+                    SettingsSection.Shortcuts -> {
+                        Text("Ctrl+L or ⌘L · Focus Browser address")
+                        Text("Ctrl+F or ⌘F · Find in page")
+                        Text("Ctrl+K or ⌘K · Open app commands")
+                        Text("F12 · Toggle Developer Tools")
                     }
                     SettingsSection.Browsing -> {
                         Text("Browser uses the WebView profile belonging to ESuite. Its cookies and storage stay on this device.",

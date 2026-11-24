@@ -87,6 +87,7 @@ import kotlinx.serialization.json.JsonPrimitive
 
 private data class ConsoleRun(val document: Int, val origin: String, val token: String, val input: String, val script: Boolean)
 private data class PageFindResult(val active: Int, val total: Int)
+internal enum class BrowserShortcut { Tools, Address, Find }
 
 @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 @Composable
@@ -98,7 +99,7 @@ internal fun BrowserScreen(
     utilitiesVisible: Boolean,
     closeUtilities: () -> Unit,
     onReady: () -> Unit,
-    onShortcut: ((() -> Unit)?) -> Unit,
+    onShortcut: (((BrowserShortcut) -> Unit)?) -> Unit,
     onSettings: () -> Unit,
     onCommands: () -> Unit,
     onDataCleared: (Boolean) -> Unit,
@@ -109,6 +110,7 @@ internal fun BrowserScreen(
     val context = LocalContext.current
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
+    val addressFocus = remember { FocusRequester() }
     val hostView = LocalView.current
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val links = LocalUriHandler.current
@@ -156,6 +158,7 @@ internal fun BrowserScreen(
     var elementNotice by remember { mutableStateOf("") }
     var document by remember { mutableIntStateOf(0) }
     var findInPage by remember { mutableStateOf(false) }
+    var findFocusRequest by remember { mutableIntStateOf(0) }
     var findQuery by remember { mutableStateOf("") }
     var findResult by remember { mutableStateOf<PageFindResult?>(null) }
     var inspection by remember { mutableIntStateOf(0) }
@@ -350,9 +353,20 @@ internal fun BrowserScreen(
         if (!inspecting && browser?.hasFocus() != true) focus.clearFocus()
     }
 
-    val toggleTools by rememberUpdatedState(::toggleInspector)
-    DisposableEffect(visible, browser, rendererGone) {
-        if (visible && browser != null && !rendererGone) onShortcut { toggleTools() }
+    fun openPageFind() {
+        findInPage = true
+        findFocusRequest++
+    }
+
+    val handleShortcut by rememberUpdatedState<(BrowserShortcut) -> Unit> { shortcut ->
+        when (shortcut) {
+            BrowserShortcut.Tools -> toggleInspector()
+            BrowserShortcut.Address -> addressFocus.requestFocus()
+            BrowserShortcut.Find -> openPageFind()
+        }
+    }
+    DisposableEffect(visible, browser, rendererGone, preparing) {
+        if (visible && browser != null && !rendererGone && !preparing) onShortcut { handleShortcut(it) }
         onDispose { onShortcut(null) }
     }
 
@@ -364,7 +378,7 @@ internal fun BrowserScreen(
     }
     LaunchedEffect(preparing) { if (!preparing) onReady() }
     LaunchedEffect(findInPageRequest) {
-        if (findInPageRequest != 0) findInPage = true
+        if (findInPageRequest != 0) openPageFind()
     }
     LaunchedEffect(visible) {
         if (!visible && findInPage) closePageFind()
@@ -529,7 +543,7 @@ internal fun BrowserScreen(
     Column(Modifier.fillMaxSize().clipToBounds()) {
         if (visible && !preparing) {
             BrowserToolbar(
-                address, {
+                address, addressFocus, {
                     addressOverflow = it.length > BrowserAddress.MAX_CHARS
                     if (!addressOverflow) {
                         address = it
@@ -561,7 +575,8 @@ internal fun BrowserScreen(
             )
             if (loading) LinearProgressIndicator(progress = { progress.coerceIn(0, 100) / 100f }, modifier = Modifier.fillMaxWidth())
             if (findInPage) {
-                PageFindBar(findQuery, { findQuery = it.atCharacterBoundary(240) }, findResult, activeView() != null, ::closePageFind) { forward ->
+                PageFindBar(findQuery, { findQuery = it.atCharacterBoundary(240) }, findResult, activeView() != null,
+                    findFocusRequest, ::closePageFind) { forward ->
                     keyboard?.hide()
                     activeView()?.findNext(forward)
                 }
@@ -845,7 +860,7 @@ private suspend fun awaitConsole(view: WebView, token: String): String {
 
 @Composable
 private fun BrowserToolbar(
-    address: String, edit: (String) -> Unit, go: () -> Unit, submitEnabled: Boolean,
+    address: String, addressFocus: FocusRequester, edit: (String) -> Unit, go: () -> Unit, submitEnabled: Boolean,
     canGoBack: Boolean, canGoForward: Boolean, loading: Boolean, loaded: Boolean,
     inspecting: Boolean, utilitiesVisible: Boolean, toolsEnabled: Boolean,
     back: () -> Unit, forward: () -> Unit, reload: () -> Unit, tools: () -> Unit,
@@ -857,7 +872,8 @@ private fun BrowserToolbar(
             value = address, onValueChange = edit, singleLine = true,
             placeholder = { Text("Search or enter an address", maxLines = 1) },
             keyboardOptions = UrlKeyboard.copy(imeAction = ImeAction.Go), keyboardActions = KeyboardActions(onGo = { if (submitEnabled) go() }),
-            modifier = modifier.testTag("browser_url").semantics { contentDescription = "Search or enter an address" },
+            modifier = modifier.focusRequester(addressFocus).testTag("browser_url")
+                .semantics { contentDescription = "Search or enter an address" },
             shape = MaterialTheme.shapes.medium,
             colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = colors.surfaceContainerLow,
                 focusedContainerColor = colors.surfaceContainerLow, unfocusedBorderColor = colors.outlineVariant),
@@ -928,9 +944,11 @@ private fun BrowserToolbar(
 }
 
 @Composable
-private fun PageFindBar(query: String, edit: (String) -> Unit, result: PageFindResult?, ready: Boolean, close: () -> Unit, move: (Boolean) -> Unit) {
+private fun PageFindBar(query: String, edit: (String) -> Unit, result: PageFindResult?, ready: Boolean,
+    focusRequest: Int, close: () -> Unit, move: (Boolean) -> Unit,
+) {
     val requester = remember { FocusRequester() }
-    LaunchedEffect(ready) { if (ready) requester.requestFocus() }
+    LaunchedEffect(ready, focusRequest) { if (ready) requester.requestFocus() }
     val hasMatches = (result?.total ?: 0) > 0
     Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow).padding(horizontal = 6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {

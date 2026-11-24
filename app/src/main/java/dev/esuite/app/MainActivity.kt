@@ -55,6 +55,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.esuite.app.browser.BrowserProfiles
 import dev.esuite.app.browser.BrowserLogSnapshot
 import dev.esuite.app.browser.BrowserScreen
+import dev.esuite.app.browser.BrowserShortcut
 import dev.esuite.app.browser.BrowserSkeleton
 import dev.esuite.app.core.*
 import dev.esuite.app.ui.*
@@ -63,23 +64,35 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     // Activity-scoped ViewModel shared with Compose (same ViewModelStore), so onStop can flush it.
     private val model: AppViewModel by viewModels()
-    private var developerToolsShortcut: (() -> Unit)? = null
+    private var browserShortcut: ((BrowserShortcut) -> Unit)? = null
     private var commandShortcut: (() -> Unit)? = null
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        val shortcut = developerToolsShortcut
+        val shortcut = browserShortcut
         if (keyCode == KeyEvent.KEYCODE_F12 && shortcut != null) {
-            if (event.repeatCount == 0) shortcut()
+            if (event.repeatCount == 0) shortcut(BrowserShortcut.Tools)
             return true
         }
         return super.onKeyDown(keyCode, event)
     }
 
     override fun onKeyShortcut(keyCode: Int, event: KeyEvent): Boolean {
-        val shortcut = commandShortcut
-        if (keyCode == KeyEvent.KEYCODE_K && (event.isCtrlPressed || event.isMetaPressed) && !event.isAltPressed && shortcut != null) {
-            if (event.repeatCount == 0) shortcut()
-            return true
+        if ((event.isCtrlPressed || event.isMetaPressed) && !event.isAltPressed) {
+            val commands = commandShortcut
+            if (keyCode == KeyEvent.KEYCODE_K && commands != null) {
+                if (event.repeatCount == 0) commands()
+                return true
+            }
+            val browser = browserShortcut
+            val shortcut = when (keyCode) {
+                KeyEvent.KEYCODE_L -> BrowserShortcut.Address
+                KeyEvent.KEYCODE_F -> BrowserShortcut.Find
+                else -> null
+            }
+            if (!event.isShiftPressed && browser != null && shortcut != null) {
+                if (event.repeatCount == 0) browser(shortcut)
+                return true
+            }
         }
         return super.onKeyShortcut(keyCode, event)
     }
@@ -110,7 +123,7 @@ class MainActivity : ComponentActivity() {
                         onMotion = { motion = it; preferences.edit().putBoolean("motion", it).apply() },
                         useUtcTimestamps = useUtc,
                         onUtcTimestamps = { useUtc = it; preferences.edit().putBoolean("timestamps_utc", it).apply() },
-                        onBrowserShortcut = { developerToolsShortcut = it },
+                        onBrowserShortcut = { browserShortcut = it },
                         onCommandShortcut = { commandShortcut = it })
                 }
             }
@@ -155,7 +168,7 @@ internal fun ESuiteApp(
     onMotion: (Boolean) -> Unit = {},
     useUtcTimestamps: Boolean = false,
     onUtcTimestamps: (Boolean) -> Unit = {},
-    onBrowserShortcut: ((() -> Unit)?) -> Unit = {},
+    onBrowserShortcut: (((BrowserShortcut) -> Unit)?) -> Unit = {},
     onCommandShortcut: ((() -> Unit)?) -> Unit = {},
 ) {
     val state by model.state.collectAsStateWithLifecycle()
