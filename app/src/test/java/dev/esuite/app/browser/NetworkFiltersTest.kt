@@ -29,8 +29,8 @@ class NetworkFiltersTest {
     }
 
     @Test fun resetRestoresFiltersWithoutChangingTheDisplayControls() {
-        val filters = NetworkFilters(query = "status-code:404", order = NetworkOrder.Latest, waterfall = false, expanded = true)
-        assertEquals(NetworkFilters(waterfall = false, expanded = true), filters.reset())
+        val filters = NetworkFilters(query = "status-code:404", order = NetworkOrder.Latest, waterfall = false)
+        assertEquals(NetworkFilters(waterfall = false), filters.reset())
         assertFalse(filters.reset().active)
     }
 }

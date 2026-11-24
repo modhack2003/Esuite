@@ -44,13 +44,12 @@ internal data class NetworkFilters(
     val source: NetworkSource = NetworkSource.All,
     val method: String? = null,
     val order: NetworkOrder = NetworkOrder.Start,
-    val expanded: Boolean = false,
     val waterfall: Boolean = true,
 ) {
     val active: Boolean get() = query.isNotBlank() || type != ResourceType.All || status != StatusFilter.All ||
         source != NetworkSource.All || method != null
 
-    fun reset() = NetworkFilters(expanded = expanded, waterfall = waterfall)
+    fun reset() = NetworkFilters(waterfall = waterfall)
 
     fun select(rows: List<BrowserRequestEvent>): List<BrowserRequestEvent> {
         val terms = query.split(whitespace).filter(String::isNotBlank).map(SearchTerm::parse)

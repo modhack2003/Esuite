@@ -55,6 +55,8 @@ The direct Find check passed on APIs 33 and 34. The API 34 failure was instead i
 
 The Network checkpoint showed a clipped filter field in the small Android dock. Opening filters now scrolls the search field into view above the observations. The native check verifies the entered text, collapses the filter controls and verifies the filtered count before and after a panel switch. Fixed toolbar checks wait for enabled controls and reacquire stale text fields. [Network checkpoint](https://github.com/modhack2003/Esuite/actions/runs/45367731557)
 
+The compact follow-up still lost the Network filter field or clear action during keyboard changes and put Open in Activity against the viewport edge. A dedicated dialog now stages edits until Apply. Network keeps its full list in the dock and has an always-positioned Open in Activity toolbar action that enables when observations are available. The native checks exercise apply, panel switching, clearing and the Activity handoff. [Compact follow-up](https://github.com/modhack2003/Esuite/actions/runs/45370137855)
+
 ## 1.0.9 Activity and passive review
 
 Activity combines stored HTTP exchanges with an explicitly imported, in-memory Browser Network snapshot. Source labels preserve the distinction between callbacks, timings and captured responses. Site Map uses complete observed paths and exact site scope. Quick response review shares one rule engine with API Lab, Tools and Findings. Review results can attach the selected exchange as immutable encrypted evidence. The device harness covers Browser handoff, Site Map, review, finding save and evidence retention after history clearing. The upgrade baseline is the published 1.0.8 APK.

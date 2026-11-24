@@ -279,7 +279,8 @@ public class ProductionUiTest extends NativeUiDriver {
     private void checkNetworkFilterSurvivesPanelSwitch() {
         clickExposedControl("network_filters");
         enterExposedText("network_search", "path:/esuite-native-filter-mismatch");
-        clickExposedControl("network_filters");
+        clickExposedControl("network_apply_filters");
+        assertTrue(device.wait(Until.gone(By.res("network_filter_dialog")), 5000));
         BySelector empty = By.res("network_summary").textStartsWith("0 of ");
         assertTrue("The missing path should hide the observed rows", device.wait(Until.hasObject(empty), 5000));
         selectBrowserTool("viewport");
@@ -288,7 +289,7 @@ public class ProductionUiTest extends NativeUiDriver {
         clickExposedControl("network_filters");
         clickExposedControl("network_search_clear");
         assertTrue("The search term was not cleared", device.wait(Until.gone(By.res("network_search_clear")), 5000));
-        clickExposedControl("network_filters");
+        clickExposedControl("network_apply_filters");
         assertTrue("Clearing the search should restore the observed rows", device.wait(Until.hasObject(By.res("network_event")), 5000));
     }
 

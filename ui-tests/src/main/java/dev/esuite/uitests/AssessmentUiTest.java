@@ -22,6 +22,8 @@ public class AssessmentUiTest extends NativeUiDriver {
         click("browser_tools");
         click("browser_panel_picker");
         click("browser_panel_choice_network");
+        assertTrue("Browser observations did not become available for Activity",
+                device.wait(Until.hasObject(By.res("network_open_activity").enabled(true)), 10000));
         click("network_open_activity");
         assertTrue(device.wait(Until.hasObject(By.res("browser_activity_import")), 8000));
         click("browser_activity_create");

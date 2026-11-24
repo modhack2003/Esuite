@@ -10,7 +10,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
@@ -21,9 +23,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.esuite.app.R
 import dev.esuite.app.ui.TechnicalKeyboard
 import dev.esuite.app.core.atCharacterBoundary
 import dev.esuite.app.ui.observedAt
@@ -39,11 +45,10 @@ internal fun NetworkPanel(state: BrowserNetworkState, filters: NetworkFilters, u
 ) {
     val origin = state.origin
     var selected by remember(origin) { mutableStateOf<String?>(null) }
+    var editingFilters by remember(origin) { mutableStateOf(false) }
     val listPosition = rememberLazyListState()
-    LaunchedEffect(filters.expanded) { if (filters.expanded) listPosition.scrollToItem(0) }
-    val methods = remember(state.rows, filters.method) {
-        (state.rows.mapNotNull(BrowserRequestEvent::method) + listOfNotNull(filters.method?.takeIf(String::isNotEmpty))).distinct().sorted()
-    }
+    LaunchedEffect(filters) { listPosition.scrollToItem(0) }
+    val methods = remember(state.rows) { state.rows.mapNotNull(BrowserRequestEvent::method).distinct().sorted() }
     val rows = remember(state.rows, filters) { filters.select(state.rows) }
     val timedRows = remember(rows) { rows.filter { it.timing?.duration != null } }
     val start = remember(timedRows) { timedRows.minOfOrNull(BrowserRequestEvent::timestamp) ?: 0.0 }
@@ -64,17 +69,20 @@ internal fun NetworkPanel(state: BrowserNetworkState, filters: NetworkFilters, u
                 IconButton(onClick = { selected = null; clearRequests() }, modifier = Modifier.testTag("network_clear")) {
                     Icon(Icons.Outlined.Clear, contentDescription = "Clear Network log")
                 }
-                FilterChip(state.preserve, { onPreserve(!state.preserve) }, { Text("Preserve log") },
-                    modifier = Modifier.testTag("network_preserve"))
-                IconButton(onClick = { update(filters.copy(expanded = !filters.expanded)) }, modifier = Modifier.testTag("network_filters")) {
-                    Icon(Icons.Outlined.Search, contentDescription = if (filters.expanded) "Hide filters" else "Search and filter",
+                IconToggleButton(checked = state.preserve, onCheckedChange = onPreserve, modifier = Modifier.testTag("network_preserve")) {
+                    Icon(painterResource(R.drawable.ic_bookmark_outline), contentDescription = "Preserve Network log on navigation",
+                        tint = if (state.preserve) colors.primary else LocalContentColor.current)
+                }
+                IconButton(onClick = { editingFilters = true }, modifier = Modifier.testTag("network_filters")) {
+                    Icon(Icons.Outlined.Search, contentDescription = "Search and filter Network observations",
                         tint = if (filters.active) colors.primary else LocalContentColor.current)
+                }
+                IconButton(onClick = onOpenActivity, enabled = state.rows.isNotEmpty(),
+                    modifier = Modifier.testTag("network_open_activity")) {
+                    Icon(Icons.AutoMirrored.Outlined.List, contentDescription = "Open in Activity")
                 }
             }
             LazyColumn(Modifier.fillMaxWidth().weight(1f).testTag("network_rows"), state = listPosition) {
-                if (filters.expanded) item(key = "search") {
-                    InspectionSearch(filters.query, { update(filters.copy(query = it)) }, "Filter network observations", "network_search")
-                }
                 item(key = "summary") {
                     val total = if (knownTransfer) " · ${bytes(transfer)} measured" else ""
                     val paused = if (state.recording) "" else " · Paused"
@@ -82,41 +90,6 @@ internal fun NetworkPanel(state: BrowserNetworkState, filters: NetworkFilters, u
                     InspectionMessage("${rows.size} of ${state.rows.size} same-origin observations$total$paused$filtered",
                         Modifier.testTag("network_summary"))
                     if (state.rows.size == NETWORK_ROW_LIMIT) InspectionMessage("Network keeps the latest $NETWORK_ROW_LIMIT observations.")
-                }
-                if (state.rows.isNotEmpty()) item(key = "activity") {
-                    TextButton(onClick = onOpenActivity, modifier = Modifier.testTag("network_open_activity")) { Text("Open in Activity") }
-                }
-                if (filters.expanded) item {
-                    InspectionMessage("Combine method:GET with status-code:4xx. Filter further with resource-type:script, source:timing or path:/assets. Start a term with - to exclude it.")
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        ResourceType.entries.forEach { type ->
-                            FilterChip(filters.type == type, { update(filters.copy(type = type)) }, { Text(type.label) })
-                        }
-                    }
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        StatusFilter.entries.forEach { option ->
-                            FilterChip(filters.status == option, { update(filters.copy(status = option)) }, { Text(option.label) })
-                        }
-                    }
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        NetworkSource.entries.forEach { option ->
-                            FilterChip(filters.source == option, { update(filters.copy(source = option)) }, { Text(option.label) })
-                        }
-                    }
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilterChip(filters.method == null, { update(filters.copy(method = null)) }, { Text("All methods") })
-                        methods.forEach { option ->
-                            FilterChip(filters.method == option, { update(filters.copy(method = option)) }, { Text(option) })
-                        }
-                        FilterChip(filters.method == "", { update(filters.copy(method = "")) }, { Text("Method unavailable") })
-                    }
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        NetworkOrder.entries.forEach { option ->
-                            FilterChip(filters.order == option, { update(filters.copy(order = option)) }, { Text(option.label) })
-                        }
-                        FilterChip(filters.waterfall, { update(filters.copy(waterfall = !filters.waterfall)) }, { Text("Waterfall") })
-                    }
-                    ResetNetworkFilters { update(filters.reset()) }
                 }
                 if (wide && rows.isNotEmpty()) item {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -134,7 +107,7 @@ internal fun NetworkPanel(state: BrowserNetworkState, filters: NetworkFilters, u
                         !state.recording -> "Recording is paused."
                         else -> "Waiting for same-origin network activity."
                     })
-                    if (filters.active && !filters.expanded) ResetNetworkFilters { update(filters.reset()) }
+                    if (filters.active) ResetNetworkFilters { update(filters.reset()) }
                 }
                 items(rows, key = BrowserRequestEvent::id) { row ->
                     val facts = listOfNotNull(row.method, row.resourceType.takeUnless { it == "unknown" },
@@ -163,6 +136,45 @@ internal fun NetworkPanel(state: BrowserNetworkState, filters: NetworkFilters, u
     }
     current?.let { row ->
         key(row.id) { NetworkDetails(row, origin) { selected = null } }
+    }
+    if (editingFilters) NetworkFilterDialog(filters, methods, close = { editingFilters = false }) {
+        update(it)
+        editingFilters = false
+    }
+}
+
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@Composable
+private fun NetworkFilterDialog(initial: NetworkFilters, observedMethods: List<String>, close: () -> Unit, apply: (NetworkFilters) -> Unit) {
+    var filters by remember { mutableStateOf(initial) }
+    val methods = remember(observedMethods, initial.method) {
+        (observedMethods + listOfNotNull(initial.method?.takeIf(String::isNotEmpty))).distinct().sorted()
+    }
+    AlertDialog(onDismissRequest = close, modifier = Modifier.semantics { testTagsAsResourceId = true }.testTag("network_filter_dialog"),
+        title = { Text("Network filters") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                InspectionSearch(filters.query, { filters = filters.copy(query = it) }, "Filter network observations", "network_search")
+                InspectionMessage("Combine method:GET with status-code:4xx. Filter further with resource-type:script, source:timing or path:/assets. Start a term with - to exclude it.")
+                NetworkFilterChoices(ResourceType.entries, filters.type, ResourceType::label) { filters = filters.copy(type = it) }
+                NetworkFilterChoices(StatusFilter.entries, filters.status, StatusFilter::label) { filters = filters.copy(status = it) }
+                NetworkFilterChoices(NetworkSource.entries, filters.source, NetworkSource::label) { filters = filters.copy(source = it) }
+                NetworkFilterChoices(listOf(null) + methods + "", filters.method, {
+                    when (it) { null -> "All methods"; "" -> "Method unavailable"; else -> it }
+                }) { filters = filters.copy(method = it) }
+                NetworkFilterChoices(NetworkOrder.entries, filters.order, NetworkOrder::label) { filters = filters.copy(order = it) }
+                FilterChip(filters.waterfall, { filters = filters.copy(waterfall = !filters.waterfall) }, { Text("Waterfall") })
+                ResetNetworkFilters { filters = filters.reset() }
+            }
+        },
+        confirmButton = { Button(onClick = { apply(filters) }, modifier = Modifier.testTag("network_apply_filters")) { Text("Apply") } },
+        dismissButton = { TextButton(onClick = close) { Text("Cancel") } })
+}
+
+@Composable
+private fun <T> NetworkFilterChoices(options: List<T>, selection: T, label: (T) -> String, select: (T) -> Unit) {
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        options.forEach { option -> FilterChip(selection == option, { select(option) }, { Text(label(option)) }) }
     }
 }
 
