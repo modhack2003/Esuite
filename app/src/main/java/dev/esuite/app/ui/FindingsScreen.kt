@@ -167,6 +167,8 @@ internal fun FindingsScreen(state: AppState, model: AppViewModel, project: Proje
                         openReview = { exchange -> selectedId = null; openReview(exchange) },
                     )
                     LocalReportAction("Preview observation report", "esuite-observation.json", { model.exportObservation(finding.id) }, model::message)
+                    LocalReportAction("Preview Markdown report", "esuite-observation.md", { model.exportObservation(finding.id, markdown = true) },
+                        model::message, mimeType = "text/markdown")
                     TextButton(onClick = { remove = true }) { Text("Remove observation") }
                 }
             },

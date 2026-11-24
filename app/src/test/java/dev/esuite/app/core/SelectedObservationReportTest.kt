@@ -36,5 +36,25 @@ class SelectedObservationReportTest {
         assertTrue(evidence[0].getValue("responseBodyTruncated").jsonPrimitive.boolean)
         assertEquals(listOf(false, false), evidence.drop(1).map { it.getValue("retained").jsonPrimitive.boolean })
         assertNull(ReportExporter.selectedObservation(workspace, otherProject.id, finding.id))
+
+        val markdown = requireNotNull(ReportExporter.selectedObservationMarkdown(workspace, project.id, finding.id))
+        assertTrue(markdown.startsWith("# ESuite observation"))
+        assertTrue(markdown.contains("Clipped"))
+        assertTrue(markdown.contains("| missing | Missing |"))
+        assertFalse(markdown.contains("private"))
+        assertFalse(markdown.contains(otherProject.origin))
+        assertFalse(markdown.contains(otherFinding.id))
+        assertNull(ReportExporter.selectedObservationMarkdown(workspace, otherProject.id, finding.id))
+    }
+
+    @Test fun markdownEscapesEvidenceIdentifiersAndOmitsNotes() {
+        val project = Project(id = "p", name = "Fixture", origin = "https://example.test")
+        val finding = Finding(id = "<id>|[link]", projectId = project.id, title = "Hidden title", detail = "Hidden note",
+            evidenceIds = listOf("row|alias\n# injected"))
+        val report = requireNotNull(ReportExporter.selectedObservationMarkdown(
+            Workspace(projects = listOf(project), findings = listOf(finding)), project.id, finding.id))
+        assertTrue(report.contains("&lt;id&gt;\\|\\[link\\]"))
+        assertTrue(report.contains("| row\\|alias \\# injected | Missing |"))
+        assertFalse(report.contains("Hidden"))
     }
 }

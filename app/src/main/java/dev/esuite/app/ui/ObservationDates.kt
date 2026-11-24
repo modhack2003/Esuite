@@ -20,9 +20,10 @@ import java.time.Instant
 import java.time.ZoneId
 
 private val LocalObservationDates = compositionLocalOf { observationDateFormatter() }
+private val UtcZone = ZoneId.of("UTC")
 
 @Composable
-internal fun ObservationDates(content: @Composable () -> Unit) {
+internal fun ObservationDates(useUtc: Boolean, content: @Composable () -> Unit) {
     val context = LocalContext.current.applicationContext
     val locale = LocalConfiguration.current.locales[0]
     var zone by remember { mutableStateOf(ZoneId.systemDefault()) }
@@ -34,7 +35,8 @@ internal fun ObservationDates(content: @Composable () -> Unit) {
         zone = ZoneId.systemDefault()
         onDispose { context.unregisterReceiver(receiver) }
     }
-    val formatter = remember(locale, zone) { observationDateFormatter(locale, zone) }
+    val displayZone = if (useUtc) UtcZone else zone
+    val formatter = remember(locale, displayZone) { observationDateFormatter(locale, displayZone) }
     CompositionLocalProvider(LocalObservationDates provides formatter, content = content)
 }
 

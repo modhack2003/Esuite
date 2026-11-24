@@ -20,16 +20,23 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private class LocalReportDocument : ActivityResultContracts.CreateDocument("application/json") {
+private class LocalReportDocument(mimeType: String) : ActivityResultContracts.CreateDocument(mimeType) {
     override fun createIntent(context: Context, input: String): Intent = super.createIntent(context, input).putExtra(Intent.EXTRA_LOCAL_ONLY, true)
 }
 
 @Composable
-fun LocalReportAction(label: String, filename: String, prepare: suspend () -> String?, onMessage: (String) -> Unit, enabled: Boolean = true) {
+fun LocalReportAction(
+    label: String,
+    filename: String,
+    prepare: suspend () -> String?,
+    onMessage: (String) -> Unit,
+    enabled: Boolean = true,
+    mimeType: String = "application/json",
+) {
     val context = LocalContext.current; val scope = rememberCoroutineScope()
     var export by remember { mutableStateOf("") }; var preview by remember { mutableStateOf(false) }
     var preparing by remember { mutableStateOf(false) }
-    val launcher = rememberLauncherForActivityResult(LocalReportDocument()) { uri ->
+    val launcher = rememberLauncherForActivityResult(remember(mimeType) { LocalReportDocument(mimeType) }) { uri ->
         val payload = export
         export = ""
         if (uri != null) {

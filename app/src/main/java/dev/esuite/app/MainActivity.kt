@@ -96,6 +96,7 @@ class MainActivity : ComponentActivity() {
                 mutableStateOf(Appearance.entries.firstOrNull { it.name == preferences.getString("theme", null) } ?: Appearance.Dark)
             }
             var motion by remember { mutableStateOf(preferences.getBoolean("motion", true)) }
+            var useUtc by remember { mutableStateOf(preferences.getBoolean("timestamps_utc", false)) }
             val dark = isDark(appearance)
             SideEffect {
                 val color = android.graphics.Color.TRANSPARENT
@@ -103,10 +104,12 @@ class MainActivity : ComponentActivity() {
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
             }
             ESuiteTheme(appearance) {
-                ObservationDates {
+                ObservationDates(useUtc) {
                     ESuiteApp(model, appearance, motion,
                         onAppearance = { appearance = it; preferences.edit().putString("theme", it.name).apply() },
                         onMotion = { motion = it; preferences.edit().putBoolean("motion", it).apply() },
+                        useUtcTimestamps = useUtc,
+                        onUtcTimestamps = { useUtc = it; preferences.edit().putBoolean("timestamps_utc", it).apply() },
                         onBrowserShortcut = { developerToolsShortcut = it },
                         onCommandShortcut = { commandShortcut = it })
                 }
@@ -150,6 +153,8 @@ internal fun ESuiteApp(
     motion: Boolean = true,
     onAppearance: (Appearance) -> Unit = {},
     onMotion: (Boolean) -> Unit = {},
+    useUtcTimestamps: Boolean = false,
+    onUtcTimestamps: (Boolean) -> Unit = {},
     onBrowserShortcut: ((() -> Unit)?) -> Unit = {},
     onCommandShortcut: ((() -> Unit)?) -> Unit = {},
 ) {
@@ -290,7 +295,8 @@ internal fun ESuiteApp(
                                     Surface(Modifier.fillMaxSize(), color = Midnight) {
                                         when {
                                             destination == Screen.Settings -> SettingsScreen(state, model, appearance, motion,
-                                                onAppearance, onMotion, { browserMessage = "Clearing browsing data…"; clearRequest++ },
+                                                onAppearance, onMotion, useUtcTimestamps, onUtcTimestamps,
+                                                { browserMessage = "Clearing browsing data…"; clearRequest++ },
                                                 browserMessage, ::closeSettings)
                                             !state.ready -> SavedDataState(state, ::settings)
                                             destination == Screen.Findings -> key(state.projectId) {

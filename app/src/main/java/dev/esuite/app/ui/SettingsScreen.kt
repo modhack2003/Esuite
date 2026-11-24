@@ -25,6 +25,7 @@ import dev.esuite.app.BuildConfig
 
 private enum class SettingsSection(val title: String, val terms: String) {
     Appearance("Appearance", "theme system light dark high contrast animation motion reset"),
+    Timestamps("Timestamps", "timezone time zone UTC local dates Activity observations"),
     Browsing("Browsing data", "webview history cookies storage clear browser"),
     Sites("Saved site data", "vault encryption copy export report site save restore remove erase"),
     About("About ESuite", "version build release credits license Inter MIT GitHub support diagnostics webview");
@@ -42,6 +43,8 @@ internal fun SettingsScreen(
     motion: Boolean,
     setAppearance: (Appearance) -> Unit,
     setMotion: (Boolean) -> Unit,
+    useUtcTimestamps: Boolean,
+    setUtcTimestamps: (Boolean) -> Unit,
     clearBrowser: () -> Unit,
     browserMessage: String?,
     onBack: () -> Unit,
@@ -93,6 +96,16 @@ internal fun SettingsScreen(
                         TextButton(onClick = { confirmAppearanceReset = true }, enabled = appearance != Appearance.Dark || !motion) {
                             Text("Restore appearance defaults")
                         }
+                    }
+                    SettingsSection.Timestamps -> {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Use UTC for timestamps", Modifier.weight(1f))
+                            Switch(checked = useUtcTimestamps, onCheckedChange = setUtcTimestamps,
+                                modifier = Modifier.testTag("settings_timestamps_utc")
+                                    .semantics { contentDescription = "Use UTC for timestamps" })
+                        }
+                        Text(if (useUtcTimestamps) "Observations display UTC." else "Observations display the device’s local time.",
+                            style = MaterialTheme.typography.bodySmall, color = Muted)
                     }
                     SettingsSection.Browsing -> {
                         Text("Browser uses the WebView profile belonging to ESuite. Its cookies and storage stay on this device.",

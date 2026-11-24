@@ -43,6 +43,9 @@ public class ProductionUiTest extends NativeUiDriver {
         click("finding_item");
         find(By.text("Preview observation report")).click();
         assertNotNull(device.wait(Until.findObject(By.textContains("esuite-observation")), 5000));
+        device.pressBack();
+        find(By.text("Preview Markdown report")).click();
+        assertTrue(device.wait(Until.hasObject(By.textContains("# ESuite observation")), 5000));
         device.pressBack(); device.pressBack();
         click("nav_tools");
         growDock(device.getDisplayHeight() / 10);
@@ -110,8 +113,15 @@ public class ProductionUiTest extends NativeUiDriver {
         enter("settings_search", "license");
         assertTrue(waitText("settings_version", "Version", 5000));
         assertFalse(device.hasObject(By.res("settings_clear_browser")));
+        enter("settings_search", "UTC");
+        click("settings_timestamps_utc");
+        assertTrue(tag("settings_timestamps_utc").isChecked());
         device.pressBack();
         assertNotNull(tag("browser_url"));
+        launch();
+        click("open_settings");
+        enter("settings_search", "UTC");
+        assertTrue("The UTC preference should survive restart", tag("settings_timestamps_utc").isChecked());
     }
 
     @Test public void curlPreviewRequiresConfirmationBeforeReplacingTheRequest() throws Exception {

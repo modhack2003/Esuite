@@ -450,10 +450,13 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         return withContext(Dispatchers.Default) { ReportExporter.sanitized(snapshot.workspace, project) }
     }
 
-    suspend fun exportObservation(id: String): String? {
+    suspend fun exportObservation(id: String, markdown: Boolean = false): String? {
         val snapshot = state.value
         val project = snapshot.projectId ?: return null
-        return withContext(Dispatchers.Default) { ReportExporter.selectedObservation(snapshot.workspace, project, id) }
+        return withContext(Dispatchers.Default) {
+            if (markdown) ReportExporter.selectedObservationMarkdown(snapshot.workspace, project, id)
+            else ReportExporter.selectedObservation(snapshot.workspace, project, id)
+        }
     }
     fun deleteProject() {
         val p = currentProject() ?: return
