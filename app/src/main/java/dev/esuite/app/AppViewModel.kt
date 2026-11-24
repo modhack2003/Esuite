@@ -517,6 +517,27 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
     }
     fun deleteSavedRequest(id: String) { mutable.update { it.copy(workspace = it.workspace.copy(savedRequests = it.workspace.savedRequests.filterNot { r -> r.id == id })) }; persistDurable() }
     fun deleteFinding(id: String) { mutable.update { it.copy(workspace = it.workspace.copy(findings = it.workspace.findings.filterNot { f -> f.id == id })) }; persistDurable() }
+
+    suspend fun restoreFindingEvidence(findingId: String, exchangeId: String): Boolean {
+        val site = currentProject() ?: return false
+        return admitDurable("Evidence restored. Check the save status for confirmation.") { workspace ->
+            val finding = requireNotNull(workspace.findings.firstOrNull { it.id == findingId && it.projectId == site.id }) {
+                "This observation is no longer available."
+            }
+            require(exchangeId in EvidenceRetention.missing(finding)) { "This attachment is already retained or no longer referenced." }
+            val original = requireNotNull(workspace.exchanges.firstOrNull { it.id == exchangeId && it.projectId == site.id }) {
+                "This exchange is no longer available in Activity."
+            }
+            val snapshot = EvidenceRetention.snapshot(original)
+            val restored = finding.copy(
+                evidence = finding.evidence + snapshot,
+                evidenceRequestBodies = finding.evidenceRequestBodies +
+                    (exchangeId to EvidenceRetention.stateForNewSnapshot(workspace, original, snapshot)),
+            )
+            workspace.copy(findings = workspace.findings.map { if (it.id == finding.id) restored else it })
+        }
+    }
+
     /** Drop one retained snapshot but keep its id, so the reference reports the explicit missing state. */
     fun removeEvidence(findingId: String, exchangeId: String) {
         mutable.update {

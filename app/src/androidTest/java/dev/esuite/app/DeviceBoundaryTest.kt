@@ -67,6 +67,13 @@ class DeviceBoundaryTest {
                 assertTrue(model.replayFindingEvidence(finding.id, long.id))
                 assertEquals(originalBody, model.state.value.draft.body)
                 assertTrue(model.state.value.draft.headers.isEmpty())
+
+                model.removeEvidence(finding.id, long.id)
+                assertEquals(listOf(long.id), EvidenceRetention.missing(model.state.value.workspace.findings.single()))
+                assertTrue(model.restoreFindingEvidence(finding.id, long.id))
+                assertFalse(model.restoreFindingEvidence(finding.id, long.id))
+                assertEquals(finding, model.state.value.workspace.findings.single())
+
                 model.clearHistory()
                 model.replaceDraft(RequestDraft(url = site.origin + "/keep"))
                 assertFalse(model.replayFindingEvidence(finding.id, long.id))
@@ -79,6 +86,8 @@ class DeviceBoundaryTest {
                 assertEquals(listOf(short.id, long.id), reduced.evidenceIds)
                 assertEquals(listOf(long.id), EvidenceRetention.missing(reduced))
                 assertEquals(setOf(short.id), reduced.evidenceRequestBodies.keys)
+                assertFalse(model.restoreFindingEvidence(finding.id, long.id))
+                assertEquals(reduced, model.state.value.workspace.findings.single())
             }
         } finally {
             withContext(Dispatchers.Main) { model.viewModelScope.cancel(); model.engine.close() }

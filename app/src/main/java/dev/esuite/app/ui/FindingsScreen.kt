@@ -164,6 +164,7 @@ internal fun FindingsScreen(state: AppState, model: AppViewModel, project: Proje
                     FindingEvidence(finding, evidenceOptions,
                         replay = { evidenceId -> if (model.replayFindingEvidence(finding.id, evidenceId)) openApi() },
                         remove = { evidenceId -> model.removeEvidence(finding.id, evidenceId) },
+                        restore = { evidenceId -> model.restoreFindingEvidence(finding.id, evidenceId) },
                         openReview = { exchange -> selectedId = null; openReview(exchange) },
                     )
                     LocalReportAction("Preview observation report", "esuite-observation.json", { model.exportObservation(finding.id) }, model::message)
@@ -227,6 +228,7 @@ private fun FindingEvidence(
     history: List<Exchange>,
     replay: (String) -> Unit,
     remove: (String) -> Unit,
+    restore: suspend (String) -> Boolean,
     openReview: (Exchange) -> Unit,
 ) {
     if (finding.evidenceIds.isEmpty()) {
@@ -238,8 +240,26 @@ private fun FindingEvidence(
         key(evidenceId) {
             val snapshot = finding.evidence.firstOrNull { it.id == evidenceId }
             if (snapshot == null || evidenceId in missing) {
-                Text("Evidence not retained — history was cleared or this observation predates evidence retention.",
+                val originalAvailable = history.any { it.id == evidenceId }
+                Text(if (originalAvailable) "Evidence not retained. The original exchange is still available in Activity."
+                    else "Evidence not retained. The original exchange is unavailable in Activity.",
                     style = MaterialTheme.typography.bodySmall, color = Muted)
+                if (originalAvailable) {
+                    val scope = rememberCoroutineScope()
+                    var restoring by remember { mutableStateOf(false) }
+                    var failed by remember { mutableStateOf(false) }
+                    OutlinedButton(onClick = {
+                        restoring = true
+                        failed = false
+                        scope.launch {
+                            try { failed = !restore(evidenceId) } finally { restoring = false }
+                        }
+                    }, enabled = !restoring, modifier = Modifier.testTag("finding_restore_evidence_$index")) {
+                        Text(if (restoring) "Restoring evidence…" else "Restore from Activity")
+                    }
+                    if (failed) Text("Evidence could not be restored. Check the selected site and available storage.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
             } else {
                 var shown by remember { mutableStateOf(false) }
                 var confirmEvidence by remember { mutableStateOf(false) }
