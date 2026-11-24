@@ -12,6 +12,8 @@ Read this file first, then `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md
 
 ## 1.1.0 development
 
+The attached 1.1.0 plan was imported into [the acceptance ledger](../release/1.1.0-acceptance.csv), retaining all 1,000 feature IDs and 1,000 quality IDs and the 13 confirmed-defect expectations. The plan document SHA-256 is `491bc7eb20d51505a24dc01590f77c65b266937721090e37b6adf858edf65415`. Run `python3 tools/check_release_acceptance.py --checkpoint 1` for the first checkpoint and `python3 tools/check_release_acceptance.py --complete --candidate <build>` for the all-items release gate on the final build. Implemented items stay open for acceptance until the ledger records a build, fixture, observed outcome, and evidence.
+
 The release branch starts with the 13 defects reproduced in the 1.0.9 stress audit. The fixes cover exact raw HTTP bodies, cURL data and destination handling, bounded OpenAPI and HAR file imports, Unicode-safe drafts and markup previews, live inspector bounds, Activity time zone and locale changes, and corrected offline response review. The response-review engine records rule version 2 for new reviews. Existing findings retain the versions and evidence they were saved with.
 
 The audit ran 1,220 additional cases against 1.0.9 and observed 925 passes and 295 failing variants across the 13 defects. The development branch has JVM regression cases and Chromium inspector scenarios for the fixes, plus an independent Android raw import test. The full 1.1.0 feature and quality catalog, candidate Android matrix, same-signer upgrade from 1.0.9, and physical-device checks are release gates.

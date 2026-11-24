@@ -180,6 +180,21 @@ with sync_playwright() as p:
     assert page.locator("#replacement").evaluate("e=>e.style.outlineColor==='blue' && e.style.outlineWidth==='1px'"), "Changing selection must preserve edited outline"
     page.evaluate(scripts["select"])
     page.locator("#replacement").click()
+    page.evaluate(scripts["highlightSelection"])
+    page.evaluate("""() => {
+        const highlight = window.__esuiteHighlight;
+        window.fixtureHighlight = highlight.node;
+        window.fixtureDisconnected = [];
+        for (const [name, observer] of [['resize', highlight.resizeObserver], ['removal', highlight.removalObserver]]) {
+            const disconnect = observer.disconnect.bind(observer);
+            observer.disconnect = () => { window.fixtureDisconnected.push(name); disconnect(); };
+        }
+    }""")
+    page.evaluate(scripts["clearSelection"])
+    assert page.evaluate("window.fixtureDisconnected.sort().join(',') === 'removal,resize' && !window.fixtureHighlight.isConnected")
+    assert json.loads(page.evaluate(scripts["selection"])) is None
+    page.evaluate(scripts["select"])
+    page.locator("#replacement").click()
     assert edit_html(json.loads(page.evaluate(scripts['selection']))['html'], 'text only') == 'HTML updated locally'
     assert json.loads(page.evaluate(scripts["selection"])) is None
     page.evaluate(scripts["select"])
