@@ -31,6 +31,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.net.InetAddress
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -320,6 +321,11 @@ class DeviceBoundaryTest {
         assertTrue("Timed out waiting for ViewModel state", condition(model.state.value))
     }
 
+    private fun startLoopbackServer() = MockWebServer().apply {
+        // Keep the fixture independent of the emulator's localhost name resolution.
+        start(InetAddress.getByAddress("127.0.0.1", byteArrayOf(127, 0, 0, 1)), 0)
+    }
+
     private fun loadedViewModel(server: MockWebServer): Pair<AppViewModel, Project> {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val application = context.applicationContext as android.app.Application
@@ -395,7 +401,7 @@ class DeviceBoundaryTest {
     @Test fun delayedResponseArrivingAfterIdentitySwitchIsRecordedButNotApplied() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        val server = MockWebServer(); server.start()
+        val server = startLoopbackServer()
         val (model, _) = loadedViewModel(server)
         try {
             instrumentation.runOnMainSync { model.draft(RequestDraft(url = server.url("/api").toString())) }
@@ -420,7 +426,7 @@ class DeviceBoundaryTest {
     @Test fun delayedErrorArrivingAfterIdentitySwitchIsRecordedButNotApplied() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        val server = MockWebServer(); server.start()
+        val server = startLoopbackServer()
         val (model, _) = loadedViewModel(server)
         try {
             instrumentation.runOnMainSync { model.draft(RequestDraft(url = server.url("/api").toString())) }
@@ -444,7 +450,7 @@ class DeviceBoundaryTest {
     @Test fun cancellingAnInFlightRequestRecordsNothingAndKeepsCancellationSemantics() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        val server = MockWebServer(); server.start()
+        val server = startLoopbackServer()
         val (model, _) = loadedViewModel(server)
         try {
             instrumentation.runOnMainSync { model.draft(RequestDraft(url = server.url("/api").toString())) }

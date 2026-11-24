@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -108,6 +109,7 @@ internal fun BrowserScreen(
     val context = LocalContext.current
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
+    val hostView = LocalView.current
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val links = LocalUriHandler.current
     val requestLog = remember { BrowserRequestLog() }
@@ -250,6 +252,7 @@ internal fun BrowserScreen(
     }
 
     fun closePageFind() {
+        keyboard?.hide()
         findInPage = false
         findQuery = ""
         findResult = null
@@ -508,8 +511,9 @@ internal fun BrowserScreen(
             requestLog.page(null)
         }
     }
-    BackHandler(visible && !imeVisible && (findInPage || utilitiesVisible || inspecting || canGoBack)) {
+    BackHandler(visible && (findInPage || utilitiesVisible || inspecting || canGoBack)) {
         when {
+            imeVisible -> ViewCompat.getWindowInsetsController(hostView)?.hide(WindowInsetsCompat.Type.ime())
             findInPage -> closePageFind()
             utilitiesVisible -> closeUtilities()
             inspecting -> {

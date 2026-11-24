@@ -157,7 +157,8 @@ public class ProductionUiTest extends NativeUiDriver {
         click("open_app_commands");
         enter("command_search", "/find");
         click("command_app_find");
-        enter("browser_find_query", "Example");
+        // Exercise the on-screen Close action with the Find field still focused.
+        tag("browser_find_query").setText("Example");
         assertTrue("Find in page did not report matching text",
                 device.wait(Until.hasObject(By.res("browser_find_count").textStartsWith("1 of ")), 5000));
         click("browser_close_find");
@@ -233,7 +234,7 @@ public class ProductionUiTest extends NativeUiDriver {
     private Rect pageBounds() {
         UiObject2 page = device.wait(Until.findObject(By.res("browser_page")), 2000);
         if (page == null) page = device.wait(Until.findObject(By.clazz("android.webkit.WebView")), 5000);
-        assertNotNull("The WebView disappeared", page);
+        assertNotNull("The WebView disappeared. Foreground package: " + device.getCurrentPackageName(), page);
         return page.getVisibleBounds();
     }
 

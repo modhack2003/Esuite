@@ -40,6 +40,8 @@ The production-signed upgrade harness now uses the checksum-pinned 1.0.9 APK and
 
 The raw-import branch checkpoint passed eight Android configurations, including API 34. API 29 lost the cURL action in the test driver's page-wide scroll after revealing it inside the dock. The harness now checks the button against the dock viewport throughout the actual tap. API 32 stopped during the emulator ZIP download before instrumentation. [Android matrix](https://github.com/modhack2003/Esuite/actions/runs/45277790067) · [Dock harness follow-up](https://github.com/modhack2003/Esuite/actions/runs/45326195304)
 
+The dock follow-up passed the API 32 configuration. API 33's page-find test returned to the launcher with an empty crash buffer. Browser now handles Back while the Find bar or dock is active, and the test exercises the on-screen Close action with the Find field focused. On API 36, two fixture servers failed to resolve localhost. Those debug tests now bind to the numeric IPv4 loopback address. [Dock harness follow-up](https://github.com/modhack2003/Esuite/actions/runs/45326195304)
+
 ## 1.0.9 Activity and passive review
 
 Activity combines stored HTTP exchanges with an explicitly imported, in-memory Browser Network snapshot. Source labels preserve the distinction between callbacks, timings and captured responses. Site Map uses complete observed paths and exact site scope. Quick response review shares one rule engine with API Lab, Tools and Findings. Review results can attach the selected exchange as immutable encrypted evidence. The device harness covers Browser handoff, Site Map, review, finding save and evidence retention after history clearing. The upgrade baseline is the published 1.0.8 APK.
