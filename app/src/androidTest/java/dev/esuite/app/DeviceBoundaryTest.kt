@@ -39,6 +39,51 @@ import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(AndroidJUnit4::class)
 class DeviceBoundaryTest {
+    @Test fun retainedFindingLoadsOnlyCompleteRequestsAndPreservesMultipleAttachments() = runBlocking {
+        val site = Project("replay-site", "Evidence fixture", "https://example.test")
+        val originalBody = "x".repeat(Limits.EVIDENCE_BYTES - 3) + "🧪"
+        val long = Exchange(id = "long", projectId = site.id, identity = "A", status = 200,
+            request = RequestDraft("POST", site.origin + "/long", listOf(Header("Authorization", "synthetic")), originalBody))
+        val short = Exchange(id = "short", projectId = site.id, identity = "B", status = 200,
+            request = RequestDraft("POST", site.origin + "/short", body = "complete"))
+        val store = object : WorkspaceStore {
+            override fun load() = Workspace(projects = listOf(site), exchanges = listOf(long, short))
+            override fun save(workspace: Workspace) = workspace
+            override fun erase() = Unit
+        }
+        val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+        val model = withContext(Dispatchers.Main) { AppViewModel(app, store) }
+        try {
+            awaitState(model) { it.ready }
+            withContext(Dispatchers.Main) {
+                assertFalse(model.addFinding("Duplicate evidence", "Must be rejected", listOf(long, long)))
+                assertTrue(model.state.value.workspace.findings.isEmpty())
+                assertTrue(model.addFinding("Two captures", "Retain both", listOf(short, long), findingId = "retained"))
+                val finding = model.state.value.workspace.findings.single()
+                assertEquals(listOf(short.id, long.id), finding.evidenceIds)
+                assertEquals(mapOf(short.id to EvidenceRequestBody.Complete, long.id to EvidenceRequestBody.Clipped), finding.evidenceRequestBodies)
+
+                assertTrue(model.replayFindingEvidence(finding.id, long.id))
+                assertEquals(originalBody, model.state.value.draft.body)
+                assertTrue(model.state.value.draft.headers.isEmpty())
+                model.clearHistory()
+                model.replaceDraft(RequestDraft(url = site.origin + "/keep"))
+                assertFalse(model.replayFindingEvidence(finding.id, long.id))
+                assertEquals(site.origin + "/keep", model.state.value.draft.url)
+                assertTrue(model.replayFindingEvidence(finding.id, short.id))
+                assertEquals(short.request, model.state.value.draft)
+
+                model.removeEvidence(finding.id, long.id)
+                val reduced = model.state.value.workspace.findings.single()
+                assertEquals(listOf(short.id, long.id), reduced.evidenceIds)
+                assertEquals(listOf(long.id), EvidenceRetention.missing(reduced))
+                assertEquals(setOf(short.id), reduced.evidenceRequestBodies.keys)
+            }
+        } finally {
+            withContext(Dispatchers.Main) { model.viewModelScope.cancel(); model.engine.close() }
+        }
+    }
+
     @Test fun staleReviewContextCannotAttachOrSaveAnotherIdentity() = runBlocking {
         val site = Project(id = UUID.randomUUID().toString(), name = "Review fixture", origin = "https://example.test")
         val exchange = Exchange(projectId = site.id, identity = "A", request = RequestDraft(url = site.origin + "/"),

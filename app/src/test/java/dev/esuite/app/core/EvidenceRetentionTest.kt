@@ -14,6 +14,49 @@ import java.util.Random
 class EvidenceRetentionTest {
     private val random = Random(0x51E)
 
+    @Test fun clippedRequestReplaysOnlyWithMatchingCompleteHistory() {
+        repeat(4) { offset ->
+            val source = exchange("p", "retained-$offset").let {
+                it.copy(request = it.request.copy(body = "x".repeat(Limits.EVIDENCE_BYTES - offset) + "🧪"))
+            }
+            val snapshot = EvidenceRetention.snapshot(source)
+            val history = Workspace(exchanges = listOf(source))
+            val state = EvidenceRetention.stateForNewSnapshot(history, source, snapshot)
+            val finding = Finding(projectId = "p", title = "Retained", detail = "Fixture",
+                evidenceIds = listOf(snapshot.id), evidence = listOf(snapshot), evidenceRequestBodies = mapOf(snapshot.id to state))
+
+            assertEquals(EvidenceRequestBody.Clipped, state)
+            assertEquals(source.request, EvidenceRetention.requestForReplay(finding, snapshot, history.exchanges))
+            assertNull(EvidenceRetention.requestForReplay(finding, snapshot, emptyList()))
+            assertNull(EvidenceRetention.requestForReplay(finding, snapshot, listOf(snapshot)))
+            assertNull(EvidenceRetention.requestForReplay(finding, snapshot, listOf(source.copy(projectId = "elsewhere"))))
+            assertNull(EvidenceRetention.requestForReplay(finding, snapshot, listOf(source.copy(identity = "C"))))
+            assertNull(EvidenceRetention.requestForReplay(finding, snapshot, listOf(source.copy(request = source.request.copy(body = "different")))))
+            assertEquals(EvidenceRequestBody.Clipped,
+                EvidenceRetention.stateForNewSnapshot(Workspace(findings = listOf(finding)), snapshot, snapshot))
+        }
+    }
+
+    @Test fun olderEvidenceNearTheCapKeepsAnUnknownStateUntilAnOriginalIsAvailable() {
+        val source = exchange("p", "legacy").let {
+            it.copy(request = it.request.copy(body = "x".repeat(Limits.EVIDENCE_BYTES - 3) + "🧪"))
+        }
+        val snapshot = EvidenceRetention.snapshot(source)
+        val legacy = Finding(projectId = "p", title = "Legacy", detail = "Fixture", evidence = listOf(snapshot))
+        assertEquals(EvidenceRequestBody.Unknown, EvidenceRetention.requestBodyState(legacy, snapshot))
+        assertNull(EvidenceRetention.requestForReplay(legacy, snapshot, emptyList()))
+        assertEquals(source.request, EvidenceRetention.requestForReplay(legacy, snapshot, listOf(source)))
+
+        val complete = source.copy(request = source.request.copy(body = "x".repeat(Limits.EVIDENCE_BYTES)))
+        val state = EvidenceRetention.stateForNewSnapshot(Workspace(exchanges = listOf(complete)), complete, complete)
+        assertEquals(EvidenceRequestBody.Complete, state)
+        assertEquals(complete.request, EvidenceRetention.requestForReplay(
+            legacy.copy(evidenceRequestBodies = mapOf(complete.id to state)), complete, emptyList()))
+        val small = source.copy(request = source.request.copy(body = "x".repeat(Limits.EVIDENCE_BYTES - 4)))
+        assertEquals(small.request, EvidenceRetention.requestForReplay(legacy, small, emptyList()))
+        assertNull(EvidenceRetention.requestForReplay(legacy, small.copy(source = "Browser metadata"), listOf(small)))
+    }
+
     /**
      * The invariant: a snapshot stored on a [Finding] is unchanged by every path that disposes of
      * [Workspace.exchanges] — `clearHistory()`'s project filter, `record()`'s rollover past

@@ -28,7 +28,7 @@ import kotlinx.serialization.json.jsonObject
  */
 object WorkspaceSchema {
     /** The schema version this build writes and migrates toward. */
-    const val CURRENT_VERSION: Int = 3
+    const val CURRENT_VERSION: Int = 4
 
     private val json = Json { encodeDefaults = true }
 
@@ -41,6 +41,9 @@ object WorkspaceSchema {
     private val migrations: Map<Int, (JsonObject) -> JsonObject> = linkedMapOf(
         1 to { document -> stampVersion(document, 2) },
         2 to { document -> backfillEvidence(document) },
+        // Version 4 records completeness on new evidence. Existing snapshots keep their bytes
+        // and can resolve legacy request bodies against their original capture when available.
+        3 to { document -> stampVersion(document, 4) },
     )
 
     /**
@@ -55,10 +58,9 @@ object WorkspaceSchema {
      * region `WorkspacePersistence.prepare` cannot prune. References the remaining headroom cannot
      * afford keep reporting the explicit missing state, so the repair stays opportunistic.
      *
-     * Reusing the CURRENT [Exchange]/[Finding] serializers inside this step is only valid while
-     * those shapes are unchanged relative to v2: `Finding.evidence` has a default, so a v2 finding
-     * decodes cleanly and everything else is identical. A later shape change to either type MUST
-     * pin a frozen DTO for this step instead of the live serializer.
+     * Optional finding fields introduced after v3 must have defaults and must be omitted here so
+     * the generated findings still use the v3 JSON shape. Any incompatible shape change must use
+     * a frozen DTO for this step instead of the live serializer.
      */
     private fun backfillEvidence(document: JsonObject): JsonObject {
         val exchanges = document["exchanges"]?.let { json.decodeFromJsonElement(ListSerializer(Exchange.serializer()), it) }.orEmpty()

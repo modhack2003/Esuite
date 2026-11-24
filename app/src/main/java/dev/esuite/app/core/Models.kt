@@ -1,5 +1,7 @@
 package dev.esuite.app.core
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
@@ -21,11 +23,16 @@ import java.util.UUID
  * the referenced exchanges, so `evidenceIds - evidence.map { it.id }` is exactly the missing set.
  * Snapshots live in the durable region and are never touched by a history disposal path.
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable data class Finding(
     val id: String = UUID.randomUUID().toString(), val projectId: String, val title: String,
     val detail: String, val evidenceIds: List<String> = emptyList(), val evidence: List<Exchange> = emptyList(),
     val state: String = "Observation", val timestamp: Long = System.currentTimeMillis(),
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val evidenceRequestBodies: Map<String, EvidenceRequestBody> = emptyMap(),
 )
+@Serializable
+enum class EvidenceRequestBody { Complete, Clipped, Unknown, Unavailable }
 @Serializable data class SavedRequest(val id: String = UUID.randomUUID().toString(), val projectId: String, val name: String, val draft: RequestDraft)
 @Serializable data class IdentityConfig(val projectId: String, val identity: String, val headers: List<Header> = emptyList())
 @Serializable data class Workspace(

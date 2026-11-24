@@ -263,9 +263,32 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         writeHeaderEditor(value.headers)
     }
     fun select(exchange: Exchange) = mutable.update { it.copy(selected = exchange) }
+
     fun replay(exchange: Exchange) {
-        mutable.update { it.copy(draft = CredentialPolicy.strip(exchange.request, it.workspace.identityConfigs.filter { c -> c.projectId == it.projectId }), selected = exchange,
-            message = if (exchange.source == "Browser metadata") "Browser bodies are unavailable. Supply missing bodies before sending. Observed auth headers were removed." else "Draft loaded with observed auth headers removed. Review body values; sending is explicit.") }
+        loadReplay(exchange, exchange.request,
+            if (exchange.source == "Browser metadata") "Browser bodies are unavailable. Supply missing bodies before sending. Observed auth headers were removed."
+            else "Draft loaded with observed auth headers removed. Review body values; sending is explicit.")
+    }
+
+    fun replayFindingEvidence(findingId: String, evidenceId: String): Boolean {
+        val current = state.value
+        val project = currentProject() ?: return false
+        val finding = current.workspace.findings.firstOrNull { it.id == findingId && it.projectId == project.id } ?: return false
+        val snapshot = finding.evidence.firstOrNull { it.id == evidenceId && it.projectId == project.id } ?: return false
+        val request = EvidenceRetention.requestForReplay(finding, snapshot, current.workspace.exchanges)
+        if (request == null || !ScopePolicy(project.origin).allows(request.url)) {
+            message("The complete request is unavailable in this site’s Activity.")
+            return false
+        }
+        loadReplay(snapshot, request, "Complete request loaded with observed auth headers removed. Review it before sending.")
+        return true
+    }
+
+    private fun loadReplay(exchange: Exchange, request: RequestDraft, notice: String) {
+        mutable.update { current ->
+            val configs = current.workspace.identityConfigs.filter { it.projectId == current.projectId }
+            current.copy(draft = CredentialPolicy.strip(request, configs), selected = exchange, message = notice)
+        }
         writeHeaderEditor(state.value.draft.headers)
     }
     private fun writeHeaderEditor(headers: List<Header>) =
@@ -457,6 +480,11 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
     suspend fun addFinding(
         title: String, detail: String, evidence: Exchange?,
         expectedContext: RequestContext = currentContext(), findingId: String = java.util.UUID.randomUUID().toString(),
+    ): Boolean = addFinding(title, detail, listOfNotNull(evidence), expectedContext, findingId)
+
+    internal suspend fun addFinding(
+        title: String, detail: String, evidence: List<Exchange>,
+        expectedContext: RequestContext = currentContext(), findingId: String = java.util.UUID.randomUUID().toString(),
     ): Boolean {
         val project = currentProject() ?: return false
         if (!ResultAttribution.accepts(expectedContext, currentContext())) {
@@ -469,12 +497,18 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
             }
             require(workspace.findings.size < Limits.FINDINGS) { "Observation limit reached. Remove a saved observation before adding one." }
             require(workspace.findings.none { it.id == findingId }) { "This observation was already added." }
-            require(evidence == null || (evidence.projectId == project.id && workspace.containsEvidence(evidence))) {
-                "The selected exchange is no longer available in this site’s history."
+            require(evidence.size <= Limits.HISTORY && evidence.map(Exchange::id).distinct().size == evidence.size) {
+                "Select distinct exchanges within the history limit."
             }
-            val snapshot = evidence?.let(EvidenceRetention::snapshot)
+            require(evidence.all { it.projectId == project.id && workspace.containsEvidence(it) }) {
+                "One or more selected exchanges are no longer available in this site."
+            }
+            val snapshots = evidence.map(EvidenceRetention::snapshot)
+            val requestBodies = evidence.zip(snapshots).associate { (source, snapshot) ->
+                snapshot.id to EvidenceRetention.stateForNewSnapshot(workspace, source, snapshot)
+            }
             val finding = Finding(id = findingId, projectId = project.id, title = title, detail = detail,
-                evidenceIds = listOfNotNull(snapshot?.id), evidence = listOfNotNull(snapshot))
+                evidenceIds = snapshots.map(Exchange::id), evidence = snapshots, evidenceRequestBodies = requestBodies)
             workspace.copy(findings = listOf(finding) + workspace.findings)
         }
     }
@@ -484,7 +518,8 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
     fun removeEvidence(findingId: String, exchangeId: String) {
         mutable.update {
             it.copy(workspace = it.workspace.copy(findings = it.workspace.findings.map { f ->
-                if (f.id == findingId) f.copy(evidence = f.evidence.filterNot { e -> e.id == exchangeId }) else f
+                if (f.id == findingId) f.copy(evidence = f.evidence.filterNot { e -> e.id == exchangeId },
+                    evidenceRequestBodies = f.evidenceRequestBodies - exchangeId) else f
             }), message = "Retained evidence removed. The observation keeps its reference and now reports evidence as not retained.")
         }
         persistDurable()
