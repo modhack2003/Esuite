@@ -6,9 +6,9 @@ F004,1,per-tab scroll restoration,open,,,per-tab scroll restoration,,
 F005,1,per-tab back stacks,open,,,per-tab back stacks,,
 F006,1,predictable Up action,open,,,predictable Up action,,
 F007,1,Back preview,open,,,Back preview,,
-F008,1,return-to-origin action,open,,,return-to-origin action,,
-F009,1,tab reselect behavior,open,,,tab reselect behavior,,
-F010,1,navigation preferences,open,,,navigation preferences,,
+F008,1,return-to-origin action,implemented,102841edb4e858d4abc07d5f2fccb08e91ce8dc5,,return-to-origin action,API Lab offers a visible return action for routed drafts. Native acceptance is open.,app/src/main/java/dev/esuite/app/MainActivity.kt
+F009,1,tab reselect behavior,implemented,102841edb4e858d4abc07d5f2fccb08e91ce8dc5,,tab reselect behavior,Primary tabs keep their current position on reselect. Reselecting Tools closes its Browser pane. Native acceptance is open.,app/src/main/java/dev/esuite/app/MainActivity.kt
+F010,1,navigation preferences,implemented,102841edb4e858d4abc07d5f2fccb08e91ce8dc5,,navigation preferences,Navigation settings can restore the last primary tab. Browser remains the fresh-install destination. Native acceptance is open.,app/src/main/java/dev/esuite/app/ui/SettingsScreen.kt
 Q001,1,Cold route valid,open,,,Cold route valid,,
 Q002,1,warm route restored,open,,,warm route restored,,
 Q003,1,deep Back ordered,open,,,deep Back ordered,,
