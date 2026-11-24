@@ -31,6 +31,7 @@ The production-signed upgrade harness now uses the checksum-pinned 1.0.9 APK and
 | Confirmed defects | Q061, Q211, Q221, Q451, Q511, Q601–Q603, Q631, Q711, Q731, Q741 and Q751 have fixes and regression coverage. The Android end-to-end matrix is separate. |
 | App shell | Adaptive navigation, restored tab state, contextual API return, Browser commands, searchable settings, high contrast and local diagnostics. |
 | Browser and inspector | Page find, dock mirroring, Console filtering and grouped messages, Elements markup and edit consistency, and Network filter and timing changes. |
+| Network inspection | Network accepts plain terms and typed path, method, status, source and resource-type filters. Filters stay in memory for the same origin across DevTools panels. Rows publish with their origin, and timing details show delivery, rendering, redirect and service-worker data when the provider supplies it. The panel explains its 300-row limit. |
 | Imports and offline tools | Bounded document picker, explicit import review, selectable imports, Base64URL, hex, URL components, SHA-512 and JSON formatting. |
 | API Lab comparison | Header names are matched case-insensitively and repeated fields retain order. Differences list field names without values. Partial capture comparisons are labeled as previews. |
 | Raw HTTP entry | The Saved tab opens a separate import dialog before the collection list. Rejected input stays editable in that dialog, and a successful import opens the unsent request draft. |

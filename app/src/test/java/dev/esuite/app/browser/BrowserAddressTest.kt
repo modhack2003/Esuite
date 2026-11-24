@@ -39,6 +39,7 @@ class BrowserAddressTest {
         assertTrue(log.state.value.rows.isEmpty())
         log.add("GET", first)
         log.page("https://outside.test/".toHttpUrl())
+        assertEquals("https://outside.test", log.state.value.origin)
         assertTrue(log.state.value.rows.isEmpty())
     }
 

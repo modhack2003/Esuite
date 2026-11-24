@@ -14,7 +14,6 @@ import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -30,65 +29,19 @@ import dev.esuite.app.ui.observedAt
 import dev.esuite.app.ui.technicalTextStyle
 import java.util.Locale
 
-private enum class ResourceType(val label: String, val key: String) {
-    All("All", ""), Document("Doc", "document"), Fetch("Fetch / XHR", "fetch"), Script("JS", "script"),
-    Style("CSS", "stylesheet"), Image("Img", "image"), Font("Font", "font"), Media("Media", "media"), Other("Other", "other"),
-}
-
-private enum class StatusFilter(val label: String) {
-    All("All statuses"), Success("2xx"), Redirect("3xx"), Errors("Errors"), Unknown("Unavailable"),
-    ;
-
-    fun includes(row: BrowserRequestEvent): Boolean = when (this) {
-        All -> true
-        Success -> row.status in 200..299
-        Redirect -> row.status in 300..399
-        Errors -> row.failed
-        Unknown -> row.status == null && !row.failed
-    }
-}
-
-private enum class NetworkOrder(val label: String) { Start("Start time"), Latest("Newest"), Slowest("Slowest"), Largest("Largest") }
-private enum class NetworkSource(val label: String) {
-    All("All sources"), Callback("WebView callbacks"), Timing("Resource timing");
-
-    fun includes(row: BrowserRequestEvent): Boolean = when (this) {
-        All -> true
-        Callback -> row.timing == null
-        Timing -> row.timing != null
-    }
-}
 private enum class DetailsTab(val label: String) { General("General"), Timing("Timing") }
 
 @Composable
-internal fun NetworkPanel(state: BrowserNetworkState, ready: Boolean, clearRequests: () -> Unit,
+internal fun NetworkPanel(state: BrowserNetworkState, filters: NetworkFilters, update: (NetworkFilters) -> Unit,
+    clearRequests: () -> Unit,
     onRecord: (Boolean) -> Unit, onPreserve: (Boolean) -> Unit, onOpenActivity: () -> Unit,
 ) {
-    var query by remember { mutableStateOf("") }
-    var resourceType by rememberSaveable { mutableStateOf(ResourceType.All) }
-    var status by rememberSaveable { mutableStateOf(StatusFilter.All) }
-    var source by rememberSaveable { mutableStateOf(NetworkSource.All) }
-    var method by rememberSaveable { mutableStateOf<String?>(null) }
-    var order by rememberSaveable { mutableStateOf(NetworkOrder.Start) }
-    var showFilters by rememberSaveable { mutableStateOf(false) }
-    var showWaterfall by rememberSaveable { mutableStateOf(true) }
-    var selected by rememberSaveable { mutableStateOf<String?>(null) }
-    val methods = remember(state.rows) { state.rows.mapNotNull(BrowserRequestEvent::method).distinct().sorted() }
-    val rows = remember(state.rows, resourceType, status, source, method, query, order) {
-        val text = query.trim()
-        val found = state.rows.filter { row ->
-            val typeMatches = resourceType == ResourceType.All || row.resourceType == resourceType.key ||
-                (resourceType == ResourceType.Other && row.resourceType == "unknown")
-            typeMatches && status.includes(row) && source.includes(row) && (method == null || method == row.method.orEmpty()) &&
-                "${row.path} ${row.method.orEmpty()} ${row.kind.label} ${row.resourceType} ${row.status ?: ""}".contains(text, true)
-        }
-        when (order) {
-            NetworkOrder.Start -> found.sortedBy { it.timestamp }
-            NetworkOrder.Latest -> found.sortedByDescending { it.timestamp }
-            NetworkOrder.Slowest -> found.sortedByDescending { it.timing?.duration ?: -1.0 }
-            NetworkOrder.Largest -> found.sortedByDescending { it.timing?.transfer ?: -1L }
-        }
+    val origin = state.origin
+    var selected by remember(origin) { mutableStateOf<String?>(null) }
+    val methods = remember(state.rows, filters.method) {
+        (state.rows.mapNotNull(BrowserRequestEvent::method) + listOfNotNull(filters.method?.takeIf(String::isNotEmpty))).distinct().sorted()
     }
+    val rows = remember(state.rows, filters) { filters.select(state.rows) }
     val timedRows = remember(rows) { rows.filter { it.timing?.duration != null } }
     val start = remember(timedRows) { timedRows.minOfOrNull(BrowserRequestEvent::timestamp) ?: 0.0 }
     val span = remember(timedRows, start) {
@@ -110,74 +63,73 @@ internal fun NetworkPanel(state: BrowserNetworkState, ready: Boolean, clearReque
                 }
                 FilterChip(state.preserve, { onPreserve(!state.preserve) }, { Text("Preserve log") },
                     modifier = Modifier.testTag("network_preserve"))
-                IconButton(onClick = { showFilters = !showFilters }, modifier = Modifier.testTag("network_filters")) {
-                    Icon(Icons.Outlined.Search, contentDescription = if (showFilters) "Hide filters" else "Search and filter")
+                IconButton(onClick = { update(filters.copy(expanded = !filters.expanded)) }, modifier = Modifier.testTag("network_filters")) {
+                    Icon(Icons.Outlined.Search, contentDescription = if (filters.expanded) "Hide filters" else "Search and filter",
+                        tint = if (filters.active) colors.primary else LocalContentColor.current)
                 }
             }
             LazyColumn(Modifier.fillMaxWidth().weight(1f).testTag("network_rows")) {
                 if (state.rows.isNotEmpty()) item {
                     TextButton(onClick = onOpenActivity, modifier = Modifier.testTag("network_open_activity")) { Text("Open in Activity") }
                 }
-                if (showFilters) item {
-                    InspectionSearch(query, { query = it }, "Filter by path, type, method, or status", "network_search")
+                item {
+                    val total = if (knownTransfer) " · ${bytes(transfer)} measured" else ""
+                    val paused = if (state.recording) "" else " · Paused"
+                    val filtered = if (filters.active) " · Filtered" else ""
+                    InspectionMessage("${rows.size} of ${state.rows.size} same-origin observations$total$paused$filtered",
+                        Modifier.testTag("network_summary"))
+                    if (state.rows.size == NETWORK_ROW_LIMIT) InspectionMessage("Network keeps the latest $NETWORK_ROW_LIMIT observations.")
+                }
+                if (filters.expanded) item {
+                    InspectionSearch(filters.query, { update(filters.copy(query = it)) }, "Filter network observations", "network_search")
+                    InspectionMessage("Combine method:GET with status-code:4xx. Filter further with resource-type:script, source:timing or path:/assets. Start a term with - to exclude it.")
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         ResourceType.entries.forEach { type ->
-                            FilterChip(resourceType == type, { resourceType = type }, { Text(type.label) })
+                            FilterChip(filters.type == type, { update(filters.copy(type = type)) }, { Text(type.label) })
                         }
                     }
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         StatusFilter.entries.forEach { option ->
-                            FilterChip(status == option, { status = option }, { Text(option.label) })
+                            FilterChip(filters.status == option, { update(filters.copy(status = option)) }, { Text(option.label) })
                         }
                     }
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         NetworkSource.entries.forEach { option ->
-                            FilterChip(source == option, { source = option }, { Text(option.label) })
+                            FilterChip(filters.source == option, { update(filters.copy(source = option)) }, { Text(option.label) })
                         }
                     }
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilterChip(method == null, { method = null }, { Text("All methods") })
+                        FilterChip(filters.method == null, { update(filters.copy(method = null)) }, { Text("All methods") })
                         methods.forEach { option ->
-                            FilterChip(method == option, { method = option }, { Text(option) })
+                            FilterChip(filters.method == option, { update(filters.copy(method = option)) }, { Text(option) })
                         }
-                        FilterChip(method == "", { method = "" }, { Text("Method unavailable") })
+                        FilterChip(filters.method == "", { update(filters.copy(method = "")) }, { Text("Method unavailable") })
                     }
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         NetworkOrder.entries.forEach { option ->
-                            FilterChip(order == option, { order = option }, { Text(option.label) })
+                            FilterChip(filters.order == option, { update(filters.copy(order = option)) }, { Text(option.label) })
                         }
-                        FilterChip(showWaterfall, { showWaterfall = !showWaterfall }, { Text("Waterfall") })
+                        FilterChip(filters.waterfall, { update(filters.copy(waterfall = !filters.waterfall)) }, { Text("Waterfall") })
                     }
-                    TextButton(onClick = {
-                        query = ""
-                        resourceType = ResourceType.All
-                        status = StatusFilter.All
-                        source = NetworkSource.All
-                        method = null
-                        order = NetworkOrder.Start
-                    }, modifier = Modifier.testTag("network_reset_filters")) { Text("Reset filters") }
-                }
-                item {
-                    val total = if (knownTransfer) " · ${bytes(transfer)} measured" else ""
-                    val paused = if (state.recording) "" else " · Paused"
-                    InspectionMessage("${rows.size} of ${state.rows.size} same-origin observations$total$paused")
+                    ResetNetworkFilters { update(filters.reset()) }
                 }
                 if (wide && rows.isNotEmpty()) item {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Name", Modifier.weight(2f), style = MaterialTheme.typography.labelMedium)
                         Text("Method · Type · Status", Modifier.weight(2f), style = MaterialTheme.typography.labelMedium)
                         Text("Size · Time", Modifier.weight(1.3f), style = MaterialTheme.typography.labelMedium)
-                        if (showWaterfall) Text("Waterfall", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
+                        if (filters.waterfall) Text("Waterfall", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
                     }
                     HorizontalDivider()
                 }
                 if (rows.isEmpty()) item {
                     InspectionMessage(when {
-                        !ready -> "Load an HTTPS page to see its network activity."
+                        origin == null -> "Load an HTTPS page to see its network activity."
                         state.rows.isNotEmpty() -> "No observations match these filters."
                         !state.recording -> "Recording is paused."
                         else -> "Waiting for same-origin network activity."
                     })
+                    if (filters.active && !filters.expanded) ResetNetworkFilters { update(filters.reset()) }
                 }
                 items(rows, key = BrowserRequestEvent::id) { row ->
                     val facts = listOfNotNull(row.method, row.resourceType.takeUnless { it == "unknown" },
@@ -192,12 +144,12 @@ internal fun NetworkPanel(state: BrowserNetworkState, ready: Boolean, clearReque
                         Text(facts, Modifier.weight(2f), style = MaterialTheme.typography.bodySmall,
                             color = if (row.failed) colors.error else colors.onSurfaceVariant)
                         Text(metrics.ifEmpty { "—" }, Modifier.weight(1.3f), style = MaterialTheme.typography.bodySmall)
-                        if (showWaterfall) Box(Modifier.weight(1f)) { WaterfallBar(row, start, span) }
+                        if (filters.waterfall) Box(Modifier.weight(1f)) { WaterfallBar(row, start, span) }
                     } else Column(modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(row.path + if (row.pathClipped) "…" else "", style = technicalTextStyle(), maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(listOf(facts, metrics).filter(String::isNotEmpty).joinToString(" · "), style = MaterialTheme.typography.bodySmall,
                             color = if (row.failed) colors.error else colors.onSurfaceVariant)
-                        if (showWaterfall) WaterfallBar(row, start, span)
+                        if (filters.waterfall) WaterfallBar(row, start, span)
                     }
                     HorizontalDivider(color = colors.outlineVariant)
                 }
@@ -205,12 +157,17 @@ internal fun NetworkPanel(state: BrowserNetworkState, ready: Boolean, clearReque
         }
     }
     current?.let { row ->
-        key(row.id) { NetworkDetails(row) { selected = null } }
+        key(row.id) { NetworkDetails(row, origin) { selected = null } }
     }
 }
 
 @Composable
-private fun NetworkDetails(row: BrowserRequestEvent, close: () -> Unit) {
+private fun ResetNetworkFilters(reset: () -> Unit) {
+    TextButton(onClick = reset, modifier = Modifier.testTag("network_reset_filters")) { Text("Reset filters") }
+}
+
+@Composable
+private fun NetworkDetails(row: BrowserRequestEvent, origin: String?, close: () -> Unit) {
     var tab by remember { mutableStateOf(DetailsTab.General) }
     val timing = row.timing
     AlertDialog(onDismissRequest = close, title = { Text("Network details") },
@@ -224,6 +181,7 @@ private fun NetworkDetails(row: BrowserRequestEvent, close: () -> Unit) {
                 LazyColumn(Modifier.heightIn(max = 350.dp)) {
                     if (tab == DetailsTab.General) {
                         item {
+                            if (origin != null) InspectionValue("Origin", origin)
                             InspectionValue("Path", row.path + if (row.pathClipped) "… (clipped)" else "")
                             InspectionValue("Observed at", observedAt(row.timestamp.toLong()))
                             InspectionValue("Source", if (timing == null) "WebView callback · ${row.kind.label}" else "Browser resource timing")
@@ -234,6 +192,9 @@ private fun NetworkDetails(row: BrowserRequestEvent, close: () -> Unit) {
                             if (row.mimeType != null) InspectionValue("Response content type", row.mimeType)
                             if (timing != null) {
                                 InspectionValue("Protocol", timing.protocol.ifEmpty { "Unavailable" })
+                                InspectionValue("Delivery type", timing.delivery.ifEmpty { "Unavailable" })
+                                InspectionValue("Render blocking", timing.renderBlocking.ifEmpty { "Unavailable" })
+                                if (timing.contentType.isNotEmpty()) InspectionValue("Response content type", timing.contentType)
                                 InspectionValue("Transfer size", timing.transfer?.let(::bytes) ?: "Unavailable")
                                 InspectionValue("Encoded body size", timing.encoded?.let(::bytes) ?: "Unavailable")
                                 InspectionValue("Decoded body size", timing.decoded?.let(::bytes) ?: "Unavailable")
@@ -244,9 +205,11 @@ private fun NetworkDetails(row: BrowserRequestEvent, close: () -> Unit) {
                     } else item {
                         InspectionValue("Start after navigation", duration(timing.start))
                         InspectionValue("Total", duration(timing.duration))
+                        InspectionValue("Redirect", duration(timing.redirect))
+                        InspectionValue("Service worker before fetch", duration(timing.serviceWorker))
                         InspectionValue("DNS", duration(timing.dns))
                         InspectionValue("Connection", duration(timing.connect))
-                        InspectionValue("TLS", duration(timing.tls))
+                        InspectionValue("TLS within connection", duration(timing.tls))
                         InspectionValue("Waiting for response", duration(timing.wait))
                         InspectionValue("Download", duration(timing.download))
                     }
@@ -276,8 +239,8 @@ private fun NetworkDetails(row: BrowserRequestEvent, close: () -> Unit) {
         trailingIcon = { if (text.isNotEmpty()) TextButton(onClick = { update("") }) { Text("Clear") } })
 }
 
-@Composable internal fun InspectionMessage(message: String) {
-    Text(message, Modifier.padding(horizontal = 8.dp, vertical = 6.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
+@Composable internal fun InspectionMessage(message: String, modifier: Modifier = Modifier) {
+    Text(message, modifier.padding(horizontal = 8.dp, vertical = 6.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
         style = MaterialTheme.typography.bodySmall)
 }
 

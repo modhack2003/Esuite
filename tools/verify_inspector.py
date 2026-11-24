@@ -50,6 +50,10 @@ with sync_playwright() as p:
     timing = json.loads(page.evaluate(scripts["networkTiming"]))['rows']
     asset = next(row for row in timing if row['path'] == '/assets/fixture.js')
     assert asset['kind'] == 'script' and asset['duration'] >= 0 and asset['start'] >= 0
+    assert asset['redirect'] is None and asset['serviceWorker'] is None
+    assert asset['renderBlocking'] in ('blocking', 'non-blocking', '')
+    assert asset['contentType'] in ('text/javascript', '')
+    assert isinstance(asset['delivery'], str)
     assert 'private' not in json.dumps(timing) and any(row['kind'] == 'document' for row in timing)
     page.evaluate("Promise.all([fetch('/repeat?fixture=private'),fetch('/repeat?fixture=private')].map(r => r.then(response => response.text())))")
     page.wait_for_function("performance.getEntriesByType('resource').filter(row => row.name.includes('/repeat?')).length === 2")

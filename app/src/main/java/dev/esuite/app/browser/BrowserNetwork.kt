@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl
 
+internal const val NETWORK_ROW_LIMIT = 300
+
 internal enum class RequestEventKind(val label: String) {
     Navigation("Navigation"), Request("Request"), HttpError("HTTP error"), LoadError("Load error"), Timing("Resource timing"),
 }
@@ -15,6 +17,8 @@ internal enum class RequestEventKind(val label: String) {
     val id: Int, val path: String, val kind: String, val status: Int?, val start: Double?, val duration: Double?,
     val transfer: Long?, val protocol: String, val dns: Double?, val connect: Double?, val tls: Double?,
     val wait: Double?, val download: Double?, val encoded: Long?, val decoded: Long?, val pathClipped: Boolean = false,
+    val delivery: String = "", val renderBlocking: String = "", val contentType: String = "",
+    val redirect: Double? = null, val serviceWorker: Double? = null,
 )
 
 internal data class BrowserRequestEvent(
@@ -35,13 +39,13 @@ internal data class BrowserNetworkState(
     val rows: List<BrowserRequestEvent> = emptyList(),
     val recording: Boolean = true,
     val preserve: Boolean = false,
+    val origin: String? = null,
 )
 
 internal data class BrowserLogSnapshot(val origin: String, val rows: List<BrowserRequestEvent>)
 
 /** WebView callback and Performance API observations have independent identities. */
 internal class BrowserRequestLog(private val now: () -> Long = System::currentTimeMillis) {
-    private var origin: String? = null
     private var sequence = 0L
     private var generation = 0L
     private var earliestStart = 0L
@@ -49,27 +53,26 @@ internal class BrowserRequestLog(private val now: () -> Long = System::currentTi
     val state = records.asStateFlow()
 
     @Synchronized
-    fun snapshot(): BrowserLogSnapshot? = origin?.let { current ->
+    fun snapshot(): BrowserLogSnapshot? = records.value.origin?.let { current ->
         records.value.rows.takeIf { it.isNotEmpty() }?.let { BrowserLogSnapshot(current, it) }
     }
 
     @Synchronized
     fun page(url: HttpUrl?, continuing: Boolean = false) {
         val next = url?.let(BrowserAddress::origin)
-        if (next == null || next != origin || (!continuing && !records.value.preserve)) {
-            records.value = records.value.copy(rows = emptyList())
-        }
-        if (!continuing || origin != next) {
+        val current = records.value
+        if (!continuing || current.origin != next) {
             generation++
             earliestStart = 0L
         }
-        origin = next
+        val retain = next != null && next == current.origin && (continuing || current.preserve)
+        records.value = current.copy(origin = next, rows = if (retain) current.rows else emptyList())
     }
 
     @Synchronized
     fun add(method: String, url: HttpUrl, mainFrame: Boolean = false, kind: RequestEventKind = RequestEventKind.Request,
         code: Int? = null, mimeType: String? = null) {
-        if (BrowserAddress.origin(url) != origin || !records.value.recording) return
+        if (BrowserAddress.origin(url) != records.value.origin || !records.value.recording) return
         val event = BrowserRequestEvent("callback:${++sequence}", kind, url.encodedPath.take(280), now().toDouble(),
             method.takeIf { it.length in 1..64 && it.isNotBlank() }, mainFrame, code, mimeType = mimeType?.take(80),
             pathClipped = url.encodedPath.length > 280)
@@ -77,11 +80,11 @@ internal class BrowserRequestLog(private val now: () -> Long = System::currentTi
     }
 
     @Synchronized
-    fun token(): Long? = generation.takeIf { origin != null && records.value.recording }
+    fun token(): Long? = generation.takeIf { records.value.origin != null && records.value.recording }
 
     @Synchronized
     fun addTimings(token: Long, scope: String, batch: TimingBatch) {
-        if (token != generation || origin != scope || !records.value.recording) return
+        if (token != generation || records.value.origin != scope || !records.value.recording) return
         val new = batch.rows.mapNotNull { timing ->
             val started = batch.timeOrigin + (timing.start ?: return@mapNotNull null)
             if (!started.isFinite() || started < earliestStart) return@mapNotNull null
@@ -114,6 +117,6 @@ internal class BrowserRequestLog(private val now: () -> Long = System::currentTi
     }
 
     private fun bounded(rows: List<BrowserRequestEvent>): List<BrowserRequestEvent> {
-        return rows.sortedByDescending { it.timestamp }.take(300)
+        return rows.sortedByDescending { it.timestamp }.take(NETWORK_ROW_LIMIT)
     }
 }

@@ -201,6 +201,7 @@ public class ProductionUiTest extends NativeUiDriver {
         assertNotNull(find(By.res("browser_output")));
         selectBrowserTool("storage"); assertTrue(waitText("browser_output", "Local storage", 10000));
         selectBrowserTool("network"); assertTrue("Network did not show a request row", device.wait(Until.hasObject(By.res("network_event")), 10000));
+        checkNetworkFilterSurvivesPanelSwitch();
         click("network_record");
         assertTrue(waitText("network_record", "Record", 5000));
         click("network_clear");
@@ -251,6 +252,22 @@ public class ProductionUiTest extends NativeUiDriver {
     private void clickExposedControl(String name) {
         click(name, () -> requireExposedControl(name), control ->
                 control != null && control.isEnabled() && !control.getVisibleBounds().isEmpty());
+    }
+
+    private void checkNetworkFilterSurvivesPanelSwitch() {
+        clickExposedControl("network_filters");
+        requireExposedControl("network_search").setText("path:/esuite-native-filter-mismatch");
+        BySelector empty = By.res("network_summary").textStartsWith("0 of ");
+        assertTrue("The missing path should hide the observed rows", device.wait(Until.hasObject(empty), 5000));
+        clickExposedControl("network_filters");
+        selectBrowserTool("viewport");
+        selectBrowserTool("network");
+        assertTrue("Network lost the filter when switching Developer Tools panels", device.wait(Until.hasObject(empty), 5000));
+        clickExposedControl("network_filters");
+        requireExposedControl("network_search").setText("");
+        assertTrue("Clearing the search should restore the observed rows", device.wait(Until.gone(empty), 5000));
+        clickExposedControl("network_filters");
+        assertTrue(device.wait(Until.hasObject(By.res("network_event")), 5000));
     }
 
     private Rect pageBounds() {

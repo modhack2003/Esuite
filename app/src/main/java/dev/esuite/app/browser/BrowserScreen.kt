@@ -131,6 +131,8 @@ internal fun BrowserScreen(
     var pageUrl by remember { mutableStateOf<String?>(null) }
     var pageTitle by remember { mutableStateOf("") }
     var loadTarget by remember { mutableStateOf<String?>(null) }
+    val networkOrigin = (loadTarget ?: pageUrl)?.let(BrowserAddress::https)?.let(BrowserAddress::origin)
+    var networkFilters by remember(networkOrigin) { mutableStateOf(NetworkFilters()) }
     var awaitingStart by remember { mutableStateOf(false) }
     var progress by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(false) }
@@ -793,7 +795,7 @@ internal fun BrowserScreen(
                         })
                 } }, network = {
                     val network by requestLog.state.collectAsState()
-                    NetworkPanel(network, pageUrl != null || loadTarget != null, clearRequests = requestLog::clear,
+                    NetworkPanel(network, networkFilters, { networkFilters = it }, clearRequests = requestLog::clear,
                         onRecord = { recordingNetwork = it; requestLog.setRecording(it) }, onPreserve = requestLog::setPreserve,
                         onOpenActivity = { requestLog.snapshot()?.let(onOpenActivity) })
                 }) {

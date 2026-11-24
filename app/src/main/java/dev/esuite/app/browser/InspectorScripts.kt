@@ -324,6 +324,7 @@ object InspectorScripts {
           const milliseconds = value => Number.isFinite(value) && value >= 0 ? Math.round(value * 10) / 10 : null;
           const phase = (start,end) => start > 0 && end >= start ? milliseconds(end-start) : null;
           const size = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
+          const text = (value,limit) => typeof value === 'string' ? value.slice(0,limit) : '';
           function type(item,url) {
             if (item.entryType === 'navigation' || item.initiatorType === 'iframe') return 'document';
             if (item.initiatorType === 'fetch' || item.initiatorType === 'xmlhttprequest') return 'fetch';
@@ -341,10 +342,13 @@ object InspectorScripts {
             if (!state.ids.has(item)) state.ids.set(item,state.next++);
             rows.push({id:state.ids.get(item), path:url.pathname.slice(0,280), pathClipped:url.pathname.length > 280, kind:type(item,url),
               status:item.responseStatus || null, start:milliseconds(item.startTime), duration:milliseconds(item.duration),
-              transfer:size(item.transferSize), protocol:(item.nextHopProtocol || '').slice(0,24),
+              transfer:size(item.transferSize), protocol:text(item.nextHopProtocol,24),
               dns:phase(item.domainLookupStart,item.domainLookupEnd), connect:phase(item.connectStart,item.connectEnd),
               tls:phase(item.secureConnectionStart,item.connectEnd), wait:phase(item.requestStart,item.responseStart),
-              download:phase(item.responseStart,item.responseEnd), encoded:size(item.encodedBodySize), decoded:size(item.decodedBodySize)});
+              download:phase(item.responseStart,item.responseEnd), encoded:size(item.encodedBodySize), decoded:size(item.decodedBodySize),
+              delivery:text(item.deliveryType,32), renderBlocking:text(item.renderBlockingStatus,32), contentType:text(item.contentType,80),
+              redirect:item.redirectEnd > 0 && item.redirectStart >= 0 ? milliseconds(item.redirectEnd-item.redirectStart) : null,
+              serviceWorker:phase(item.workerStart,item.fetchStart)});
           }
           return JSON.stringify({timeOrigin:performance.timeOrigin || performance.timing.navigationStart, rows});
         })()
