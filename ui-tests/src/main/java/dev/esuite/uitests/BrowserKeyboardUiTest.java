@@ -92,14 +92,17 @@ public final class BrowserKeyboardUiTest extends NativeUiDriver {
         UiObject2 key = device.wait(Until.findObject(By.text(keyLabel).clickable(true)), 5_000);
         assertNotNull("Keyboard action was not available for " + field, key);
         key.click();
+        assertTrue("The IME did not accept the input for " + field,
+                device.wait(Until.hasObject(By.pkg("dev.esuite.uitests").desc("Input accepted")), 8000));
+        device.pressBack();
+        assertTrue("Keyboard stayed open", device.wait(Until.gone(By.text("Type fixture text")), 5_000));
         if (!device.wait(Until.hasObject(By.text("Received " + field)), 20_000)) {
             checkpoint("website-ime-commit-" + field);
             String connectionState = device.executeShellCommand("logcat -d -t 30 -s ESuiteFixtureIme:I");
             fail("The DOM did not report committed text for " + field + " on " + device.getCurrentPackageName()
                     + "\n" + connectionState);
         }
-        device.pressBack();
-        assertTrue("Keyboard stayed open", device.wait(Until.gone(By.text("Type fixture text")), 5_000));
+
     }
 
     private UiObject2 findWebForm() {
