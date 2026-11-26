@@ -71,8 +71,8 @@ class ApiEngine(val sessions: IdentitySessions = IdentitySessions()) {
                             val reflectedBinary = bearer != null && !textual && Buffer().write(bytes).indexOf(okio.ByteString.of(*bearer.toByteArray())) >= 0
                             fun redact(value: String) = if (bearer != null && bearer in value) "[redacted]" else value
                             Exchange(projectId = project.id, identity = identity, source = source,
-                                request = draft.copy(headers = sent.headers.filterNot { bearer != null && it.first.equals("Authorization", true) }.map { h -> Header(h.first, redact(h.second)) }), status = it.code,
-                                responseHeaders = it.headers.map { h -> Header(h.first, redact(h.second)) },
+                                request = draft.copy(headers = sent.headers.filterNot { bearer != null && it.first.equals("Authorization", true) }.map { h -> Header(redact(h.first), redact(h.second)) }), status = it.code,
+                                responseHeaders = it.headers.map { h -> Header(redact(h.first), redact(h.second)) },
                                 response = if (reflectedBinary) StoredBody("[Binary response contained the session credential and was omitted]", "utf8", true)
                                     else StoredBody(redact(content), if (textual) "utf8" else "base64", truncated),
                                 durationMs = (System.nanoTime() - start) / 1_000_000)

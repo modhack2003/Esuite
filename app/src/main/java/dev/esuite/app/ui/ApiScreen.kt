@@ -97,9 +97,9 @@ internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> 
                 TextButton(onClick = disconnectSession) { Text("Disconnect Browser session") }
             } else FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (hasBearer) Text("Bearer token · identity ${state.identity} · ${project.origin}")
-                Button(onClick = { prepare { model.send(); show(ApiSection.Response) } },
+                Button(onClick = { prepare { if (model.send()) show(ApiSection.Response) else returnToTop() } },
                     enabled = !state.busy && draft.url.isNotBlank(), modifier = Modifier.testTag("api_send")) { Text("Send request") }
-                OutlinedButton(onClick = { prepare { model.send(compare = true); show(ApiSection.Response) } },
+                OutlinedButton(onClick = { prepare { if (model.send(compare = true)) show(ApiSection.Response) else returnToTop() } },
                     enabled = !state.busy && draft.url.isNotBlank(), modifier = Modifier.testTag("api_compare")) { Text("Compare A and B") }
             }
             OutlinedTextField(headers, { write(Editor.ApiHeaders, it) }, label = { Text("Headers") },

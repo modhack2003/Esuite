@@ -296,13 +296,19 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
     fun record(exchange: Exchange) {
         mutable.update { if (!it.ready || it.workspace.projects.none { p -> p.id == exchange.projectId }) it else it.copy(workspace = it.workspace.copy(exchanges = (listOf(exchange) + it.workspace.exchanges).take(Limits.HISTORY))) }
     }
-    fun send(compare: Boolean = false) {
-        val snapshot = state.value; val project = currentProject() ?: return message("Open a site in API Lab first")
-        if (snapshot.busy) return
+    fun send(compare: Boolean = false): Boolean {
+        val snapshot = state.value
+        val project = currentProject()
+        if (project == null) {
+            message("Open a site in API Lab first")
+            return false
+        }
+        if (snapshot.busy) return false
         val started = currentContext()
         if (!compare && engine.sessions.jar(project.id, snapshot.identity).hasBearer.value &&
             withIdentity(snapshot.draft, project.id, snapshot.identity).headers.any { it.name.equals("Authorization", true) }) {
-            return message("Choose one authorization source. Remove the Authorization header or forget the session bearer token.")
+            message("Choose one authorization source. Remove the Authorization header or forget the session bearer token.")
+            return false
         }
         requestJob = viewModelScope.launch {
             val identities = if (compare) "identities A and B" else "identity ${snapshot.identity}"
@@ -342,6 +348,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
                 else message(supersededMessage(started, current))
             } finally { mutable.update { it.copy(busy = false, manualRequestLabel = null) } }
         }
+        return true
     }
     fun cancelRequest() { requestJob?.cancel() }
 
