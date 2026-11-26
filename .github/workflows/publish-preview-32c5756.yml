@@ -1,0 +1,63 @@
+name: Publish ESuite 1.1.0 Preview
+on:
+  push:
+    branches: ['preview/1.1.0-32c5756']
+    paths: ['.github/workflows/publish-preview-32c5756.yml']
+permissions:
+  contents: write
+concurrency:
+  group: esuite-preview-32c5756
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SOURCE_SHA: 32c57567f581f4577823c7f29624c63c65d1fc3d
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 32c57567f581f4577823c7f29624c63c65d1fc3d
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+        with:
+          cmdline-tools-version: '15859902'
+          packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build the side-by-side preview
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          printf 'versionName=1.1.0-preview\nversionCode=13\n' > release/version.properties
+          sed -i '/^    buildTypes {/a\        getByName("debug") { applicationIdSuffix = ".preview" }' app/build.gradle.kts
+          sed -i 's/android:label="ESuite"/android:label="ESuite Preview"/' app/src/main/AndroidManifest.xml
+          ./gradlew :app:assembleDebug --no-daemon
+          mkdir delivery
+          filename=ESuite-1.1.0-preview-32c5756.apk
+          cp app/build/outputs/apk/debug/app-debug.apk "delivery/$filename"
+          sdk="$ANDROID_HOME/build-tools/36.0.0"
+          "$sdk/apksigner" verify --verbose "delivery/$filename"
+          "$sdk/zipalign" -c -P 16 4 "delivery/$filename"
+          "$sdk/aapt" dump badging "delivery/$filename" > delivery/badging.txt
+          grep -F "name='dev.esuite.app.preview' versionCode='13' versionName='1.1.0-preview'" delivery/badging.txt
+          grep -F "application-label:'ESuite Preview'" delivery/badging.txt
+          (cd delivery && sha256sum "$filename" > "$filename.sha256")
+      - name: Publish the verified preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > delivery/notes.md <<'MD'
+          Install **ESuite Preview** alongside stable ESuite. This APK uses a separate package and a debug signing key. Android 9 or later is required.
+
+          This preview contains Browser session handoff, memory-only bearer authentication in API Lab, shared search, and settings resets.
+
+          GitHub Actions built this APK from commit `32c57567f581f4577823c7f29624c63c65d1fc3d`. The production-signed 1.1.0 release is still in verification.
+          MD
+          gh release create v1.1.0-preview.32c5756 \
+            delivery/ESuite-1.1.0-preview-32c5756.apk delivery/ESuite-1.1.0-preview-32c5756.apk.sha256 \
+            --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" --prerelease --latest=false \
+            --title 'ESuite 1.1.0 Preview (32c5756)' --notes-file delivery/notes.md
