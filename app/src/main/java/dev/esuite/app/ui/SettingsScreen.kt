@@ -23,10 +23,16 @@ import dev.esuite.app.AppState
 import dev.esuite.app.AppViewModel
 import dev.esuite.app.BuildConfig
 
+private enum class PreferenceReset(val label: String, val preview: String) {
+    Appearance("appearance", "Use the dark theme and enable interface animations."),
+    Navigation("navigation", "Open Browser at startup."),
+    Timestamps("timestamp", "Display timestamps in the device’s local time."),
+}
+
 private enum class SettingsSection(val title: String, val terms: String) {
     Appearance("Appearance", "theme system light dark high contrast animation motion reset"),
-    Navigation("Navigation", "startup last tab resume launch browser"),
-    Timestamps("Timestamps", "timezone time zone UTC local dates Activity observations"),
+    Navigation("Navigation", "startup last tab resume launch browser reset defaults"),
+    Timestamps("Timestamps", "timezone time zone UTC local dates Activity observations reset defaults"),
     Shortcuts("Keyboard shortcuts", "browser address find page devtools commands ctrl command hardware F12"),
     Browsing("Browsing data", "webview history cookies storage clear browser"),
     Sites("Saved site data", "vault encryption copy export report site save restore remove erase"),
@@ -60,7 +66,7 @@ internal fun SettingsScreen(
     var confirmClear by remember { mutableStateOf(false) }
     var erase by remember { mutableStateOf(false) }
     var showInterLicense by remember { mutableStateOf(false) }
-    var confirmAppearanceReset by remember { mutableStateOf(false) }
+    var reset by remember { mutableStateOf<PreferenceReset?>(null) }
     var diagnostics by remember { mutableStateOf(false) }
     var linkError by remember { mutableStateOf(false) }
     val visibleSections = remember(query) {
@@ -95,7 +101,8 @@ internal fun SettingsScreen(
                             Switch(checked = motion, onCheckedChange = setMotion,
                                 modifier = Modifier.testTag("settings_motion").semantics { contentDescription = "Interface animations" })
                         }
-                        TextButton(onClick = { confirmAppearanceReset = true }, enabled = appearance != Appearance.Dark || !motion) {
+                        TextButton(onClick = { reset = PreferenceReset.Appearance }, enabled = appearance != Appearance.Dark || !motion,
+                            modifier = Modifier.testTag("settings_reset_appearance")) {
                             Text("Restore appearance defaults")
                         }
                     }
@@ -108,6 +115,8 @@ internal fun SettingsScreen(
                         }
                         Text(if (resumeTab) "ESuite reopens your last tab." else "ESuite opens the Browser.",
                             style = MaterialTheme.typography.bodySmall, color = Muted)
+                        TextButton(onClick = { reset = PreferenceReset.Navigation }, enabled = resumeTab,
+                            modifier = Modifier.testTag("settings_reset_navigation")) { Text("Restore navigation defaults") }
                     }
                     SettingsSection.Timestamps -> {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -118,6 +127,8 @@ internal fun SettingsScreen(
                         }
                         Text(if (useUtcTimestamps) "Observations display UTC." else "Observations display the device’s local time.",
                             style = MaterialTheme.typography.bodySmall, color = Muted)
+                        TextButton(onClick = { reset = PreferenceReset.Timestamps }, enabled = useUtcTimestamps,
+                            modifier = Modifier.testTag("settings_reset_timestamps")) { Text("Restore timestamp defaults") }
                     }
                     SettingsSection.Shortcuts -> {
                         Text("Ctrl+L or ⌘L · Focus Browser address")
@@ -160,17 +171,24 @@ internal fun SettingsScreen(
             }
         }
     }
-    if (confirmAppearanceReset) AlertDialog(
-        onDismissRequest = { confirmAppearanceReset = false },
-        title = { Text("Restore appearance defaults?") },
-        text = { Text("ESuite will use the dark theme and enable interface animations.") },
-        confirmButton = {
-            TextButton(onClick = { confirmAppearanceReset = false; setAppearance(Appearance.Dark); setMotion(true) }) {
-                Text("Restore defaults")
-            }
-        },
-        dismissButton = { TextButton(onClick = { confirmAppearanceReset = false }) { Text("Cancel") } },
-    )
+    reset?.let { target ->
+        AlertDialog(
+            onDismissRequest = { reset = null },
+            title = { Text("Restore ${target.label} defaults?") },
+            text = { Text(target.preview) },
+            confirmButton = {
+                TextButton(onClick = {
+                    reset = null
+                    when (target) {
+                        PreferenceReset.Appearance -> { setAppearance(Appearance.Dark); setMotion(true) }
+                        PreferenceReset.Navigation -> setResumeTab(false)
+                        PreferenceReset.Timestamps -> setUtcTimestamps(false)
+                    }
+                }) { Text("Restore defaults") }
+            },
+            dismissButton = { TextButton(onClick = { reset = null }) { Text("Cancel") } },
+        )
+    }
     if (diagnostics) {
         val profiles = remember { WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE) }
         val lines = listOf(

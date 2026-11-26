@@ -187,8 +187,8 @@ F095,1,licenses browser,open,,,licenses browser,,
 F096,1,credits screen,open,,,credits screen,,
 F097,1,support information,open,,,support information,,
 F098,1,local diagnostics preview,implemented,e4025b0,,local diagnostics preview,A matching source path is present. Final per-item acceptance is open.,app/src/main/java/dev/esuite/app/ui/SettingsScreen.kt
-F099,1,preference reset preview,open,,,preference reset preview,,
-F100,1,restore defaults by category,open,,,restore defaults by category,,
+F099,1,preference reset preview,implemented,,,preference reset preview,Each preference reset previews the settings it will restore. Native acceptance is open.,app/src/main/java/dev/esuite/app/ui/SettingsScreen.kt
+F100,1,restore defaults by category,implemented,,,restore defaults by category,"Appearance, navigation and timestamps have separate restore actions. Native acceptance is open.",app/src/main/java/dev/esuite/app/ui/SettingsScreen.kt
 Q091,1,Settings persist,open,,,Settings persist,,
 Q092,1,scoped reset affects named category,open,,,scoped reset affects named category,,
 Q093,1,version matches package,passed,a6ca85f,Android 15 optimized fixture browserOpensWithoutASavedSiteAndInspectsTheCurrentPage,version matches package,The displayed version matched Android package metadata.,https://github.com/modhack2003/Esuite/actions/runs/45376388035/job/138386063850

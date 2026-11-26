@@ -147,7 +147,26 @@ public class ProductionUiTest extends NativeUiDriver {
         click("open_settings");
         enter("settings_search", "UTC");
         assertTrue("The UTC preference should survive restart", tag("settings_timestamps_utc").isChecked());
-        if (android.os.Build.VERSION.SDK_INT == 35) verifyResumeLastTab();
+        if (android.os.Build.VERSION.SDK_INT == 35) {
+            verifyResumeLastTab();
+            verifyScopedPreferenceReset();
+        }
+    }
+
+    private void verifyScopedPreferenceReset() {
+        click("open_settings");
+        enter("settings_search", "Resume last tab");
+        click("settings_resume_tab");
+        assertTrue(tag("settings_resume_tab").isChecked());
+        click("settings_reset_navigation");
+        assertTrue(device.wait(Until.hasObject(By.text("Open Browser at startup.")), 5000));
+        find(By.text("Cancel")).click();
+        assertTrue("Cancel changed the setting", tag("settings_resume_tab").isChecked());
+        click("settings_reset_navigation");
+        find(By.text("Restore defaults")).click();
+        assertFalse("Navigation preference was not restored", tag("settings_resume_tab").isChecked());
+        enter("settings_search", "UTC");
+        assertTrue("Navigation reset affected timestamp settings", tag("settings_timestamps_utc").isChecked());
     }
 
     private void verifyResumeLastTab() throws Exception {
