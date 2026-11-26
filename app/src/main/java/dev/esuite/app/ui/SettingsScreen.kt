@@ -79,9 +79,7 @@ internal fun SettingsScreen(
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back") }
             Text("Settings", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.testTag("settings_title").semantics { heading() })
         }
-        OutlinedTextField(query, { query = it.take(80) }, label = { Text("Find a setting") }, singleLine = true,
-            modifier = Modifier.fillMaxWidth().testTag("settings_search"),
-            trailingIcon = if (query.isNotEmpty()) ({ TextButton(onClick = { query = "" }) { Text("Clear") } }) else null)
+        SearchField(query, { query = it }, "Find a setting", "settings_search")
         if (visibleSections.isEmpty()) Text("No settings match.", color = Muted)
         visibleSections.forEach { section ->
             key(section) {

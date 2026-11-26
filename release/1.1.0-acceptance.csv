@@ -6,9 +6,9 @@ F004,1,per-tab scroll restoration,open,,,per-tab scroll restoration,,
 F005,1,per-tab back stacks,open,,,per-tab back stacks,,
 F006,1,predictable Up action,open,,,predictable Up action,,
 F007,1,Back preview,open,,,Back preview,,
-F008,1,return-to-origin action,implemented,102841edb4e858d4abc07d5f2fccb08e91ce8dc5,,return-to-origin action,API Lab offers a visible return action for routed drafts. Native acceptance is open.,app/src/main/java/dev/esuite/app/MainActivity.kt
+F008,1,return-to-origin action,passed,087dd639e2c18f327874eb3a53e7733d64b3f7ad,Android 15 optimized APK · browserOpensWithoutASavedSiteAndInspectsTheCurrentPage,return-to-origin action,The visible return action reopened the originating Browser URL from API Lab.,https://github.com/modhack2003/Esuite/actions/runs/45831080502/job/139950264697
 F009,1,tab reselect behavior,implemented,102841edb4e858d4abc07d5f2fccb08e91ce8dc5,,tab reselect behavior,Primary tabs keep their current position on reselect. Reselecting Tools closes its Browser pane. Native acceptance is open.,app/src/main/java/dev/esuite/app/MainActivity.kt
-F010,1,navigation preferences,implemented,102841edb4e858d4abc07d5f2fccb08e91ce8dc5,,navigation preferences,Navigation settings can restore the last primary tab. Browser remains the fresh-install destination. Native acceptance is open.,app/src/main/java/dev/esuite/app/ui/SettingsScreen.kt
+F010,1,navigation preferences,passed,087dd639e2c18f327874eb3a53e7733d64b3f7ad,Android 15 optimized APK · browserCommandsCanFindSettingsAndReturnToTheBrowser,navigation preferences,"Enabled resume, restarted into Tools, disabled resume, then restarted into Browser.",https://github.com/modhack2003/Esuite/actions/runs/45831080502/job/139950264697
 Q001,1,Cold route valid,open,,,Cold route valid,,
 Q002,1,warm route restored,open,,,warm route restored,,
 Q003,1,deep Back ordered,open,,,deep Back ordered,,
@@ -18,11 +18,11 @@ Q006,1,reselect deterministic,open,,,reselect deterministic,,
 Q007,1,rapid taps coalesced,open,,,rapid taps coalesced,,
 Q008,1,hidden route recoverable,open,,,hidden route recoverable,,
 Q009,1,navigation state survives rotation,open,,,navigation state survives rotation,,
-Q010,1,Up returns to caller,open,,,Up returns to caller,,
+Q010,1,Up returns to caller,passed,087dd639e2c18f327874eb3a53e7733d64b3f7ad,Android 15 optimized APK · browserOpensWithoutASavedSiteAndInspectsTheCurrentPage,Up returns to caller,The API Lab Up action returned to the Browser that supplied the draft.,https://github.com/modhack2003/Esuite/actions/runs/45831080502/job/139950264697
 F011,1,Local command palette,passed,a6ca85f,Android 15 optimized fixture browserCommandsCanFindSettingsAndReturnToTheBrowser,Local command palette,The Browser command palette opened Settings and returned to the Browser.,https://github.com/modhack2003/Esuite/actions/runs/45376388035/job/138386063850
 F012,1,long-press actions,open,,,long-press actions,,
-F013,1,recently used commands,implemented,65d67a50ccc1fc412f75dc9e8699334374abf2c1,,recently used commands,Blank command search shows up to five recent commands. Native acceptance is open.,app/src/main/java/dev/esuite/app/ui/AssessmentDialogs.kt
-F014,1,pinned commands,implemented,65d67a50ccc1fc412f75dc9e8699334374abf2c1,,pinned commands,The palette toggles pins and stores their stable IDs across process restarts. Native acceptance is open.,app/src/main/java/dev/esuite/app/ui/AssessmentDialogs.kt
+F013,1,recently used commands,passed,087dd639e2c18f327874eb3a53e7733d64b3f7ad,Android 15 optimized APK · browserCommandsCanFindSettingsAndReturnToTheBrowser,recently used commands,Removing the Settings pin revealed the command in Recent after a process restart.,https://github.com/modhack2003/Esuite/actions/runs/45831080502/job/139950264697
+F014,1,pinned commands,passed,087dd639e2c18f327874eb3a53e7733d64b3f7ad,Android 15 optimized APK · browserCommandsCanFindSettingsAndReturnToTheBrowser,pinned commands,"Pinned Settings, restarted, verified its pin, then removed it.",https://github.com/modhack2003/Esuite/actions/runs/45831080502/job/139950264697
 F015,1,action synonyms,implemented,e4025b0,,action synonyms,A matching source path is present. Final per-item acceptance is open.,app/src/main/java/dev/esuite/app/MainActivity.kt
 F016,1,contextual shortcuts,implemented,e4025b0,,contextual shortcuts,A matching source path is present. Final per-item acceptance is open.,app/src/main/java/dev/esuite/app/MainActivity.kt
 F017,1,keyboard shortcut sheet,open,,,keyboard shortcut sheet,,
@@ -100,7 +100,7 @@ Q048,1,no mojibake,open,,,no mojibake,,
 Q049,1,narrow title fits,open,,,narrow title fits,,
 Q050,1,preview matches applied scale,open,,,preview matches applied scale,,
 F051,1,Shared text field,open,,,Shared text field,,
-F052,1,shared search field,open,,,shared search field,,
+F052,1,shared search field,implemented,,,shared search field,"Settings and command palettes share the same single-line field, clear action and Unicode-safe input limit.",app/src/main/java/dev/esuite/app/ui/SearchField.kt
 F053,1,split-button component,open,,,split-button component,,
 F054,1,segmented control,open,,,segmented control,,
 F055,1,filter chip,implemented,e4025b0,,filter chip,A matching source path is present. Final per-item acceptance is open.,app/src/main/java/dev/esuite/app/browser/InspectorPanels.kt

@@ -1,8 +1,6 @@
 package dev.esuite.app.ui
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -91,10 +89,9 @@ internal fun <T> SearchCommands(
     WorkflowDialog("Commands", close, dialogTag, fitKeyboard = true) {
         LazyColumn(Modifier.weight(1f).testTag("command_list")) {
             item {
-                OutlinedTextField(query, { query = it.atCharacterBoundary(80) }, label = { Text("Find a command") }, singleLine = true,
-                    keyboardOptions = TechnicalKeyboard.copy(imeAction = ImeAction.Go),
-                    keyboardActions = KeyboardActions(onGo = { matching.singleOrNull()?.let(choose) }),
-                    modifier = Modifier.fillMaxWidth().testTag("command_search"))
+                SearchField(query, { query = it }, "Find a command", "command_search") {
+                    matching.singleOrNull()?.let(choose)
+                }
             }
             if (matching.isEmpty()) item { Text("No commands match.") }
             groups.forEach { (group, choices) ->
