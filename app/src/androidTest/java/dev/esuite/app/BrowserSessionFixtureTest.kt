@@ -22,6 +22,24 @@ class BrowserSessionFixtureTest {
     private val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
     private fun control(id: String) = requireNotNull(device.wait(Until.findObject(By.res(id)), 10000)) { "Missing $id" }
 
+    private fun reveal(id: String, container: String? = null) {
+        val selector = By.res(id)
+        if (!device.wait(Until.hasObject(selector), 800)) {
+            val scroll = if (container != null) control(container) else requireNotNull(device.findObject(By.scrollable(true)))
+            scroll.scrollUntil(androidx.test.uiautomator.Direction.DOWN, Until.hasObject(selector))
+        }
+    }
+
+    private fun openSessionDraft() {
+        control("browser_tools").click()
+        control("browser_panel_picker").click()
+        reveal("browser_panel_choice_cookies", "browser_panel_choices")
+        control("browser_panel_choice_cookies").click()
+        reveal("browser_use_session")
+        control("browser_use_session").click()
+        reveal("api_session_open")
+    }
+
     @Test fun signInOpenProtectedPageAndSignOutInTheSameBrowser() {
         val protectedLoads = java.util.concurrent.atomic.AtomicInteger()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -59,20 +77,19 @@ class BrowserSessionFixtureTest {
             control("browser_go").click()
             requireNotNull(device.wait(Until.findObject(By.text("Fixture sign in")), 10000)).click()
             assertTrue(device.wait(Until.hasObject(By.text("Protected fixture content 1")), 10000))
-            control("browser_tools").click()
-            control("browser_panel_picker").click()
-            control("browser_panel_choice_cookies").click()
-            control("browser_use_session").click()
-            val opener = By.res("api_session_open")
-            if (!device.hasObject(opener)) {
-                val scroll = requireNotNull(device.findObject(By.scrollable(true)))
-                scroll.scrollUntil(androidx.test.uiautomator.Direction.DOWN, Until.hasObject(opener))
-            }
+            openSessionDraft()
             control("api_session_open").click()
             assertTrue(device.wait(Until.hasObject(By.text("Protected fixture content 2")), 10000))
             control("browser_close_dock").click()
             requireNotNull(device.wait(Until.findObject(By.text("Fixture sign out")), 10000)).click()
             assertTrue(device.wait(Until.hasObject(By.text("Sign-in required")), 10000))
+            openSessionDraft()
+            control("identity_B").click()
+            reveal("api_session_open")
+            control("api_session_open").click()
+            assertTrue(device.wait(Until.hasObject(By.text("This Browser session is no longer available.")), 10000))
+            assertTrue(protectedLoads.get() == 3)
+
         }
     }
 
