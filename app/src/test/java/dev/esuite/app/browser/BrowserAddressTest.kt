@@ -44,7 +44,7 @@ class BrowserAddressTest {
     }
 
     @Test fun cookieInspectionDisclosesNamesAndKnownFlagsWithoutValues() {
-        assertEquals(listOf("session · Secure · HttpOnly · SameSite=Lax"),
+        assertEquals(listOf("session · Path=/ · Domain=example.test · Secure · HttpOnly · SameSite=Lax"),
             cookieMetadata(listOf("session=private; Path=/; Domain=example.test; Secure; HttpOnly; SameSite=Lax"), true))
         assertEquals(listOf("theme", "test"), cookieMetadata(listOf("theme=private", "test=another"), false))
     }

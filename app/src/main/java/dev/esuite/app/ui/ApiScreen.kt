@@ -1,5 +1,10 @@
 package dev.esuite.app.ui
 
+import androidx.compose.foundation.border
+import androidx.compose.foundation.text.BasicSecureTextField
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.maxLength
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
@@ -30,12 +35,16 @@ private enum class ApiSection(val label: String) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> Unit, onReview: (Exchange) -> Unit) {
+internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> Unit,
+    browserSession: Boolean, disconnectSession: () -> Unit, openSession: (String) -> Boolean, returnToBrowser: () -> Unit,
+    onReview: (Exchange) -> Unit) {
     val project = model.currentProject()
     if (project == null) {
         Text("Open an HTTPS site to use API Lab.", style = MaterialTheme.typography.titleMedium)
         return
     }
+    val jar = model.engine.sessions.jar(project.id, state.identity)
+    val hasBearer by jar.hasBearer.collectAsStateWithLifecycle()
     val draft = state.draft
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -72,7 +81,22 @@ internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> 
                 textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("api_method"))
             OutlinedTextField(draft.url, { model.draft(draft.copy(url = it)) }, singleLine = true, label = { Text("HTTPS URL") },
                 keyboardOptions = UrlKeyboard, textStyle = technicalTextStyle(), modifier = Modifier.fillMaxWidth().testTag("api_url"))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (browserSession) {
+                var expired by remember { mutableStateOf(false) }
+                Text("Browser profile · WebView observation", style = MaterialTheme.typography.labelLarge)
+                val validGet = draft.method.equals("GET", true) && draft.body.isEmpty() && headers.isBlank() &&
+                    ScopePolicy(project.origin).allows(draft.url)
+                if (expired) {
+                    Text("This Browser session is no longer available.")
+                    TextButton(onClick = returnToBrowser) { Text("Return to Browser") }
+                } else {
+                    if (!validGet) Text("Browser navigation requires a same-site GET with empty headers and body.")
+                    Button(onClick = { expired = !openSession(draft.url) }, enabled = validGet,
+                        modifier = Modifier.testTag("api_session_open")) { Text("Open with Browser session") }
+                }
+                TextButton(onClick = disconnectSession) { Text("Disconnect Browser session") }
+            } else FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (hasBearer) Text("Bearer token · identity ${state.identity} · ${project.origin}")
                 Button(onClick = { prepare { model.send(); show(ApiSection.Response) } },
                     enabled = !state.busy && draft.url.isNotBlank(), modifier = Modifier.testTag("api_send")) { Text("Send request") }
                 OutlinedButton(onClick = { prepare { model.send(compare = true); show(ApiSection.Response) } },
@@ -193,6 +217,9 @@ internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> 
             IdentityControls(state, model)
             Text("Each identity has a separate session. Review the URL and body before comparing identities.",
                 style = MaterialTheme.typography.bodySmall, color = Muted)
+            key(project.id, state.identity) {
+                BearerEditor(project.origin, state.identity, jar, hasBearer)
+            }
             val fallback = remember(state.workspace.identityConfigs, project.id, state.identity) {
                 state.workspace.identityConfigs.firstOrNull { it.projectId == project.id && it.identity == state.identity }
                     ?.headers.orEmpty().asEditorText()
@@ -225,3 +252,28 @@ internal fun ApiScreen(state: AppState, model: AppViewModel, returnToTop: () -> 
 }
 
 private fun List<Header>.asEditorText() = joinToString("\n") { "${it.name}: ${it.value}" }
+
+@Composable
+private fun BearerEditor(origin: String, identity: String, jar: dev.esuite.app.transport.IdentityCookieJar, active: Boolean) {
+    var revision by remember { mutableIntStateOf(0) }
+    val field = remember(revision) { androidx.compose.foundation.text.input.TextFieldState() }
+    var problem by remember { mutableStateOf<String?>(null) }
+    Text("Bearer token", style = MaterialTheme.typography.titleMedium)
+    Text("Manual requests · identity $identity · $origin", style = MaterialTheme.typography.bodySmall)
+    if (active) {
+        Text("Token in memory")
+        TextButton(onClick = { jar.setBearer(null) }, modifier = Modifier.testTag("api_forget_bearer")) { Text("Forget token") }
+    } else {
+        BasicSecureTextField(state = field, inputTransformation = InputTransformation.maxLength(8185),
+            textStyle = technicalTextStyle().copy(color = MaterialTheme.colorScheme.onSurface),
+            textObfuscationMode = androidx.compose.foundation.text.input.TextObfuscationMode.Hidden,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("api_bearer_input")
+                .semantics { contentDescription = "API bearer token" }
+                .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.small).padding(12.dp))
+        problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        OutlinedButton(onClick = {
+            runCatching { jar.setBearer(field.text.toString()) }.onSuccess { revision++; problem = null }
+                .onFailure { problem = it.message }
+        }, enabled = field.text.isNotEmpty(), modifier = Modifier.testTag("api_set_bearer")) { Text("Use token") }
+    }
+}

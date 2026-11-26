@@ -5,7 +5,22 @@ import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import java.util.concurrent.ConcurrentHashMap
 
+private val BEARER_PATTERN = Regex("[A-Za-z0-9._~+/\\-]+=*")
+
 class IdentityCookieJar : CookieJar {
+    private var bearer: String? = null
+    private val bearerPresent = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val hasBearer: kotlinx.coroutines.flow.StateFlow<Boolean> get() = bearerPresent
+
+    @Synchronized fun setBearer(value: String?) {
+        require(value == null || (value.length in 1..8185 && BEARER_PATTERN.matches(value))) {
+            "Enter a bearer token without spaces or the Bearer prefix."
+        }
+        bearer = value
+        bearerPresent.value = value != null
+    }
+    @Synchronized internal fun manualBearer() = bearer
+
     private val cookies = mutableListOf<Cookie>()
     @Synchronized override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
         cookies.forEach { incoming ->
@@ -19,7 +34,10 @@ class IdentityCookieJar : CookieJar {
         cookies.removeAll { it.expiresAt <= System.currentTimeMillis() }
         return cookies.filter { it.matches(url) }
     }
-    @Synchronized fun clear() = cookies.clear()
+    @Synchronized fun clear() {
+        setBearer(null)
+        cookies.clear()
+    }
     @Synchronized fun replaceFromBrowser(url: HttpUrl, setCookies: List<String>): Int {
         require(setCookies.size <= 200) { "Too many cookies to transfer" }
         val parsed = setCookies.map { Cookie.parse(url, it) ?: throw IllegalArgumentException("A browser cookie could not be parsed") }

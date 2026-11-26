@@ -18,13 +18,19 @@ class ApiEngine(val sessions: IdentitySessions = IdentitySessions()) {
         .retryOnConnectionFailure(false).connectTimeout(15, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS)
         .callTimeout(35, TimeUnit.SECONDS).build()
 
-    suspend fun execute(project: Project, identity: String, draft: RequestDraft, source: String = "API Lab"): Exchange {
+    suspend fun execute(project: Project, identity: String, draft: RequestDraft, source: String = "API Lab", useManualBearer: Boolean = false): Exchange {
         DraftParser.validate(draft)
         val url = ScopePolicy(project.origin).requireAllowed(draft.url)
         val jar = sessions.jar(project.id, identity)
+        val bearer = if (useManualBearer) jar.manualBearer() else null
+        if (bearer != null) {
+            require(url.isHttps && draft.headers.none { it.name.equals("Authorization", true) }) {
+                "Choose one authorization source for this HTTPS request."
+            }
+        }
         val explicitCookie = draft.headers.any { it.name.equals("Cookie", true) }
         val perCallJar = object : CookieJar {
-            override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) = jar.saveFromResponse(url, cookies)
+            override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) = jar.saveFromResponse(url, if (bearer == null) cookies else cookies.filterNot { bearer in it.toString() })
             override fun loadForRequest(url: HttpUrl) = if (explicitCookie) emptyList() else jar.loadForRequest(url)
         }
         val observed = AtomicReference<Request>()
@@ -34,6 +40,7 @@ class ApiEngine(val sessions: IdentitySessions = IdentitySessions()) {
         val request = Request.Builder().url(url).apply {
             draft.headers.filterNot { it.name.lowercase() in setOf("host", "content-length", "transfer-encoding", "connection", "proxy-authorization", "proxy-connection") }
                 .forEach { addHeader(it.name, it.value) }
+            if (bearer != null) header("Authorization", "Bearer $bearer")
             val type = draft.headers.lastOrNull { it.name.equals("Content-Type", true) }?.value?.toMediaTypeOrNull()
             method(draft.method.uppercase(), if (draft.method.uppercase() in setOf("GET", "HEAD")) null else draft.body.toRequestBody(type))
         }.build()
@@ -59,10 +66,15 @@ class ApiEngine(val sessions: IdentitySessions = IdentitySessions()) {
                             val bytes = buffer.readByteArray(minOf(buffer.size, Limits.RESPONSE_BYTES.toLong()))
                             val media = body?.contentType(); val textual = media == null || media.type == "text" || listOf("json", "xml", "javascript", "x-www-form-urlencoded").any { key -> media.subtype.contains(key) }
                             val sent = observed.get() ?: request
+                            val content = if (textual) CapturedText.decode(bytes, media?.charset(Charsets.UTF_8) ?: Charsets.UTF_8, truncated)
+                                else Base64.getEncoder().encodeToString(bytes)
+                            val reflectedBinary = bearer != null && !textual && Buffer().write(bytes).indexOf(okio.ByteString.of(*bearer.toByteArray())) >= 0
+                            fun redact(value: String) = if (bearer != null && bearer in value) "[redacted]" else value
                             Exchange(projectId = project.id, identity = identity, source = source,
-                                request = draft.copy(headers = sent.headers.map { h -> Header(h.first, h.second) }), status = it.code,
-                                responseHeaders = it.headers.map { h -> Header(h.first, h.second) },
-                                response = StoredBody(if (textual) CapturedText.decode(bytes, media?.charset(Charsets.UTF_8) ?: Charsets.UTF_8, truncated) else Base64.getEncoder().encodeToString(bytes), if (textual) "utf8" else "base64", truncated),
+                                request = draft.copy(headers = sent.headers.filterNot { bearer != null && it.first.equals("Authorization", true) }.map { h -> Header(h.first, redact(h.second)) }), status = it.code,
+                                responseHeaders = it.headers.map { h -> Header(h.first, redact(h.second)) },
+                                response = if (reflectedBinary) StoredBody("[Binary response contained the session credential and was omitted]", "utf8", true)
+                                    else StoredBody(redact(content), if (textual) "utf8" else "base64", truncated),
                                 durationMs = (System.nanoTime() - start) / 1_000_000)
                         }
                         if (continuation.isActive) continuation.resume(exchange)

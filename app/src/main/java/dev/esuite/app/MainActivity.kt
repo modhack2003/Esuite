@@ -169,6 +169,7 @@ enum class Screen(val label: String, val icon: ImageVector) {
 
 private enum class AppCommand(val label: String, val aliases: String, val screen: Screen? = null) {
     Browser("Open Browser", "/browser webpage navigate", Screen.Browser),
+    Session("Open Browser session", "/session cookies login bearer browser profile", Screen.Browser),
     Find("Find in page", "/find page text search matches", Screen.Browser),
     Activity("Open Activity", "/activity traffic history sitemap", Screen.Traffic),
     Requests("Open API Lab", "/api request headers", Screen.Api),
@@ -203,6 +204,15 @@ internal fun ESuiteApp(
     var previousName by rememberSaveable { mutableStateOf(initialScreen.name) }
     var requestRouteId by rememberSaveable { mutableIntStateOf(0) }
     var requestReturnName by rememberSaveable { mutableStateOf<String?>(null) }
+    var sessionPanelRequest by remember { mutableIntStateOf(0) }
+    var browserSessionMode by rememberSaveable { mutableStateOf(false) }
+    var sessionContext by remember { mutableStateOf<RequestContext?>(null) }
+    var openSessionUrl by remember { mutableStateOf<((String) -> Boolean)?>(null) }
+    fun disconnectSession() {
+        browserSessionMode = false
+        openSessionUrl = null
+        sessionContext = null
+    }
     var findInPageRequest by remember { mutableIntStateOf(0) }
     var clearRequest by remember { mutableIntStateOf(0) }
     var starting by remember { mutableStateOf(true) }
@@ -237,6 +247,7 @@ internal fun ESuiteApp(
         if (next != Screen.Settings) onPrimaryScreen(next)
     }
     fun openApiRequest() {
+        disconnectSession()
         requestRouteId++
         requestReturnName = screen.name.takeUnless { screen == Screen.Api }
         navigate(Screen.Api)
@@ -313,6 +324,7 @@ internal fun ESuiteApp(
                             motion = motion,
                             clearRequest = clearRequest,
                             findInPageRequest = findInPageRequest,
+                            sessionPanelRequest = sessionPanelRequest,
                             utilitiesVisible = screen == Screen.Tools,
                             closeUtilities = { navigate(Screen.Browser) },
                             onReady = { starting = false },
@@ -328,7 +340,14 @@ internal fun ESuiteApp(
                                     else -> "Browsing data cleared."
                                 }
                             },
-                            onOpenApi = { if (model.openSite(it)) openApiRequest() },
+                            onSessionDraft = { url, open ->
+                                if (model.openSite(url)) {
+                                    openApiRequest()
+                                    sessionContext = model.currentContext()
+                                    openSessionUrl = open
+                                    browserSessionMode = true
+                                }
+                            },
                             onOpenActivity = { browserImportError = ""; browserImport = it },
                             utilities = {
                                 primaryState.SaveableStateProvider(Screen.Tools.name) {
@@ -375,7 +394,15 @@ internal fun ESuiteApp(
                                                     }
                                                     WorkspaceStatus(site, state)
                                                     SitePicker(state, site, model, allowNew = true)
-                                                    if (site != null) ApiScreen(state, model, { scope.launch { pageScroll.scrollTo(0) } }) {
+                                                    if (site != null) ApiScreen(state, model, { scope.launch { pageScroll.scrollTo(0) } },
+                                                        browserSessionMode, ::disconnectSession, { url ->
+                                                            val active = sessionContext == model.currentContext() && openSessionUrl?.invoke(url) == true
+                                                            if (active) {
+                                                                disconnectSession()
+                                                                navigate(Screen.Browser)
+                                                            }
+                                                            active
+                                                        }, { disconnectSession(); navigate(Screen.Browser) }) {
                                                         openReview(listOf(it), ResponseCheck.Quick)
                                                     }
                                                 }
@@ -417,6 +444,7 @@ internal fun ESuiteApp(
             ) { command ->
                 commands = false
                 saveCommandUsage(commandUsage.record(command.name, appCommandIds))
+                if (command == AppCommand.Session) sessionPanelRequest++
                 if (command == AppCommand.Find) findInPageRequest++
                 when (val target = command.screen) {
                     null -> latest?.let { openReview(listOf(it), ResponseCheck.Quick) }

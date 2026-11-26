@@ -96,6 +96,7 @@ internal fun BrowserScreen(
     motion: Boolean,
     clearRequest: Int,
     findInPageRequest: Int,
+    sessionPanelRequest: Int,
     utilitiesVisible: Boolean,
     closeUtilities: () -> Unit,
     onReady: () -> Unit,
@@ -103,7 +104,7 @@ internal fun BrowserScreen(
     onSettings: () -> Unit,
     onCommands: () -> Unit,
     onDataCleared: (Boolean) -> Unit,
-    onOpenApi: (String) -> Unit,
+    onSessionDraft: (String, (String) -> Boolean) -> Unit,
     onOpenActivity: (BrowserLogSnapshot) -> Unit,
     utilities: @Composable () -> Unit,
 ) {
@@ -377,6 +378,12 @@ internal fun BrowserScreen(
         preparing = false
     }
     LaunchedEffect(preparing) { if (!preparing) onReady() }
+    LaunchedEffect(sessionPanelRequest) {
+        if (sessionPanelRequest > 0) {
+            inspecting = true
+            panel = BrowserTool.Cookies
+        }
+    }
     LaunchedEffect(findInPageRequest) {
         if (findInPageRequest != 0) openPageFind()
     }
@@ -766,7 +773,22 @@ internal fun BrowserScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 utilities()
             } else BrowserInspector(panel, output, pageUrl?.takeIf { error == null }, { panel = it }, { readPanel(panel) },
-                ::toggleInspector, onOpenApi, ::openInSystemBrowser,
+                ::toggleInspector, { current ->
+                    val view = browser
+                    val origin = BrowserAddress.https(current)?.let(BrowserAddress::origin)
+                    val issuedDocument = document
+                    if (view != null && origin != null && !loading && !clearing && !destroyed.get()) {
+                        onSessionDraft(current) { requested ->
+                            val target = BrowserAddress.https(requested)
+                            val liveOrigin = view.takeUnless { destroyed.get() }?.url?.let(BrowserAddress::https)?.let(BrowserAddress::origin)
+                            if (document == issuedDocument && !clearing && !rendererGone && !loading && error == null &&
+                                target != null && origin == liveOrigin && origin == BrowserAddress.origin(target)) {
+                                beginNavigation(view, target.toString())
+                                true
+                            } else false
+                        }
+                    }
+                }, ::openInSystemBrowser,
                 elements = { key(document) {
                     ElementsPanel(domTree, domDetails, pageUrl != null && error == null, elementNotice, domQuery, domReveal, picking,
                         onPick = {

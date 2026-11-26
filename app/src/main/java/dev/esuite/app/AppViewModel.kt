@@ -300,6 +300,10 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
         val snapshot = state.value; val project = currentProject() ?: return message("Open a site in API Lab first")
         if (snapshot.busy) return
         val started = currentContext()
+        if (!compare && engine.sessions.jar(project.id, snapshot.identity).hasBearer.value &&
+            withIdentity(snapshot.draft, project.id, snapshot.identity).headers.any { it.name.equals("Authorization", true) }) {
+            return message("Choose one authorization source. Remove the Authorization header or forget the session bearer token.")
+        }
         requestJob = viewModelScope.launch {
             val identities = if (compare) "identities A and B" else "identity ${snapshot.identity}"
             mutable.update { it.copy(busy = true, manualRequestLabel = "${project.name} · $identities · ${project.origin}", selected = null, comparison = "", message = "Sending to ${project.origin}…") }
@@ -320,7 +324,7 @@ class AppViewModel @JvmOverloads constructor(application: Application, private v
                     else message(supersededMessage(started, current))
                 } else {
                     attemptedDraft = withIdentity(snapshot.draft, project.id, snapshot.identity)
-                    val response = engine.execute(project, snapshot.identity, attemptedDraft); record(response)
+                    val response = engine.execute(project, snapshot.identity, attemptedDraft, useManualBearer = true); record(response)
                     val current = currentContext()
                     if (ResultAttribution.accepts(started, current))
                         mutable.update { it.copy(selected = response, message = "HTTP ${response.status} · ${response.durationMs} ms${if (response.response.truncated) " · body truncated" else ""}") }

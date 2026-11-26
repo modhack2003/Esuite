@@ -36,11 +36,13 @@ internal fun cookieMetadata(rows: List<String>, hasAttributes: Boolean): List<St
     rows.take(60).mapNotNull { row ->
         val parts = row.split(';')
         val name = parts.first().substringBefore('=').trim().take(160)
-        if (name.isEmpty()) return@mapNotNull null
+        if ('=' !in parts.first() || name.isEmpty()) return@mapNotNull null
         if (!hasAttributes) return@mapNotNull name
         val attributes = parts.drop(1).mapNotNull { attribute ->
             val trimmed = attribute.trim()
             when (trimmed.substringBefore('=').lowercase()) {
+                "domain", "path", "expires", "max-age" -> trimmed.takeIf { '=' in it }?.take(256)
+                "domain", "path", "expires", "max-age" -> trimmed.takeIf { '=' in it && it.none(Char::isISOControl) }?.take(256)
                 "secure" -> "Secure"
                 "httponly" -> "HttpOnly"
                 "samesite" -> trimmed.substringAfter('=', "").takeIf {

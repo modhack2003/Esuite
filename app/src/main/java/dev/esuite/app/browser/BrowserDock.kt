@@ -49,7 +49,7 @@ internal enum class BrowserTool(val label: String, val summary: String) {
     Network("Network", "Same-origin requests and resource timing"),
     Sources("Sources", "Document stylesheets and scripts"),
     Storage("Storage", "Storage keys and value lengths"),
-    Cookies("Cookies", "Cookie names and available flags"),
+    Cookies("Session", "Browser profile · cookie metadata"),
     Performance("Performance", "Page load milestones"),
     Viewport("Viewport", "Responsive page measurements"),
     Security("Security", "Security context"),
@@ -176,7 +176,7 @@ internal fun BrowserInspector(
     choose: (BrowserTool) -> Unit,
     refresh: () -> Unit,
     close: () -> Unit,
-    openApi: (String) -> Unit,
+    useSession: (String) -> Unit,
     openExternally: (String) -> Unit,
     elements: @Composable () -> Unit,
     network: @Composable () -> Unit,
@@ -231,13 +231,19 @@ internal fun BrowserInspector(
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(panel.summary, style = MaterialTheme.typography.labelLarge, modifier = Modifier.testTag("browser_tool_heading"))
+                    if (panel == BrowserTool.Cookies && currentUrl != null) {
+                        BrowserAddress.https(currentUrl)?.let { Text(BrowserAddress.origin(it)) }
+                        Button(onClick = { useSession(currentUrl) }, modifier = Modifier.testTag("browser_use_session")) {
+                            Text("Use in API Lab")
+                        }
+                    }
                     SelectionContainer {
                         Text(output.ifBlank { if (currentUrl == null) "Load an HTTPS page to inspect it." else "Reading page…" },
                             Modifier.fillMaxWidth().testTag("browser_output"), style = technicalTextStyle())
                     }
                     if (panel == BrowserTool.Page && currentUrl != null) {
                         Row(Modifier.horizontalScroll(rememberScrollState())) {
-                            TextButton(onClick = { openApi(currentUrl) }, modifier = Modifier.testTag("browser_open_api")) {
+                            TextButton(onClick = { useSession(currentUrl) }, modifier = Modifier.testTag("browser_open_api")) {
                                 Text("Open in API Lab")
                             }
                             TextButton(onClick = { openExternally(currentUrl) }) { Text("Open in system browser") }
