@@ -1,10 +1,14 @@
 package dev.esuite.uitests;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Rect;
+import android.net.Uri;
 import android.os.SystemClock;
+import android.provider.MediaStore;
 import android.view.KeyEvent;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.uiautomator.By;
@@ -194,6 +198,63 @@ public class ProductionUiTest extends NativeUiDriver {
         click("nav_api");
         assertTrue(waitText("api_url", "https://example.test/staged", 5000));
         assertTrue(waitText("api_body", "first=one&second=two", 5000));
+        if (android.os.Build.VERSION.SDK_INT == 35) {
+            click("nav_tools");
+            verifyCollectionDocument("openapi", "ESuite fixture OpenAPI.json", "{\"openapi\":\"3.0.3\",",
+                    "\"paths\":{\"/openapi-file-tail\":{\"get\":{}}}}", "/openapi-file-tail");
+            verifyCollectionDocument("har", "ESuite fixture capture.har", "{",
+                    "\"log\":{\"entries\":[{\"request\":{\"method\":\"GET\",\"url\":\"https://example.test/har-file-tail\"}}]}}", "/har-file-tail");
+        }
+    }
+
+    private void verifyCollectionDocument(String type, String filename, String prefix, String suffix, String endpoint) throws Exception {
+        ContentResolver resolver = InstrumentationRegistry.getInstrumentation().getContext().getContentResolver();
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.Downloads.DISPLAY_NAME, filename);
+        values.put(MediaStore.Downloads.MIME_TYPE, "application/json");
+        values.put(MediaStore.Downloads.IS_PENDING, 1);
+        Uri file = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+        assertNotNull("Could not create the disposable picker fixture", file);
+        try {
+            try (var stream = resolver.openOutputStream(file)) {
+                assertNotNull(stream);
+                byte[] start = prefix.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                byte[] end = suffix.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                byte[] spaces = new byte[8192];
+                java.util.Arrays.fill(spaces, (byte) ' ');
+                stream.write(start);
+                int remaining = 2 * 1024 * 1024 - start.length - end.length;
+                while (remaining > 0) {
+                    int length = Math.min(spaces.length, remaining);
+                    stream.write(spaces, 0, length);
+                    remaining -= length;
+                }
+                stream.write(end);
+            }
+            values.clear();
+            values.put(MediaStore.Downloads.IS_PENDING, 0);
+            assertEquals(1, resolver.update(file, values, null, null));
+            clickUtilityControl("tools_open_" + type + "_file");
+            UiObject2 document = device.wait(Until.findObject(By.text(filename)), 5000);
+            if (document == null) {
+                UiObject2 roots = device.wait(Until.findObject(By.desc("Show roots")), 5000);
+                assertNotNull("Android's document picker did not open", roots);
+                roots.click();
+                UiObject2 downloads = device.wait(Until.findObject(By.text("Downloads")), 5000);
+                assertNotNull("Downloads is unavailable in Android's document picker", downloads);
+                downloads.click();
+                document = device.wait(Until.findObject(By.text(filename)), 8000);
+            }
+            assertNotNull("The document picker did not list the fixture", document);
+            document.click();
+            assertTrue("Preview did not contain the endpoint beyond the paste limit",
+                    device.wait(Until.hasObject(By.text("GET https://example.test" + endpoint)), 15000));
+            checkpoint("document-picker-" + type + "-2mib");
+            device.pressBack();
+            assertTrue(device.wait(Until.gone(By.res("tools_import_preview")), 5000));
+        } finally {
+            resolver.delete(file, null, null);
+        }
     }
 
     @Test public void browserOpensWithoutASavedSiteAndInspectsTheCurrentPage() throws Exception {

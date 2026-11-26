@@ -44,6 +44,7 @@ public class AssessmentUiTest extends NativeUiDriver {
         }
         click("nav_traffic");
         click("activity_tab_history");
+        if (android.os.Build.VERSION.SDK_INT == 35) verifyLiveObservationTimeZone();
         activityControl(By.res("activity_select_review")).click();
         click("activity_review_selected");
         assertTrue(device.wait(Until.hasObject(By.res("review_summary")), 10000));
@@ -63,6 +64,43 @@ public class AssessmentUiTest extends NativeUiDriver {
         assertTrue(device.wait(Until.hasObject(By.text("Evidence attached")), 10000));
         click("finding_item");
         assertTrue(device.wait(Until.hasObject(By.textContains("Show retained evidence")), 10000));
+    }
+
+    private void verifyLiveObservationTimeZone() throws Exception {
+        String originalZone = device.executeShellCommand("getprop persist.sys.timezone").trim();
+        String automatic = device.executeShellCommand("settings get global auto_time_zone").trim();
+        assertTrue("Unexpected emulator time zone", originalZone.matches("[A-Za-z0-9/_+-]+"));
+        try {
+            device.executeShellCommand("settings put global auto_time_zone 0");
+            setTimeZone("Etc/UTC");
+            activityControl(By.res("traffic_exchange")).click();
+            assertTrue("The current observation did not display UTC",
+                    device.wait(Until.hasObject(By.res("activity_display_timestamp").textEndsWith(" UTC")), 8000));
+
+            setTimeZone("Asia/Kathmandu");
+            String abbreviation = java.time.format.DateTimeFormatter.ofPattern("z", java.util.Locale.getDefault())
+                    .withZone(java.time.ZoneId.of("Asia/Kathmandu")).format(java.time.Instant.now());
+            assertTrue("The visible timestamp did not update after a live Android time-zone change",
+                    device.wait(Until.hasObject(By.res("activity_display_timestamp").textEndsWith(" " + abbreviation)), 8000));
+            checkpoint("activity-time-zone-reformatted");
+            device.pressBack();
+            assertTrue(device.wait(Until.hasObject(By.res("activity_history")), 8000));
+        } finally {
+            try {
+                setTimeZone(originalZone);
+            } finally {
+                if (automatic.equals("null")) device.executeShellCommand("settings delete global auto_time_zone");
+                else if (automatic.equals("0") || automatic.equals("1")) {
+                    device.executeShellCommand("settings put global auto_time_zone " + automatic);
+                }
+            }
+        }
+    }
+
+    private void setTimeZone(String zone) throws Exception {
+        String result = device.executeShellCommand("cmd alarm set-timezone " + zone).trim();
+        assertEquals("Android could not change the emulator time zone: " + result,
+                zone, device.executeShellCommand("getprop persist.sys.timezone").trim());
     }
 
     private void verifyAdaptiveReview() throws Exception {

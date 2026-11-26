@@ -246,7 +246,7 @@ private fun ActivityDetail(row: ActivityRecord, modifier: Modifier, close: () ->
             when (section) {
                 ExchangeSection.Overview -> {
                     Text("${row.method ?: "Unknown method"} ${row.pathLabel}", style = technicalTextStyle())
-                    Text("${row.sourceLabel} · ${observedAt(row.timestamp)}")
+                    Text("${row.sourceLabel} · ${observedAt(row.timestamp)}", Modifier.testTag("activity_display_timestamp"))
                     Text("Identity ${exchange?.identity ?: "unavailable"}")
                     Text(row.status?.let { "HTTP $it" } ?: "HTTP status unavailable")
                     Text(exchange?.completeness ?: "Browser metadata. Request and response messages are unavailable.")

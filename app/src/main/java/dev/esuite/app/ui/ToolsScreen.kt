@@ -216,6 +216,7 @@ internal fun ToolsScreen(state: AppState, model: AppViewModel, onReview: (Exchan
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         fileFormats.forEach { format ->
                             OutlinedButton(
+                                modifier = Modifier.testTag("tools_open_${format.name.lowercase()}_file"),
                                 enabled = state.projectId != null && documentRequest == null && !working,
                                 onClick = {
                                     documentRequest = format to model.currentContext()
