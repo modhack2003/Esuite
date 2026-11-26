@@ -43,7 +43,7 @@ class ManualBearerTest {
                 val token = "local.fixture-token"
                 val session = engine.sessions.jar(site.id, "A")
                 session.setBearer(token)
-                server.enqueue(MockResponse().setBody(token).setHeader("X-Echo", token))
+                server.enqueue(MockResponse().setBody(token).setHeader("X-Echo", token).setHeader("X-$token", "masked"))
                 val result = engine.execute(site, "A", draft, useManualBearer = true)
                 assertEquals(listOf("Bearer $token"), server.takeRequest().headers.values("Authorization"))
                 assertFalse(result.toString().contains(token))

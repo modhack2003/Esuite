@@ -44,13 +44,16 @@ class ApiEngine(val sessions: IdentitySessions = IdentitySessions()) {
             val type = draft.headers.lastOrNull { it.name.equals("Content-Type", true) }?.value?.toMediaTypeOrNull()
             method(draft.method.uppercase(), if (draft.method.uppercase() in setOf("GET", "HEAD")) null else draft.body.toRequestBody(type))
         }.build()
+        fun safeFailure(error: Exception): Exception =
+            if (bearer != null && error.message.orEmpty().contains(bearer)) IOException("Authenticated request failed") else error
+
         val start = System.nanoTime()
         return suspendCancellableCoroutine { continuation ->
             val call = client.newCall(request)
             continuation.invokeOnCancellation { call.cancel() }
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
-                    if (continuation.isActive) continuation.resumeWithException(e)
+                    if (continuation.isActive) continuation.resumeWithException(safeFailure(e))
                 }
                 override fun onResponse(call: Call, response: Response) {
                     try {
@@ -69,16 +72,17 @@ class ApiEngine(val sessions: IdentitySessions = IdentitySessions()) {
                             val content = if (textual) CapturedText.decode(bytes, media?.charset(Charsets.UTF_8) ?: Charsets.UTF_8, truncated)
                                 else Base64.getEncoder().encodeToString(bytes)
                             val reflectedBinary = bearer != null && !textual && Buffer().write(bytes).indexOf(okio.ByteString.of(*bearer.toByteArray())) >= 0
-                            fun redact(value: String) = if (bearer != null && bearer in value) "[redacted]" else value
+                            fun redact(value: String, replacement: String = "[redacted]") =
+                                if (bearer != null && bearer in value) replacement else value
                             Exchange(projectId = project.id, identity = identity, source = source,
-                                request = draft.copy(headers = sent.headers.filterNot { bearer != null && it.first.equals("Authorization", true) }.map { h -> Header(redact(h.first), redact(h.second)) }), status = it.code,
-                                responseHeaders = it.headers.map { h -> Header(redact(h.first), redact(h.second)) },
+                                request = draft.copy(headers = sent.headers.filterNot { bearer != null && it.first.equals("Authorization", true) }.map { h -> Header(redact(h.first, "X-Redacted"), redact(h.second)) }), status = it.code,
+                                responseHeaders = it.headers.map { h -> Header(redact(h.first, "X-Redacted"), redact(h.second)) },
                                 response = if (reflectedBinary) StoredBody("[Binary response contained the session credential and was omitted]", "utf8", true)
                                     else StoredBody(redact(content), if (textual) "utf8" else "base64", truncated),
                                 durationMs = (System.nanoTime() - start) / 1_000_000)
                         }
                         if (continuation.isActive) continuation.resume(exchange)
-                    } catch (e: Exception) { if (continuation.isActive) continuation.resumeWithException(e) }
+                    } catch (e: Exception) { if (continuation.isActive) continuation.resumeWithException(safeFailure(e)) }
                 }
             })
         }

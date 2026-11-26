@@ -160,9 +160,16 @@ public class ProductionUiTest extends NativeUiDriver {
         } finally {
             click("open_settings");
             enter("settings_search", "Resume last tab");
-            if (tag("settings_resume_tab").isChecked()) click("settings_resume_tab");
+            assertTrue("The resume preference was lost on restart", tag("settings_resume_tab").isChecked());
+            click("settings_resume_tab");
+            assertTrue("Resume last tab did not turn off",
+                    device.wait(Until.hasObject(By.res("settings_resume_tab").checked(false)), 5000));
+            device.pressBack();
+            device.pressHome();
+            device.waitForIdle();
         }
         launch();
+        assertTrue("Browser should be selected on fresh launch", device.wait(Until.hasObject(By.res("nav_browser").selected(true)), 8000));
         assertFalse("Tools opened with the preference off", device.hasObject(By.res("tools_input")));
     }
 
@@ -247,7 +254,8 @@ public class ProductionUiTest extends NativeUiDriver {
         assertTrue("The console should paint its red script exception", viewPaints(tag("console_messages").getVisibleBounds(), 255, 180, 174));
         checkpoint("browser-console-dock");
         selectBrowserTool("cookies");
-        assertTrue(waitText("browser_tool_heading", "Cookie names and available flags", 10000));
+        assertTrue(waitText("browser_tool_heading", "Browser profile · cookie metadata", 10000));
+        assertNotNull(tag("browser_use_session"));
         assertNotNull(find(By.res("browser_output")));
         selectBrowserTool("storage"); assertTrue(waitText("browser_output", "Local storage", 10000));
         selectBrowserTool("network"); assertTrue("Network did not show a request row", device.wait(Until.hasObject(By.res("network_event")), 10000));
