@@ -909,7 +909,7 @@ F457,5,date-group headings preview,open,,,date-group headings preview,,
 F458,5,timestamp copy,open,,,timestamp copy,,
 F459,5,absolute sort order,open,,,absolute sort order,,
 F460,5,clock change state refresh,open,,,clock change state refresh,,
-Q451,5,Live time-zone changes update dates,implemented,e4025b0,app/src/test/java/dev/esuite/app/core/ObservationDateTest.kt,Reformat visible dates when system locale or time zone changes.,Implementation and regression are present. Final per-item acceptance is open.,app/src/test/java/dev/esuite/app/core/ObservationDateTest.kt
+Q451,5,Live time-zone changes update dates,passed,09ee7a12851fef79c138f4f2fddfd9d6fecfd8e7,Android 15 optimized APK Activity and JVM ObservationDateTest,Reformat visible dates when system locale or time zone changes.,An open Activity detail changed from UTC to the Kathmandu time zone without reloading. The JVM formatter also passed locale changes.,https://github.com/modhack2003/Esuite/actions/runs/45831433451/job/139952420576 and app/src/test/java/dev/esuite/app/core/ObservationDateTest.kt
 Q452,5,locale refresh updates format,open,,,locale refresh updates format,,
 Q453,5,UTC uses clear badge,open,,,UTC uses clear badge,,
 Q454,5,ambiguous DST times distinguishable,open,,,ambiguous DST times distinguishable,,

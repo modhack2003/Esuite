@@ -254,26 +254,39 @@ public class ProductionUiTest extends NativeUiDriver {
             values.put(MediaStore.Downloads.IS_PENDING, 0);
             assertEquals(1, resolver.update(file, values, null, null));
             clickUtilityControl("tools_open_" + type + "_file");
-            UiObject2 document = device.wait(Until.findObject(By.text(filename)), 5000);
-            if (document == null) {
-                UiObject2 roots = device.wait(Until.findObject(By.desc("Show roots")), 5000);
-                assertNotNull("Android's document picker did not open", roots);
-                roots.click();
-                UiObject2 downloads = device.wait(Until.findObject(By.text("Downloads")), 5000);
-                assertNotNull("Downloads is unavailable in Android's document picker", downloads);
-                downloads.click();
-                document = device.wait(Until.findObject(By.text(filename)), 8000);
+            if (!device.wait(Until.hasObject(By.text(filename)), 5000)) {
+                clickPickerControl(By.desc("Show roots"), "Android's document picker did not open");
+                clickPickerControl(By.text("Downloads"), "Downloads is unavailable in Android's document picker");
             }
-            assertNotNull("The document picker did not list the fixture", document);
-            document.click();
+            clickPickerControl(By.text(filename), "The document picker did not list the fixture");
             assertTrue("Preview did not contain the endpoint beyond the paste limit",
                     device.wait(Until.hasObject(By.text("GET https://example.test" + endpoint)), 15000));
             checkpoint("document-picker-" + type + "-2mib");
             device.pressBack();
             assertTrue(device.wait(Until.gone(By.res("tools_import_preview")), 5000));
         } finally {
+            String activePackage = device.getCurrentPackageName();
+            if (activePackage != null && activePackage.endsWith(".documentsui")) {
+                device.pressBack();
+                if (!device.wait(Until.hasObject(By.pkg("dev.esuite.app")), 3000)) device.pressBack();
+            }
             resolver.delete(file, null, null);
         }
+    }
+
+    private void clickPickerControl(BySelector selector, String failure) {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            device.waitForIdle(1000);
+            UiObject2 item = device.wait(Until.findObject(selector), 3500);
+            if (item == null) continue;
+            try {
+                item.click();
+                return;
+            } catch (androidx.test.uiautomator.StaleObjectException ignored) {
+                // DocumentsUI can recreate rows as MediaStore and storage providers refresh.
+            }
+        }
+        fail(failure);
     }
 
     @Test public void browserOpensWithoutASavedSiteAndInspectsTheCurrentPage() throws Exception {
