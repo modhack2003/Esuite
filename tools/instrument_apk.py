@@ -21,7 +21,9 @@ started = time.monotonic()
 
 def diagnostics():
     for filename, args in [('crash.txt', ['adb', 'logcat', '-d', '-b', 'crash']),
-                           ('package.txt', ['adb', 'shell', 'dumpsys', 'package', 'dev.esuite.app'])]:
+                           ('package.txt', ['adb', 'shell', 'dumpsys', 'package', 'dev.esuite.app']),
+                           ('exit-info.txt', ['adb', 'shell', 'dumpsys', 'activity', 'exit-info', 'dev.esuite.app']),
+                           ('activity-state.txt', ['adb', 'shell', 'dumpsys', 'activity', 'activities'])]:
         try:
             result = subprocess.run(args, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
             (out / filename).write_text(result.stdout)
